@@ -14,7 +14,8 @@ enum class LogLevel { // Niveles de log
     Error = 3,
 };
 
-// Función de principal
+// Definición de funciones
+static const char* GetLevelString(LogLevel level);
 void Log(LogLevel level, const char* format, ...);
 
 // Macros

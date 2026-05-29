@@ -5,7 +5,7 @@
 
 namespace efengine {
 namespace core {
-    // Obtener string del nivel de Log
+    // Función para obtener string del nivel de Log
     static const char* GetLevelString(LogLevel level) {
         switch (level) {
             case LogLevel::Debug: return "DEBUG";
@@ -33,4 +33,5 @@ namespace core {
         std::printf("%s%s\n", level_str, buffer);
         std::fflush(stdout);  // Hace que aparezca inmediatamente
     }
+}
 }
