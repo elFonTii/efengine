@@ -1,0 +1,4 @@
+add_library(efengine_scene OBJECT)
+target_sources(efengine_scene PRIVATE Scene.cpp)
+target_include_directories(efengine_scene PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(efengine_scene PUBLIC efengine_core)
