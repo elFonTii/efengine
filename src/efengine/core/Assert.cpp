@@ -10,7 +10,7 @@ namespace core {
         EF_LOG_ERROR("  Message:{}", message);
 
         #ifdef _DEBUG
-            __debugbreak(); // Pausar el debugger en el punto de fallo (MSVC)
+            __debugbreak(); // Pausar el debugger en el punto de fallo - SÓLO CON MSVC, para otros compiladores escuche __builtin_trap()
         #endif
 
         // En release, termina el programa.
