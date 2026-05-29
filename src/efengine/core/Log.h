@@ -4,9 +4,11 @@
 #include <string>
 #include <cstdio>
 
+// 1. Namespace
 namespace efengine {
 namespace core {
 
+// 2. Variables
 enum class LogLevel { // Niveles de log
     Debug = 0,
     Info = 1,
@@ -14,11 +16,11 @@ enum class LogLevel { // Niveles de log
     Error = 3,
 };
 
-// Definición de funciones
+// 3. Funciones
 static const char* GetLevelString(LogLevel level);
 void Log(LogLevel level, const char* format, ...);
 
-// Macros
+// 4. Macros
 #define EF_LOG_DEBUG(fmt, ...)\
 ::efengine::core::Log(::efengine::core::LogLevel::Debug, fmt, ##__VA_ARGS__)
 
