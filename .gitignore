@@ -1,0 +1,30 @@
+# Build directories
+build/
+cmake-build-debug/
+cmake-build-release/
+.vs/
+
+# Compiler output
+*.o
+*.obj
+*.lib
+*.exe
+*.dll
+*.pdb
+*.ilk
+
+# IDEs
+.vscode/
+.idea/
+*.sln.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies (si usamos conan, vcpkg, etc)
+conan/
+vcpkg_installed/
+
+# Document Directory
+docs/
