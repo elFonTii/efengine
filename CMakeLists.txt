@@ -29,21 +29,29 @@ FetchContent_Declare(
 )
 
 # GLAD - Cargador de funciones OpenGL
+# El proyecto CMake de GLAD 2.x vive en la subcarpeta cmake/ del repo,
+# por eso SOURCE_SUBDIR: sin esto no se define glad_add_library().
 FetchContent_Declare(
     glad
     GIT_REPOSITORY https://github.com/Dav1dde/glad.git
     GIT_TAG v2.0.7
+    SOURCE_SUBDIR cmake
 )
 
 # GLM - Matemáticas para gráficos
 FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/g-truc/glm.git
-    GIT_TAG 0.9.9.8
+    GIT_TAG 1.0.1
 )
 
 # Registrar librerías
 FetchContent_MakeAvailable(glfw glad glm)
+
+# GLAD 2.x no crea un target "glad" por sí solo: hay que generarlo con
+# glad_add_library(). Aquí pedimos OpenGL 3.3 Core (base compatible y común).
+# Para subir de versión, cambia gl:core=3.3 (p. ej. gl:core=4.6).
+glad_add_library(glad STATIC API gl:core=3.3)
 
 # SUBDIRECTORIOS
 add_subdirectory(src)
