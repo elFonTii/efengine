@@ -31,7 +31,6 @@ namespace platform {
 
             // Accessors - es solo lectura
             GLFWwindow* handle() const { return m_handle; };
-            const GLFWwindow* test = handle();
 
             // Loop
             void PollEvents();
