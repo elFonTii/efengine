@@ -30,7 +30,7 @@ namespace core {
         va_end(args);
 
         // Imprimir a stdout
-        std::printf("%s%s\n", level_str, buffer);
+        std::printf("%s%s\n ", level_str, buffer);
         std::fflush(stdout);  // Hace que aparezca inmediatamente
     }
 }
