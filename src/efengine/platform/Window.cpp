@@ -53,27 +53,47 @@ namespace platform {
     };
 
     Window::Window(Window&& other) noexcept
-        :  m_handle(std::exchange(other.m_handle, nullptr)) {}
-            /*
-            m_handle(other.m_handle) {
-            other.m_handle = null; // Si no al hacer el move ambos creerian poseerlo momentaneamente.
-            */
+        : m_handle(std::exchange(other.m_handle, null))
+        , m_width(std::exchange(other.m_width, 0))
+        , m_height(std::exchange(other.m_height, 0)) {}
 
     Window& Window::operator=(Window&& other) noexcept {
         if(this != &other) {
+            // Liberar nuestro recurso actual si lo tenemos.
             if(m_handle != null) {
                 glfwDestroyWindow(m_handle);
-                
-                if(--s_window_count < 1) {
-                    glfwTerminate();
-                    EF_ASSERT(s_window_count == 0, "Window count should be zero after destroying the last window.");
-                }
 
-                m_handle = other.m_handle;
-                other.m_handle = null; // vaciamos origen, igual al move.
+                if(--s_window_count == 0) {
+                    glfwTerminate();
+                }
             }
-            return *this;
+
+            // Transferir el recurso de 'other' (siempre, tuviéramos handle o no).
+            m_handle = std::exchange(other.m_handle, null);
+            m_width  = std::exchange(other.m_width, 0);
+            m_height = std::exchange(other.m_height, 0);
         }
+        return *this;
+    }
+
+    void Window::PollEvents() {
+        glfwPollEvents();
+    }
+
+    void Window::SwapBuffers() {
+        glfwSwapBuffers(m_handle);
+    }
+
+    bool Window::ShouldClose() const {
+        return glfwWindowShouldClose(m_handle);
+    }
+
+    void Window::SetShouldClose(bool shouldClose) {
+        glfwSetWindowShouldClose(m_handle, shouldClose);
+    }
+
+    bool Window::IsKeyPressed(int key) const {
+        return glfwGetKey(m_handle, key) == GLFW_PRESS;
     }
 }
 }
