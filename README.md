@@ -35,3 +35,27 @@ ApplyDamage(damage);
  Macros disponibles:
  - EF_ASSERT
  - EF_ASSERT_MSG
+
+## Fases
+
+- [x] **Fase 1 — Ventana y contexto OpenGL.** Ventana 800×600 "efengine" con contexto
+  OpenGL 3.3 Core (`platform::Window` RAII sobre GLFW), `renderer::Context` carga
+  GLAD y reporta la GPU, y `application::Application::Run()` corre el loop
+  básico (clear / poll / swap). Cierra con ESC o el botón X sin crashes ni leaks.
+
+### Salida esperada (sandbox, Fase 1)
+
+```
+[INFO] === efengine Sandbox: Fase 1 ===
+[INFO] Window created: efengine (800 x 600)
+[INFO] OpenGL Version : 3.3.0 ...
+[INFO] GPU Renderer   : <tu GPU>
+[INFO] GPU Vendor     : <tu vendor>
+[INFO] GLSL Version   : 3.30 ...
+[INFO] Application inicializada
+[INFO] Entrando al loop principal
+... (ventana abierta hasta que cierres con ESC o el botón X) ...
+[INFO] Saliendo del loop principal
+[INFO] === Sandbox finalizado limpiamente ===
+[INFO] Window destroyed
+```
