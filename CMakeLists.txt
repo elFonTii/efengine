@@ -45,8 +45,32 @@ FetchContent_Declare(
     GIT_TAG 1.0.1
 )
 
+# doctest - Framework de tests unitarios (header-only).
+FetchContent_Declare(
+    doctest
+    GIT_REPOSITORY https://github.com/doctest/doctest.git
+    GIT_TAG v2.4.12
+)
+
+# Opciones de GLFW: no compilar sus docs/tests/examples.
+# GLFW crea un target 'docs' propio si encuentra Doxygen, que colisiona con el
+# nuestro. Apagarlos evita la colisión y acelera el build.
+set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+
+# doctest: no compilar sus propios tests ni su main en lib estática.
+set(DOCTEST_WITH_TESTS              OFF CACHE BOOL "" FORCE)
+set(DOCTEST_WITH_MAIN_IN_STATIC_LIB OFF CACHE BOOL "" FORCE)
+
+# Opción para que un consumidor que embeba efengine pueda apagar los tests.
+option(EFENGINE_BUILD_TESTS "Compilar los tests unitarios de efengine" ON)
+
 # Registrar librerías
 FetchContent_MakeAvailable(glfw glad glm)
+if(EFENGINE_BUILD_TESTS)
+    FetchContent_MakeAvailable(doctest)
+endif()
 
 # GLAD 2.x no crea un target "glad" por sí solo: hay que generarlo con
 # glad_add_library(). Aquí pedimos OpenGL 3.3 Core (base compatible y común).
@@ -79,3 +103,11 @@ endif()
 # SUBDIRECTORIOS
 add_subdirectory(src)
 add_subdirectory(sandbox)
+
+# TESTS (doctest + CTest)
+if(EFENGINE_BUILD_TESTS)
+    enable_testing()
+    # El helper doctest_discover_tests vive en el repo de doctest.
+    include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
+    add_subdirectory(tests)
+endif()
