@@ -11,5 +11,7 @@ target_sources(efengine_core PRIVATE
     Assert.cpp
 )
 
-# Headers públicos del módulo
-target_include_directories(efengine_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# Raíz de includes del proyecto: se incluye como <efengine/core/Log.h>.
+# OJO: no exponer la carpeta del módulo (.../core) en el -I, porque en
+# Windows (case-insensitive) un header como math/Math.h shadowearía <math.h>.
+target_include_directories(efengine_core PUBLIC ${CMAKE_SOURCE_DIR}/src)

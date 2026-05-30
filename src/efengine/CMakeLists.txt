@@ -14,8 +14,8 @@ add_subdirectory(application)
 # que combine todos los módulos
 add_library(efengine STATIC)
 
-# Especificar qué carpeta es publica
-target_include_directories(efengine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# Raíz de includes pública: se consume como <efengine/...>
+target_include_directories(efengine PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
 # Enlazar módulos
 target_link_libraries(efengine PUBLIC
