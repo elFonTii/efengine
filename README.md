@@ -3,6 +3,8 @@
 ## Lineamientos de desarrollo
 - CONSISTENCIA: Cada clase deberá contar con su archivo .cpp y .h, no importa que sea header-only o una clase simple. 
 - Estructura de Header: namespace - variables - funciones - macros - constantes
+- Siempre incluir <glad/gl.h> ANTES de <GLFW/glfw3.h>
+- Copy = delete
 
 
 ## Conceptos clave
