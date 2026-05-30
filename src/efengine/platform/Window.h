@@ -1,7 +1,7 @@
 #pragma once
 
 #include <efengine/core/Types.h>
-// Forward declaration de GLFW
+// Forward declaration de GLFW, prometemos que va a estar definido.
 struct GLFWwindow;
 
 namespace efengine {
@@ -17,16 +17,21 @@ namespace platform {
     // === CLASE VENTANA ===
     class Window {
         public:
-            explicit Window(const WindowProps& props = WindowProps());
-            ~Window();
+            explicit Window(const WindowProps& props = WindowProps()); // ADQUIERE el recurso
+            ~Window(); // Llamamos al destructor explícitamente para asegurarnos de que se llame a glfwTerminate() cuando se destruya la última ventana.
 
-            // El copy es prohibido
+            // El copy es prohibido, una ventana de Windows no se puede "duplicar"
+            // Tampoco pueden poseer el mismo handle, Resource Acquisition Is Initialization.
             Window(const Window&) =             delete;
             Window& operator=(const Window&) =  delete;
 
             // El move es permitido
-            Window(Window&&) =             default;
-            Window& operator=(Window&&) =  default;
+            Window(Window&& other) noexcept;
+            Window& operator=(Window&& other) noexcept;
+
+            // Accessors - es solo lectura
+            GLFWwindow* handle() const { return m_handle; };
+            const GLFWwindow* test = handle();
 
             // Loop
             void PollEvents();
