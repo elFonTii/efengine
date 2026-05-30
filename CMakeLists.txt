@@ -53,6 +53,29 @@ FetchContent_MakeAvailable(glfw glad glm)
 # Para subir de versión, cambia gl:core=3.3 (p. ej. gl:core=4.6).
 glad_add_library(glad STATIC API gl:core=3.3)
 
+# DOCUMENTACIÓN (Doxygen)
+# Target opcional 'docs'. Si Doxygen no está instalado, simplemente se omite
+# y el build normal no se ve afectado.
+find_package(Doxygen)
+if(DOXYGEN_FOUND)
+    set(DOXYGEN_INPUT_DIR  ${CMAKE_SOURCE_DIR})
+    set(DOXYGEN_OUTPUT_DIR ${CMAKE_SOURCE_DIR}/docs)
+    set(DOXYFILE_IN  ${CMAKE_SOURCE_DIR}/cmake/Doxyfile.in)
+    set(DOXYFILE_OUT ${CMAKE_BINARY_DIR}/Doxyfile)
+
+    # Rellena las variables @...@ de la plantilla con los valores de CMake.
+    configure_file(${DOXYFILE_IN} ${DOXYFILE_OUT} @ONLY)
+
+    add_custom_target(docs
+        COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYFILE_OUT}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Generando documentación con Doxygen en ${DOXYGEN_OUTPUT_DIR}/html"
+        VERBATIM
+    )
+else()
+    message(STATUS "Doxygen no encontrado: el target 'docs' no estará disponible.")
+endif()
+
 # SUBDIRECTORIOS
 add_subdirectory(src)
 add_subdirectory(sandbox)

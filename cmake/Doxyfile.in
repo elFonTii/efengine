@@ -1,0 +1,68 @@
+# Plantilla de configuración de Doxygen para efengine.
+# CMake reemplaza las variables @...@ y genera el Doxyfile final en el build.
+# No editar el Doxyfile generado: editar esta plantilla.
+
+#---------------------------------------------------------------------------
+# Identidad del proyecto
+#---------------------------------------------------------------------------
+PROJECT_NAME           = "@PROJECT_NAME@"
+PROJECT_NUMBER         = "@PROJECT_VERSION@"
+PROJECT_BRIEF          = "Motor de videojuegos efengine"
+OUTPUT_DIRECTORY       = "@DOXYGEN_OUTPUT_DIR@"
+OUTPUT_LANGUAGE        = Spanish
+CREATE_SUBDIRS         = NO
+
+#---------------------------------------------------------------------------
+# Qué documentar
+#---------------------------------------------------------------------------
+# Extrae todo, aunque aún no tenga comentarios Doxygen.
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_CLASSES  = YES
+# Acepta comentarios estilo /// y //! ademas de /** */.
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = YES
+MARKDOWN_SUPPORT       = YES
+# Mostrar la ruta relativa de cada archivo recortando el prefijo del repo.
+FULL_PATH_NAMES        = YES
+STRIP_FROM_PATH        = "@DOXYGEN_INPUT_DIR@"
+
+#---------------------------------------------------------------------------
+# Entradas
+#---------------------------------------------------------------------------
+INPUT                  = "@DOXYGEN_INPUT_DIR@/src" \
+                         "@DOXYGEN_INPUT_DIR@/README.md"
+USE_MDFILE_AS_MAINPAGE = "@DOXYGEN_INPUT_DIR@/README.md"
+FILE_PATTERNS          = *.h *.hpp *.cpp
+RECURSIVE              = YES
+# No documentar dependencias descargadas ni el directorio de build.
+EXCLUDE_PATTERNS       = */build/* */_deps/* */cmake-build-*/*
+
+#---------------------------------------------------------------------------
+# Procesamiento del preprocesador (para que entienda las macros EF_*)
+#---------------------------------------------------------------------------
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = NO
+
+#---------------------------------------------------------------------------
+# Salida HTML
+#---------------------------------------------------------------------------
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+GENERATE_LATEX         = NO
+
+#---------------------------------------------------------------------------
+# Diagramas (Graphviz desactivado: solo HTML)
+#---------------------------------------------------------------------------
+HAVE_DOT               = NO
+
+#---------------------------------------------------------------------------
+# Diagnóstico
+#---------------------------------------------------------------------------
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
