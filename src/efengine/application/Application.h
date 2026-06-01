@@ -2,21 +2,28 @@
 
 #include <efengine/platform/Window.h>
 #include <efengine/renderer/Context.h>
+#include <efengine/renderer/Renderer.h>
 
 namespace efengine {
 namespace application {
 
+    // Bundle RAII de los subsistemas del motor. Expone accessors; el loop
+    // principal vive en el cliente (sandbox). m_context no se expone: se
+    // retiene solo por su lifetime (RAII de GLAD).
     class Application {
         public:
             Application();
-            void Run();
+
+            platform::Window&   GetWindow()   { return m_window; }
+            renderer::Renderer& GetRenderer() { return m_renderer; }
 
         private:
-            // ORDEN CRÍTICO: m_window se construye PRIMERO (crea + activa el
-            // contexto GL); m_context DESPUÉS (carga GLAD sobre ese contexto).
-            // El orden de inicialización en C++ sigue el orden de declaración.
-            platform::Window  m_window;
-            renderer::Context m_context;
+            // ORDEN CRÍTICO (contrato, principio 11): Window 1.º (crea + activa
+            // el contexto GL); Context 2.º (carga GLAD sobre ese contexto);
+            // Renderer 3.º. El orden de init en C++ sigue el orden de declaración.
+            platform::Window   m_window;
+            renderer::Context  m_context;
+            renderer::Renderer m_renderer;
     };
 
 } // namespace application

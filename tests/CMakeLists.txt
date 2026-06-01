@@ -5,6 +5,7 @@
 add_executable(efengine_tests
     main.cpp
     core/Types.test.cpp
+    renderer/VertexLayout.test.cpp
 )
 
 # Include path raíz: los tests consumen el motor como <efengine/...>.

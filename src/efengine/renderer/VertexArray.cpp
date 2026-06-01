@@ -1,0 +1,77 @@
+#include "VertexArray.h"
+
+#include <glad/gl.h>
+#include <cstdint>
+#include <utility>
+
+#include <efengine/core/Assert.h>
+
+namespace efengine {
+namespace renderer {
+
+    VertexArray::VertexArray() {
+        glGenVertexArrays(1, &m_id);
+        EF_ASSERT(m_id != 0, "VertexArray: glGenVertexArrays fallo");
+    }
+
+    VertexArray::~VertexArray() {
+        if (m_id != 0) {
+            glDeleteVertexArrays(1, &m_id);
+        }
+    }
+
+    VertexArray::VertexArray(VertexArray&& other) noexcept
+        : m_id(std::exchange(other.m_id, 0))
+        , m_buffers(std::move(other.m_buffers))
+        , m_vertexCount(std::exchange(other.m_vertexCount, 0)) {}
+
+    VertexArray& VertexArray::operator=(VertexArray&& other) noexcept {
+        if (this != &other) {
+            if (m_id != 0) {
+                glDeleteVertexArrays(1, &m_id);
+            }
+            m_id          = std::exchange(other.m_id, 0);
+            m_buffers     = std::move(other.m_buffers);
+            m_vertexCount = std::exchange(other.m_vertexCount, 0);
+        }
+        return *this;
+    }
+
+    void VertexArray::AddVertexBuffer(Buffer&& buffer, const VertexLayout& layout) {
+        EF_ASSERT(layout.stride() > 0, "VertexArray: el layout no tiene atributos");
+        EF_ASSERT(buffer.size() % layout.stride() == 0,
+                  "VertexArray: el tamano del buffer no es multiplo del stride");
+
+        glBindVertexArray(m_id);
+        buffer.Bind();
+
+        for (const VertexAttribute& attr : layout.attributes()) {
+            glEnableVertexAttribArray(attr.location);
+            // glVertexAttribPointer toma el byte-offset como const void*. Pasar un
+            // u32 directo es impl-defined en 64-bit; ensancharlo a uintptr_t antes
+            // del reinterpret_cast es la forma portable y correcta.
+            glVertexAttribPointer(
+                attr.location,
+                static_cast<GLint>(ComponentCount(attr.type)),
+                GL_FLOAT,
+                GL_FALSE,
+                static_cast<GLsizei>(layout.stride()),
+                reinterpret_cast<const void*>(static_cast<std::uintptr_t>(attr.offset)));
+        }
+
+        // stride() > 0 garantizado por el EF_ASSERT de arriba (sería UB en release si se viola).
+        m_vertexCount = static_cast<u32>(buffer.size() / layout.stride());
+        m_buffers.push_back(std::move(buffer));
+
+        // Postcondición: dejamos el VAO desenlazado para no filtrar estado GL a
+        // llamadas posteriores (configurar otro VAO no corrompe este).
+        glBindVertexArray(0);
+    }
+
+    void VertexArray::Bind() const {
+        EF_ASSERT(m_id != 0, "VertexArray::Bind: VAO vacio (movido o no inicializado)");
+        glBindVertexArray(m_id);
+    }
+
+}
+}
