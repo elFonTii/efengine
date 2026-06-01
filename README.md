@@ -32,6 +32,9 @@ Principios **MUST** del motor: reglas no negociables que aplican a todo código 
 
 
 ## Conceptos clave
+- VBOs -> Move datos de vertices (Vetex Data) una sóla vez pero se pueden reutilizar en cada frame. No guarda la información, guarda una referencia a la información de los arrays. (simplemente un bloque de memoria donde se guarda la info de los vértices)
+- VAOs -> Es una lista de bytes, le dice a la GPU como escribir datos usando ese VBO
+- EBOs -> Es un VBO pero usado con un propósito diferente. 
 - MACROS:
  Un macro es una función que se expande en tiempo de compilación, lo que permite escribir código más limpio y fácil de usar.
  Ejemplo: EF_LOG_WARNING(fmt, ...) se expande luego a  ::efengine::core::Log(::efengine::core::LogLevel::Info, fmt, ##__VA_ARGS__)
