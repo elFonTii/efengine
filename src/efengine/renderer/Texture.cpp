@@ -86,5 +86,11 @@ namespace renderer {
         }
         return *this;
     }
+
+    void Texture::Bind(u32 unit) const {
+        EF_ASSERT(m_id != 0, "Texture::Bind: Textura no válida");
+        glActiveTexture(GL_TEXTURE0 + unit);
+        glBindTexture(GL_TEXTURE_2D, m_id);
+    }
 }
 }
