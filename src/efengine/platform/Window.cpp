@@ -34,6 +34,15 @@ namespace platform {
         glfwMakeContextCurrent(m_handle);
         glfwSwapInterval(props.vsync ? 1 : 0);
 
+        // Framebuffer
+        i32 fbWidth = 0, fbHeight = 0 ;
+        glfwGetFramebufferSize(m_handle, &fbWidth, &fbHeight);
+        m_width = fbWidth;
+        m_height = fbHeight;
+
+        glfwSetWindowUserPointer(m_handle, this);
+        glfwSetFramebufferSizeCallback(m_handle, OnFramebufferResize);
+
         EF_LOG_INFO("Window created: %s (%d x %d)", props.title, m_width, m_height);
     };
 
@@ -55,7 +64,11 @@ namespace platform {
     Window::Window(Window&& other) noexcept
         : m_handle(std::exchange(other.m_handle, null))
         , m_width(std::exchange(other.m_width, 0))
-        , m_height(std::exchange(other.m_height, 0)) {}
+        , m_height(std::exchange(other.m_height, 0)) {
+            if(m_handle != null) {
+                glfwSetWindowUserPointer(m_handle, this); // sino apuntaría al objeto original y no al copiado.
+            }
+        }
 
     Window& Window::operator=(Window&& other) noexcept {
         if(this != &other) {
@@ -72,7 +85,12 @@ namespace platform {
             m_handle = std::exchange(other.m_handle, null);
             m_width  = std::exchange(other.m_width, 0);
             m_height = std::exchange(other.m_height, 0);
+
+            if(m_handle != null) {
+                glfwSetWindowUserPointer(m_handle, this); // sino apuntaría al objeto original y no al copiado.
+            }
         }
+        
         return *this;
     }
 
@@ -94,6 +112,24 @@ namespace platform {
 
     bool Window::IsKeyPressed(int key) const {
         return glfwGetKey(m_handle, key) == GLFW_PRESS;
+    }
+
+    f32 Window::GetAspectRatio() const {
+        if(m_height == 0) {
+            return 1.0f; // ventana minimizada, se retorna 1 para evitar dividir por 0
+        }
+
+        return (f32)m_width / (f32)m_height;
+    }
+
+    /* Callback que actualiza el tamaño del viewport */
+    void Window::OnFramebufferResize(GLFWwindow* handle, int width, int height) {
+        auto* self = static_cast<Window*>(glfwGetWindowUserPointer(handle)); // obtiene el puntero que se guardó con SetWindowUserPointer en el constructor
+        EF_ASSERT(self != null, "Window::OnFramebufferResize: glfw user pointer nulo");
+
+        self -> m_width = (u32)width;
+        self -> m_height= (u32)height;
+        glViewport(0,0, (GLsizei)width, (GLsizei)height); 
     }
 }
 }

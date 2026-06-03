@@ -13,12 +13,10 @@ namespace efengine {
 namespace renderer {
 
     Context::Context(platform::Window& window) {
-        // window ya hizo glfwMakeContextCurrent en su ctor.
-        (void)window;
-
         const int version = gladLoadGL((GLADloadfunc)glfwGetProcAddress);
         EF_ASSERT(version != 0, "gladLoadGL failed: could not load OpenGL functions");
-
+        
+        glViewport(0, 0, (GLsizei)window.GetWidth(), (GLsizei)window.GetHeight()); // Si lo inicializo en Window el contexto de opengl no está activo todavía "access violation -1073741819"
         glEnable(GL_DEPTH_TEST); // Test de profundidad que descarta fragmentos ocultos (las tapas traseras de una forma no tapen las delanteras)
         log_gpu_info();
     }

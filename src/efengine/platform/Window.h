@@ -44,12 +44,15 @@ namespace platform {
             // Accessors
             u32 GetWidth() const { return m_width; }
             u32 GetHeight() const { return m_height; }
+            f32 GetAspectRatio() const;
             GLFWwindow* GetNativeHandle() const { return m_handle; }
 
         private:
         GLFWwindow* m_handle = null;
         u32 m_width = 0;
         u32 m_height = 0;
+
+        static void OnFramebufferResize(GLFWwindow* handle, int width, int height);
         
     };
 }
