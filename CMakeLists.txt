@@ -52,6 +52,14 @@ FetchContent_Declare(
     GIT_TAG v2.4.12
 )
 
+# stb - Carga/decodificación de imágenes (header-only). stb no usa tags de
+# versión; se fija a un commit concreto del master para reproducibilidad.
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG f0569113c93ad095470c54bf34a17b36646bbbb5
+)
+
 # Opciones de GLFW: no compilar sus docs/tests/examples.
 # GLFW crea un target 'docs' propio si encuentra Doxygen, que colisiona con el
 # nuestro. Apagarlos evita la colisión y acelera el build.
@@ -67,10 +75,16 @@ set(DOCTEST_WITH_MAIN_IN_STATIC_LIB OFF CACHE BOOL "" FORCE)
 option(EFENGINE_BUILD_TESTS "Compilar los tests unitarios de efengine" ON)
 
 # Registrar librerías
-FetchContent_MakeAvailable(glfw glad glm)
+FetchContent_MakeAvailable(glfw glad glm stb)
 if(EFENGINE_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
 endif()
+
+# stb no trae CMakeLists: tras poblarlo, exponemos su carpeta como include
+# mediante un target INTERFACE. La implementación se compila una sola vez en
+# src/efengine/renderer/stb_image_impl.cpp.
+add_library(stb INTERFACE)
+target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
 
 # GLAD 2.x no crea un target "glad" por sí solo: hay que generarlo con
 # glad_add_library(). Aquí pedimos OpenGL 3.3 Core (base compatible y común).

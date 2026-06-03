@@ -94,5 +94,18 @@ namespace renderer {
         glUseProgram(m_program);
     }
 
+    void Shader::SetInt(const char* name, i32 value) const {
+        EF_ASSERT(m_program != 0, "Shader::SetInt: programa vacio (movido o no inicializado)");
+        
+        i32 uniformLocation = glGetUniformLocation(m_program, name);
+
+        if(uniformLocation == -1) {
+            EF_LOG_WARNING("Shader::SetInt: fallo al obtener la ubicación del uniform: %s", name);
+            return;
+        }
+
+        glUniform1i(uniformLocation, value);
+    }
+
 }
 }

@@ -21,6 +21,7 @@ namespace renderer {
             Shader& operator=(Shader&& other) noexcept;
 
             void Bind() const;
+            void SetInt(const char* name, i32 value) const;
             u32  id() const { return m_program; }
 
         private:

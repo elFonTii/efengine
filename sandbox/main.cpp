@@ -4,6 +4,7 @@
 #include <efengine/renderer/VertexArray.h>
 #include <efengine/renderer/VertexLayout.h>
 #include <efengine/renderer/IndexBuffer.h>
+#include <efengine/renderer/Texture.h>
 #include <efengine/core/Log.h>
 #include <efengine/core/Types.h>
 
@@ -15,15 +16,20 @@
 namespace {
     const char* kVertexSrc = R"(#version 330 core
 layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec2 aUV;
+out vec2 vUV;
 void main() {
+    vUV = aUV;
     gl_Position = vec4(aPos, 1.0);
 }
 )";
 
     const char* kFragmentSrc = R"(#version 330 core
 out vec4 FragColor;
+in vec2 vUV;
+uniform sampler2D uAlbedo;
 void main() {
-    FragColor = vec4(1.0, 0.5, 0.2, 1.0);
+    FragColor = texture(uAlbedo, vUV);
 }
 )";
 }
@@ -31,7 +37,7 @@ void main() {
 int main() {
     using namespace efengine;
 
-    EF_LOG_INFO("=== efengine Sandbox: Fase 3 (Plano) ===");
+    EF_LOG_INFO("=== efengine Sandbox: Fase 4 (Albedo) ===");
 
     application::Application app;
     platform::Window&   window = app.GetWindow();
@@ -43,19 +49,29 @@ int main() {
         return 1;
     }
 
+    auto texOpt = renderer::Texture::Create("assets/madera.jpg");
+
+    if (!texOpt) {
+        EF_LOG_ERROR("No se pudo cargar la textura; abortando");
+        return 1;
+    }
+
+    // QUAD: 4 vertices vec3 + uv, 6 indices (2 triángulos)
     f32 vertices[] = {
-        -0.5f, -0.5f, 0.0f,   // 0: inferior-izquierda
-        0.5f, -0.5f, 0.0f,   // 1: inferior-derecha
-        0.5f,  0.5f, 0.0f,   // 2: superior-derecha
-        -0.5f,  0.5f, 0.0f,   // 3: superior-izquierda
+        // posición            // uv
+        -0.5f, -0.5f, 0.0f,    0.0f, 0.0f,   // 0: inferior-izquierda
+         0.5f, -0.5f, 0.0f,    1.0f, 0.0f,   // 1: inferior-derecha
+         0.5f,  0.5f, 0.0f,    1.0f, 1.0f,   // 2: superior-derecha
+        -0.5f,  0.5f, 0.0f,    0.0f, 1.0f,   // 3: superior-izquierda
     };
 
-    // 4 vertices vec3
     u32 indices[] = { 0, 1, 2, 2, 3, 0 };
     
     renderer::Buffer       vbo(vertices, sizeof(vertices));
     renderer::VertexLayout layout;
     layout.Push(renderer::ShaderDataType::Float3);   // posición
+    layout.Push(renderer::ShaderDataType::Float2);   // uv
+
 
     renderer::VertexArray va;
     va.AddVertexBuffer(std::move(vbo), layout);
@@ -68,6 +84,9 @@ int main() {
         }
 
         gfx.Clear(0.1f, 0.1f, 0.12f, 1.0f);
+        shaderOpt->Bind();
+        shaderOpt->SetInt("uAlbedo", 0);
+        texOpt->Bind(0);
         gfx.Draw(va, *shaderOpt);
         window.SwapBuffers();
     }
