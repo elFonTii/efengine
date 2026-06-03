@@ -26,8 +26,8 @@ namespace renderer {
             // Toma propiedad del buffer y configura los atributos según el layout.
             void AddVertexBuffer(Buffer&& buffer, const VertexLayout& layout);
             void SetIndexBuffer(IndexBuffer&& indexBuffer);
-            int hasIndexBuffer() const { return m_indexBuffer.has_value(); }
-            int indexCount() const { return m_indexBuffer ? m_indexBuffer->count() : 0; }
+            bool hasIndexBuffer() const { return m_indexBuffer.has_value(); }
+            u32  indexCount() const;
 
             void Bind() const;
             u32  vertexCount() const { return m_vertexCount; }

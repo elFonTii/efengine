@@ -26,6 +26,7 @@ namespace renderer {
     VertexArray::VertexArray(VertexArray&& other) noexcept
         : m_id(std::exchange(other.m_id, 0))
         , m_buffers(std::move(other.m_buffers))
+        , m_indexBuffer(std::move(other.m_indexBuffer))
         , m_vertexCount(std::exchange(other.m_vertexCount, 0)) {}
 
     // Move assignment operator
@@ -36,6 +37,7 @@ namespace renderer {
             }
             m_id          = std::exchange(other.m_id, 0);
             m_buffers     = std::move(other.m_buffers);
+            m_indexBuffer = std::move(other.m_indexBuffer);
             m_vertexCount = std::exchange(other.m_vertexCount, 0);
         }
         return *this;
@@ -82,9 +84,9 @@ namespace renderer {
         indexBuffer.Bind();
         m_indexBuffer = std::move(indexBuffer);
         glBindVertexArray(0);
-    };
+    }
 
-    int VertexArray::indexCount() const {
+    u32 VertexArray::indexCount() const {
         EF_ASSERT(hasIndexBuffer(), "VertexArray::indexCount: no hay index buffer");
         return m_indexBuffer->count();
     }
