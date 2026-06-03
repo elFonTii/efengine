@@ -19,6 +19,7 @@ namespace renderer {
         const int version = gladLoadGL((GLADloadfunc)glfwGetProcAddress);
         EF_ASSERT(version != 0, "gladLoadGL failed: could not load OpenGL functions");
 
+        glEnable(GL_DEPTH_TEST); // Test de profundidad que descarta fragmentos ocultos (las tapas traseras de una forma no tapen las delanteras)
         log_gpu_info();
     }
 

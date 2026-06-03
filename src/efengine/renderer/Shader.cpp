@@ -2,6 +2,7 @@
 
 #include <glad/gl.h>
 #include <utility>
+#include <glm/gtc/type_ptr.hpp>
 
 #include <efengine/core/Assert.h>
 #include <efengine/core/Log.h>
@@ -30,6 +31,7 @@ namespace renderer {
         }
     }
 
+    // TODO: FFONTANA - HACE FALTA MÉTODO COMUN PARA CHEQUEO DE PROGRAMA Y LOCALIZACIÓN DEL UNIFORM
     std::optional<Shader> Shader::Create(const char* vertexSrc, const char* fragmentSrc) {
         EF_ASSERT(vertexSrc != null, "Shader::Create: vertexSrc no puede ser null");
         EF_ASSERT(fragmentSrc != null, "Shader::Create: fragmentSrc no puede ser null");
@@ -107,5 +109,41 @@ namespace renderer {
         glUniform1i(uniformLocation, value);
     }
 
+    void Shader::SetFloat(const char* name, f32 value) const {
+        EF_ASSERT(m_program != 0, "Shader::SetFloat: programa vacio (movido no inicializado)");
+
+        i32 uniformLocation = glGetUniformLocation(m_program, name);
+
+        if(uniformLocation == -1) {
+            EF_LOG_WARNING("Shader::SetFloat: fallo al obtener la ubicación del uniform: %s", name);
+            return;
+        }
+        glUniform1f(uniformLocation, value);
+    }
+
+    void Shader::SetVec3(const char* name, const glm::vec3& value) const {
+        EF_ASSERT(m_program != 0, "Shader::SetVec3: programa vacio (movido no inicializado)");
+
+        i32 uniformLocation = glGetUniformLocation(m_program, name);
+
+        if(uniformLocation == -1) {
+            EF_LOG_WARNING("Shader::SetVec3: fallo al obtener la ubicación del uniform: %s", name);
+            return;
+        }
+        glUniform3fv(uniformLocation, 1, glm::value_ptr(value));
+    }
+
+    void Shader::SetMat4(const char* name, const glm::mat4& value) const {
+        EF_ASSERT(m_program != 0, "Shader::SetMat4: programa vacio (movido no inicializado)");
+
+        i32 uniformLocation = glGetUniformLocation(m_program, name);
+
+        if(uniformLocation == -1) {
+            EF_LOG_WARNING("Shader::SetMat4: fallo al obtener la ubicación del uniform: %s", name);
+            return;
+        }
+        //                                     No transponer
+        glUniformMatrix4fv(uniformLocation, 1, GL_FALSE, glm::value_ptr(value));
+    }
 }
 }
