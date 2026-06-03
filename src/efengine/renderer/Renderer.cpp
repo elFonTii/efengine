@@ -17,10 +17,13 @@ namespace renderer {
 
         shader.Bind();
         va.Bind();
-        glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(va.vertexCount()));
+        
+        if(va.hasIndexBuffer()) {
+            glDrawElements(GL_TRIANGLES, (GLsizei)va.indexCount(), GL_UNSIGNED_INT, nullptr);
+        } else {
+            glDrawArrays(GL_TRIANGLES, 0, (GLsizei)va.vertexCount());
+        }
 
-        // Dejamos el contexto limpio (misma postcondición que VertexArray::AddVertexBuffer):
-        // ninguna llamada GL posterior opera por accidente sobre este VAO/shader.
         glBindVertexArray(0);
         glUseProgram(0);
     }

@@ -9,22 +9,27 @@
 namespace efengine {
 namespace renderer {
 
+    // Constructor
     VertexArray::VertexArray() {
         glGenVertexArrays(1, &m_id);
         EF_ASSERT(m_id != 0, "VertexArray: glGenVertexArrays fallo");
     }
 
+    // Destructor
     VertexArray::~VertexArray() {
         if (m_id != 0) {
             glDeleteVertexArrays(1, &m_id);
         }
     }
 
+    // Move constructor
     VertexArray::VertexArray(VertexArray&& other) noexcept
         : m_id(std::exchange(other.m_id, 0))
         , m_buffers(std::move(other.m_buffers))
+        , m_indexBuffer(std::move(other.m_indexBuffer))
         , m_vertexCount(std::exchange(other.m_vertexCount, 0)) {}
 
+    // Move assignment operator
     VertexArray& VertexArray::operator=(VertexArray&& other) noexcept {
         if (this != &other) {
             if (m_id != 0) {
@@ -32,6 +37,7 @@ namespace renderer {
             }
             m_id          = std::exchange(other.m_id, 0);
             m_buffers     = std::move(other.m_buffers);
+            m_indexBuffer = std::move(other.m_indexBuffer);
             m_vertexCount = std::exchange(other.m_vertexCount, 0);
         }
         return *this;
@@ -71,6 +77,18 @@ namespace renderer {
     void VertexArray::Bind() const {
         EF_ASSERT(m_id != 0, "VertexArray::Bind: VAO vacio (movido o no inicializado)");
         glBindVertexArray(m_id);
+    }
+
+    void VertexArray::SetIndexBuffer(IndexBuffer&& indexBuffer) {
+        glBindVertexArray(m_id);
+        indexBuffer.Bind();
+        m_indexBuffer = std::move(indexBuffer);
+        glBindVertexArray(0);
+    }
+
+    u32 VertexArray::indexCount() const {
+        EF_ASSERT(hasIndexBuffer(), "VertexArray::indexCount: no hay index buffer");
+        return m_indexBuffer->count();
     }
 
 }
