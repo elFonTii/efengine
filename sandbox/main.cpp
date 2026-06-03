@@ -117,7 +117,7 @@ void main() {
 int main() {
     using namespace efengine;
 
-    EF_LOG_INFO("=== efengine Sandbox: Fase 4 (Albedo) ===");
+    EF_LOG_INFO("=== efengine Sandbox: Fase 5 (Phong) ===");
 
     application::Application app;
     platform::Window&   window = app.GetWindow();
@@ -138,6 +138,18 @@ int main() {
     renderer::VertexArray va;
     va.AddVertexBuffer(std::move(vbo), layout);
 
+    glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 1.5f);
+    glm::vec3 lightPos  = glm::vec3(1.2f, 1.0f, 2.0f);
+    glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
+
+    glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+    glm::mat4 projection = glm::perspective(
+        glm::radians(45.0f), // fov
+        (f32)window.GetWidth() / (f32)window.GetHeight(), // aspecto
+        0.1f, 100.0f // clipping planes (cerca y lejos)
+    );
+
     while (!window.ShouldClose()) {
         window.PollEvents();
         if (window.IsKeyPressed(GLFW_KEY_ESCAPE)) {
@@ -145,9 +157,23 @@ int main() {
         }
 
         gfx.Clear(0.1f, 0.1f, 0.12f, 1.0f);
+        
+        shaderOpt->Bind(); // activa el shader
 
-        // Luego dibujar el cubo
-        shaderOpt->Bind();
+        glm::mat4 model = glm::rotate(
+            glm::mat4(1.0f),
+            (f32)glfwGetTime() * glm::radians(50.0f),
+            glm::vec3(0.5f, 1.0f, 0.0f)
+        );
+
+        shaderOpt->SetMat4("uModel", model);
+        shaderOpt->SetMat4("uView", view);
+        shaderOpt->SetMat4("uProjection", projection);
+        shaderOpt->SetVec3("uLightPos", lightPos);
+        shaderOpt->SetVec3("uLightColor", lightColor);
+        shaderOpt->SetVec3("uViewPos", cameraPos);
+
+        // Luego dibujar
         gfx.Draw(va, *shaderOpt);
         window.SwapBuffers();
     }
