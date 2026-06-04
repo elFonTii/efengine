@@ -144,7 +144,7 @@ int main() {
 
     glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
-
+    // TODO: FFONTANA - Optimizacion: agregar continue al inicio para evitar el render con ventana minimizada.
     while (!window.ShouldClose()) {
         window.PollEvents();
         if (window.IsKeyPressed(GLFW_KEY_ESCAPE)) {
