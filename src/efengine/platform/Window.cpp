@@ -39,7 +39,7 @@ namespace platform {
         glfwGetFramebufferSize(m_handle, &fbWidth, &fbHeight);
         m_width = fbWidth;
         m_height = fbHeight;
-
+        
         glfwSetWindowUserPointer(m_handle, this);
         glfwSetFramebufferSizeCallback(m_handle, OnFramebufferResize);
 
@@ -90,7 +90,7 @@ namespace platform {
                 glfwSetWindowUserPointer(m_handle, this); // sino apuntaría al objeto original y no al copiado.
             }
         }
-        
+
         return *this;
     }
 
@@ -115,15 +115,16 @@ namespace platform {
     }
 
     f32 Window::GetAspectRatio() const {
-        if(m_height == 0) {
-            return 1.0f; // ventana minimizada, se retorna 1 para evitar dividir por 0
+        if(m_width != 0 && m_height != 0) {
+            return (f32)m_width / (f32)m_height;
         }
 
-        return (f32)m_width / (f32)m_height;
+        return 1.0f; // ventana minimizada, se retorna 1 para evitar dividir por 0
     }
 
     /* Callback que actualiza el tamaño del viewport */
     void Window::OnFramebufferResize(GLFWwindow* handle, int width, int height) {
+        // EF_ASSERT(width != 0 && height != 0, "Window move constructor: width and height should not be zero if handle is valid");
         auto* self = static_cast<Window*>(glfwGetWindowUserPointer(handle)); // obtiene el puntero que se guardó con SetWindowUserPointer en el constructor
         EF_ASSERT(self != null, "Window::OnFramebufferResize: glfw user pointer nulo");
 
