@@ -156,7 +156,7 @@ int main() {
         // TODO: FFONTANA - AL IMPLEMENTAR SISTEMA DE EVENTOS, SUSCRIBIRSE AL EVENTO DE RESIZE FUERA DEL LOOP Y CALCULAR PROYECCIÓN FUERA.
         glm::mat4 projection = glm::perspective(
             glm::radians(45.0f), // fov
-            (f32)window.GetWidth() / (f32)window.GetHeight(), // aspecto
+            window.GetAspectRatio(), // aspecto
             0.1f, 100.0f // clipping planes (cerca y lejos)
         );
 
