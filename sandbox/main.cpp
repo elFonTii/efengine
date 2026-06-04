@@ -144,17 +144,21 @@ int main() {
 
     glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
-    glm::mat4 projection = glm::perspective(
-        glm::radians(45.0f), // fov
-        (f32)window.GetWidth() / (f32)window.GetHeight(), // aspecto
-        0.1f, 100.0f // clipping planes (cerca y lejos)
-    );
 
     while (!window.ShouldClose()) {
         window.PollEvents();
         if (window.IsKeyPressed(GLFW_KEY_ESCAPE)) {
             window.SetShouldClose(true);
         }
+
+        
+        // Se calcula la proyección cada frame porque el aspect ratio puede cambiar si se redimensiona la ventana.
+        // TODO: FFONTANA - AL IMPLEMENTAR SISTEMA DE EVENTOS, SUSCRIBIRSE AL EVENTO DE RESIZE FUERA DEL LOOP Y CALCULAR PROYECCIÓN FUERA.
+        glm::mat4 projection = glm::perspective(
+            glm::radians(45.0f), // fov
+            (f32)window.GetWidth() / (f32)window.GetHeight(), // aspecto
+            0.1f, 100.0f // clipping planes (cerca y lejos)
+        );
 
         gfx.Clear(0.1f, 0.1f, 0.12f, 1.0f);
         
