@@ -132,5 +132,9 @@ namespace platform {
         self -> m_height= (u32)height;
         glViewport(0,0, (GLsizei)width, (GLsizei)height); 
     }
+
+    void Window::SetEventListener(IEventListener* listener) {
+        
+    }
 }
 }
