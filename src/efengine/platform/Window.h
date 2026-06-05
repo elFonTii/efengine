@@ -61,7 +61,7 @@ namespace platform {
 
         static void OnFramebufferResize(GLFWwindow* handle, int width, int height);
         static void OnCursorPos(GLFWwindow* handle, double xpos, double ypos);
-        static void OnMouseButton(GLFWwindow* handle, int button, int mods);
+        static void OnMouseButton(GLFWwindow* handle, int button, int action, int mods);
         static void OnScroll(GLFWwindow* handle, double xoffset, double yoffset);
         
     };
