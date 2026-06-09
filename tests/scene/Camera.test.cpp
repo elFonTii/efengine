@@ -1,6 +1,8 @@
+#include <cmath>
 #include <doctest/doctest.h>
 #include <efengine/scene/Camera.h>
 #include <glm/gtc/matrix_transform.hpp>
+
 
 using namespace efengine;
 
