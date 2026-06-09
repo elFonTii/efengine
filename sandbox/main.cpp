@@ -1,8 +1,10 @@
 #include <efengine/application/Application.h>
+#include <efengine/platform/IEventListener.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/Buffer.h>
 #include <efengine/renderer/VertexArray.h>
 #include <efengine/renderer/VertexLayout.h>
+#include <efengine/scene/Camera.h>
 #include <efengine/core/Log.h>
 #include <efengine/core/Types.h>
 
@@ -16,6 +18,15 @@
 /* https://learnopengl.com/Lighting/Basic-Lighting */ 
 
 namespace {
+
+    class CameraResizeEventListener : public efengine::platform::IEventListener {
+        public:
+            explicit CameraResizeEventListener(efengine::scene::Camera* cam);
+            void OnWindowResize(u32 width, u32 height) override; // evento declarado en IEventListener
+        private:
+            efengine::scene::Camera* m_camera;
+    };
+
     const char* kVertexSrc = R"(#version 330 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aNormal;
@@ -138,7 +149,7 @@ int main() {
     renderer::VertexArray va;
     va.AddVertexBuffer(std::move(vbo), layout);
 
-    glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 1.5f);
+    glm::vec3 cameraPos = glm::vec3(0.0f, 2.0f, 1.5f);
     glm::vec3 lightPos  = glm::vec3(1.2f, 1.0f, 2.0f);
     glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
 
