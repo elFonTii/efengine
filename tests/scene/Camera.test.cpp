@@ -16,17 +16,19 @@ using namespace efengine;
     m[3][2] = (2*far*near)/(near-far)
     */
 
-TEST_CASE("Camera::ProjectionMatrix tiene que cambiar con la relación de aspecto") {
+TEST_CASE("Camera::ProjectionMatrix coincide con glm::perspective") {
     scene::Camera cam;
+    const f32 aspect = 16.0f/9.0f;
+    cam.SetAspect(aspect);
 
-    cam.SetAspect(1.0f);
-    glm::mat4 p1 = cam.ProjectionMatrix();
+    glm::mat4 actual   = cam.ProjectionMatrix();
+    glm::mat4 expected = glm::perspective(glm::radians(45.0f), 16.0f/9.0f, 0.1f, 100.0f); // por practicidad, se hace contra los defaults de la cámara.
 
-    cam.SetAspect(2.0f);
-    glm::mat4 p2 = cam.ProjectionMatrix();
-
-    // Verificamos que los valores en la posición [0][0] de las matrices difieran
-    CHECK(p1[0][0] != doctest::Approx(p2[0][0]));
+    for(int c = 0; c < 4; c++) {
+        for(int r = 0; r < 4; r++) {
+            CHECK(actual[c][r] == doctest::Approx(expected[c][r])); // Se recorre la matriz y se comparan los valores
+        }
+    }
 }
 
 TEST_CASE("Camera::ViewMatrix tiene que coincidir con glom::lookAt") {
