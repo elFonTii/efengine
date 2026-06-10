@@ -43,6 +43,10 @@ namespace platform {
         glfwSetWindowUserPointer(m_handle, this);
         glfwSetFramebufferSizeCallback(m_handle, OnFramebufferResize);
 
+        glfwSetCursorPosCallback(m_handle, OnCursorPos);
+        glfwSetMouseButtonCallback(m_handle, OnMouseButton);
+        glfwSetScrollCallback(m_handle, OnScroll);
+
         EF_LOG_INFO("Window created: %s (%d x %d)", props.title, m_width, m_height);
     };
 
@@ -64,7 +68,8 @@ namespace platform {
     Window::Window(Window&& other) noexcept
         : m_handle(std::exchange(other.m_handle, null))
         , m_width(std::exchange(other.m_width, 0))
-        , m_height(std::exchange(other.m_height, 0)) {
+        , m_height(std::exchange(other.m_height, 0))
+        , m_listener(std::exchange(other.m_listener, null)){
             if(m_handle != null) {
                 glfwSetWindowUserPointer(m_handle, this); // sino apuntaría al objeto original y no al copiado.
             }
@@ -85,6 +90,7 @@ namespace platform {
             m_handle = std::exchange(other.m_handle, null);
             m_width  = std::exchange(other.m_width, 0);
             m_height = std::exchange(other.m_height, 0);
+            m_listener = std::exchange(other.m_listener, null);
 
             if(m_handle != null) {
                 glfwSetWindowUserPointer(m_handle, this); // sino apuntaría al objeto original y no al copiado.
@@ -122,15 +128,51 @@ namespace platform {
         return 1.0f; // ventana minimizada, se retorna 1 para evitar dividir por 0
     }
 
+    void Window::SetEventListener(IEventListener* listener) { m_listener = listener; }
+
     /* Callback que actualiza el tamaño del viewport */
     void Window::OnFramebufferResize(GLFWwindow* handle, int width, int height) {
-        // EF_ASSERT(width != 0 && height != 0, "Window move constructor: width and height should not be zero if handle is valid");
         auto* self = static_cast<Window*>(glfwGetWindowUserPointer(handle)); // obtiene el puntero que se guardó con SetWindowUserPointer en el constructor
         EF_ASSERT(self != null, "Window::OnFramebufferResize: glfw user pointer nulo");
 
         self -> m_width = (u32)width;
         self -> m_height= (u32)height;
         glViewport(0,0, (GLsizei)width, (GLsizei)height); 
+
+        if (self->m_listener) self->m_listener->OnWindowResize(self->m_width, self->m_height);
     }
+
+    /* Callback que captura la posicion del cursor */
+    void Window::OnCursorPos(GLFWwindow* handle, double xpos, double ypos) {
+        auto* self = static_cast<Window*>(glfwGetWindowUserPointer(handle));
+        EF_ASSERT(self != null, "Window::OnCursorPos: glfw user pointer nulo");
+
+        if (self->m_listener) {
+            self->m_listener->OnMouseMove((f32)xpos, (f32)ypos);
+        }
+    }
+
+    /* Callback que captura los botones del cursor */
+    void Window::OnMouseButton(GLFWwindow* handle, int button, int action, int mods) {
+        auto* self = static_cast<Window*>(glfwGetWindowUserPointer(handle));
+        EF_ASSERT(self != null, "Window::OnMouseButton: glfw user pointer nulo");
+        
+        if (self->m_listener) {
+            self->m_listener->OnMouseButton((i32)button, (i32)action, (i32)mods);
+        }
+    }
+
+    /* Callback que captura el scroll del cursor */
+    void Window::OnScroll(GLFWwindow* handle, double xoffset, double yoffset) {
+        auto* self = static_cast<Window*>(glfwGetWindowUserPointer(handle));
+        EF_ASSERT(self != null, "Window::OnScroll: glfw user pointer nulo");
+        
+        if (self->m_listener) {
+            self->m_listener->OnMouseScroll((f32)xoffset, (f32)yoffset);
+        }
+    }
+
+    
+    
 }
 }

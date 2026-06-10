@@ -1,6 +1,8 @@
 #pragma once
 
 #include <efengine/core/Types.h>
+#include <efengine/platform/IEventListener.h>
+
 // Forward declaration de GLFW, prometemos que va a estar definido.
 struct GLFWwindow;
 
@@ -47,12 +49,20 @@ namespace platform {
             f32 GetAspectRatio() const;
             GLFWwindow* GetNativeHandle() const { return m_handle; }
 
+            // Eventos
+            void SetEventListener(IEventListener* listener);
+
+
         private:
         GLFWwindow* m_handle = null;
         u32 m_width = 0;
         u32 m_height = 0;
+        IEventListener* m_listener = null;
 
         static void OnFramebufferResize(GLFWwindow* handle, int width, int height);
+        static void OnCursorPos(GLFWwindow* handle, double xpos, double ypos);
+        static void OnMouseButton(GLFWwindow* handle, int button, int action, int mods);
+        static void OnScroll(GLFWwindow* handle, double xoffset, double yoffset);
         
     };
 }

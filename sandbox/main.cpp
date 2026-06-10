@@ -1,8 +1,10 @@
 #include <efengine/application/Application.h>
+#include <efengine/platform/IEventListener.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/Buffer.h>
 #include <efengine/renderer/VertexArray.h>
 #include <efengine/renderer/VertexLayout.h>
+#include <efengine/scene/Camera.h>
 #include <efengine/core/Log.h>
 #include <efengine/core/Types.h>
 
@@ -16,6 +18,23 @@
 /* https://learnopengl.com/Lighting/Basic-Lighting */ 
 
 namespace {
+
+    class CameraResizeEventListener : public efengine::platform::IEventListener {
+        public:
+            explicit CameraResizeEventListener(efengine::scene::Camera* cam) {
+                m_camera = cam;
+            }
+            
+            // evento declarado en IEventListener
+            void OnWindowResize(u32 width, u32 height) override {
+                if(height > 0) {
+                    m_camera->SetAspect((f32)width / (f32)height);
+                }
+            }
+        private:
+            efengine::scene::Camera* m_camera;
+    };
+
     const char* kVertexSrc = R"(#version 330 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aNormal;
@@ -138,11 +157,18 @@ int main() {
     renderer::VertexArray va;
     va.AddVertexBuffer(std::move(vbo), layout);
 
-    glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 1.5f);
+    glm::vec3 cameraPos = glm::vec3(0.0f, 2.0f, 1.5f);
     glm::vec3 lightPos  = glm::vec3(1.2f, 1.0f, 2.0f);
     glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
 
-    glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    scene::Camera cam;
+    cam.LookAt(cameraPos, glm::vec3(0.0f));
+    cam.SetAspect(window.GetAspectRatio()); // Cubre el aspect en el arranque
+    
+    CameraResizeEventListener resizeListener(&cam);
+    window.SetEventListener(&resizeListener);
+
+
 
     // TODO: FFONTANA - Optimizacion: agregar continue al inicio para evitar el render con ventana minimizada.
     while (!window.ShouldClose()) {
@@ -150,15 +176,6 @@ int main() {
         if (window.IsKeyPressed(GLFW_KEY_ESCAPE)) {
             window.SetShouldClose(true);
         }
-
-        
-        // Se calcula la proyección cada frame porque el aspect ratio puede cambiar si se redimensiona la ventana.
-        // TODO: FFONTANA - AL IMPLEMENTAR SISTEMA DE EVENTOS, SUSCRIBIRSE AL EVENTO DE RESIZE FUERA DEL LOOP Y CALCULAR PROYECCIÓN FUERA.
-        glm::mat4 projection = glm::perspective(
-            glm::radians(45.0f), // fov
-            window.GetAspectRatio(), // aspecto
-            0.1f, 100.0f // clipping planes (cerca y lejos)
-        );
 
         gfx.Clear(0.1f, 0.1f, 0.12f, 1.0f);
         
@@ -171,11 +188,11 @@ int main() {
         );
 
         shaderOpt->SetMat4("uModel", model);
-        shaderOpt->SetMat4("uView", view);
-        shaderOpt->SetMat4("uProjection", projection);
+        shaderOpt->SetMat4("uView", cam.ViewMatrix());
+        shaderOpt->SetMat4("uProjection", cam.ProjectionMatrix());
+        shaderOpt->SetVec3("uViewPos", cam.Position());
         shaderOpt->SetVec3("uLightPos", lightPos);
         shaderOpt->SetVec3("uLightColor", lightColor);
-        shaderOpt->SetVec3("uViewPos", cameraPos);
 
         // Luego dibujar
         gfx.Draw(va, *shaderOpt);
