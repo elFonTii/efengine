@@ -18,6 +18,9 @@ namespace scene {
             void OnMouseButton(i32 button, i32 action, i32 mods)   override;
             void OnMouseScroll(f32 xOffset, f32 yOffset)           override;
 
+            void SetInvertX(bool invert); 
+            void SetInvertY(bool invert);
+
         private:
             void UpdateCamera();
             glm::vec3 CalculateCameraPosition(glm::vec3 target, f32 distance, f32 pitch, f32 yaw) const;
@@ -33,6 +36,9 @@ namespace scene {
             // posiciones del mouse
             f32  m_lastX = 0.0f;
             f32  m_lastY = 0.0f;
+
+            bool m_invertX = false;
+            bool m_invertY = false;
 
             // control rotación
             bool m_rotating = false;

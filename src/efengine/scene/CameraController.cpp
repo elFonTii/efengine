@@ -20,7 +20,7 @@ namespace scene {
     }
 
     void CameraController::UpdateCamera() {
-        glm::vec3 pos = CalculateCameraPosition(m_target, m_distance, m_pitch, m_yaw);  
+        glm::vec3 pos = CalculateCameraPosition(m_target, m_distance, m_pitch, m_yaw);
         m_camera->LookAt(pos, m_target);
     }
 
@@ -38,11 +38,14 @@ namespace scene {
 
     void CameraController::OnMouseMove(f32 x, f32 y) {
         if(m_rotating) {
-            f32 dirX= x - m_lastX;
+            f32 signX = m_invertX ? -1.0f : 1.0f;
+            f32 signY = m_invertY ? -1.0f : 1.0f;
+
+            f32 dirX = x - m_lastX;
             f32 dirY = y - m_lastY;
             
-            m_yaw -= dirX * m_rotateSpeed;
-            m_pitch -= dirY * m_rotateSpeed;
+            m_yaw -= dirX * m_rotateSpeed * signX;
+            m_pitch += dirY * m_rotateSpeed * signY;
 
             f32 limit = glm::radians(89.0f);
             m_pitch = glm::clamp(m_pitch, -limit, limit);
@@ -64,6 +67,14 @@ namespace scene {
         if(height > 0) {
             m_camera->SetAspect((f32)width / (f32)height);
         }
+    }
+
+    void CameraController::SetInvertX(bool invert) { 
+        m_invertX = invert;
+    }
+
+    void CameraController::SetInvertY(bool invert) { 
+        m_invertY = invert;
     }
 }
 }
