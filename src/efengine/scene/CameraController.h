@@ -20,7 +20,7 @@ namespace scene {
 
         private:
             void UpdateCamera();
-            glm::vec3 CalculateCameraPosition(glm::vec3 target, f32 distance, f32 pitch, f32 yaw);
+            glm::vec3 CalculateCameraPosition(glm::vec3 target, f32 distance, f32 pitch, f32 yaw) const;
             
              Camera* m_camera;
 

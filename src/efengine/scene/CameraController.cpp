@@ -1,16 +1,15 @@
 #include "CameraController.h"
-#include "Camera.h"
+#include <cmath>
 
 #include <efengine/platform/InputCodes.h>
-#include <efengine/core/Assert.h>
 #include <efengine/core/Types.h>
-#include <efengine/core/Log.h>
+#include "Camera.h"
 
 
 namespace efengine {
 namespace scene {
 
-    glm::vec3 CameraController::CalculateCameraPosition(glm::vec3 target, f32 distance, f32 pitch, f32 yaw) {
+    glm::vec3 CameraController::CalculateCameraPosition(glm::vec3 target, f32 distance, f32 pitch, f32 yaw) const {
         glm::vec3 pos;
 
         pos.x = target.x + distance * std::cos(pitch) * std::sin(yaw);
@@ -46,7 +45,7 @@ namespace scene {
             m_pitch -= dirY * m_rotateSpeed;
 
             f32 limit = glm::radians(89.0f);
-            m_pitch == glm::clamp(m_pitch, -limit, limit);
+            m_pitch = glm::clamp(m_pitch, -limit, limit);
 
             UpdateCamera();
         }
@@ -59,6 +58,12 @@ namespace scene {
         m_distance = glm::clamp(m_distance, 1.0f, 20.0f); // limite
 
         UpdateCamera();
+    }
+
+    void CameraController::OnWindowResize(u32 width, u32 height) {
+        if(height > 0) {
+            m_camera->SetAspect((f32)width / (f32)height);
+        }
     }
 }
 }
