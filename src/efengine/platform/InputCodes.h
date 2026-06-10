@@ -18,12 +18,19 @@ namespace platform {
         A       = 65,
         S       = 83,
         D       = 68,
+
     };
 
     enum class MouseButton : i32 {
         Left = 0,
         Right = 1,
         Middle = 2,
+    };
+
+    enum class InputAction : i32 {
+        Release = 0,
+        Press   = 1,
+        Repeat  = 2,
     };
 }
 }
