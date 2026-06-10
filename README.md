@@ -32,6 +32,7 @@ Principios **MUST** del motor: reglas no negociables que aplican a todo código 
 
 
 ## Conceptos clave
+- Métodos estáticos: un método puede ser estático o devolver const si todo lo que se utiliza entra por parámetros, lo que significa que no depende de ningun objeto.
 - VBOs -> Move datos de vertices (Vetex Data) una sóla vez pero se pueden reutilizar en cada frame. No guarda la información, guarda una referencia a la información de los arrays. (simplemente un bloque de memoria donde se guarda la info de los vértices)
 - VAOs -> Es una lista de bytes, le dice a la GPU como escribir datos usando ese VBO
 - EBOs -> Es un VBO pero usado con un propósito diferente. 
