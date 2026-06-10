@@ -173,7 +173,7 @@ int main() {
     // TODO: FFONTANA - Optimizacion: agregar continue al inicio para evitar el render con ventana minimizada.
     while (!window.ShouldClose()) {
         window.PollEvents();
-        if (window.IsKeyPressed(GLFW_KEY_ESCAPE)) {
+        if (window.IsKeyPressed(platform::Key::Escape)) {
             window.SetShouldClose(true);
         }
 

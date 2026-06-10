@@ -116,8 +116,8 @@ namespace platform {
         glfwSetWindowShouldClose(m_handle, shouldClose);
     }
 
-    bool Window::IsKeyPressed(int key) const {
-        return glfwGetKey(m_handle, key) == GLFW_PRESS;
+    bool Window::IsKeyPressed(Key _key) const {
+        return glfwGetKey(m_handle, (int)_key) == GLFW_PRESS;
     }
 
     f32 Window::GetAspectRatio() const {
