@@ -50,6 +50,7 @@ namespace platform {
             u32 GetHeight() const { return m_height; }
             f32 GetAspectRatio() const;
             GLFWwindow* GetNativeHandle() const { return m_handle; }
+            static f64 GetTime();
 
             // Eventos
             void SetEventListener(IEventListener* listener);

@@ -128,6 +128,10 @@ namespace platform {
         return 1.0f; // ventana minimizada, se retorna 1 para evitar dividir por 0
     }
 
+    f64 Window::GetTime() {
+        return glfwGetTime();
+    };
+
     void Window::SetEventListener(IEventListener* listener) { m_listener = listener; }
 
     /* Callback que actualiza el tamaño del viewport */
