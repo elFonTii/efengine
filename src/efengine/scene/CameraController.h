@@ -20,8 +20,9 @@ namespace scene {
 
         private:
             void UpdateCamera();
+            glm::vec3 CalculateCameraPosition(glm::vec3 target, f32 distance, f32 pitch, f32 yaw);
             
-            Camera* m_camera;
+             Camera* m_camera;
 
             glm::vec3 m_target { 0.0f };            // punto que orbita
             f32 m_distance = 2.5f;                  // radio de la órbita
