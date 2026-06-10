@@ -1,16 +1,16 @@
 #include <efengine/application/Application.h>
 #include <efengine/platform/IEventListener.h>
+#include <efengine/scene/CameraController.h>
+#include <efengine/renderer/VertexLayout.h>
+#include <efengine/renderer/VertexArray.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/Buffer.h>
-#include <efengine/renderer/VertexArray.h>
-#include <efengine/renderer/VertexLayout.h>
 #include <efengine/scene/Camera.h>
-#include <efengine/core/Log.h>
 #include <efengine/core/Types.h>
+#include <efengine/core/Log.h>
 
-#include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-
+#include <glm/glm.hpp>
 #include <utility>
 
 /* https://learnopengl.com/Lighting/Basic-Lighting */ 
