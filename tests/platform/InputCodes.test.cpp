@@ -24,3 +24,9 @@ TEST_CASE("InputCodes::MouseButton coincide con los códigos de GLFW") {
     CHECK((i32)MouseButton::Right  == GLFW_MOUSE_BUTTON_RIGHT);
     CHECK((i32)MouseButton::Middle == GLFW_MOUSE_BUTTON_MIDDLE);
 }
+
+TEST_CASE("InputCodes::InputAction coincide con los códigos de GLFW") {
+    CHECK((i32)InputAction::Press    == GLFW_PRESS);
+    CHECK((i32)InputAction::Release  == GLFW_RELEASE);
+    CHECK((i32)InputAction::Repeat   == GLFW_REPEAT);
+}
