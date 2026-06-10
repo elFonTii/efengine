@@ -5,6 +5,7 @@
 add_executable(efengine_tests
     main.cpp
     core/Types.test.cpp
+    platform/InputCodes.test.cpp
     renderer/VertexLayout.test.cpp
     scene/Camera.test.cpp
 )
