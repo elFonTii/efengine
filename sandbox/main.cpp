@@ -1,39 +1,20 @@
 #include <efengine/application/Application.h>
-#include <efengine/platform/IEventListener.h>
+#include <efengine/scene/CameraController.h>
+#include <efengine/renderer/VertexLayout.h>
+#include <efengine/renderer/VertexArray.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/Buffer.h>
-#include <efengine/renderer/VertexArray.h>
-#include <efengine/renderer/VertexLayout.h>
 #include <efengine/scene/Camera.h>
-#include <efengine/core/Log.h>
 #include <efengine/core/Types.h>
+#include <efengine/core/Log.h>
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>   // GLFW_KEY_ESCAPE
-#include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-
+#include <glm/glm.hpp>
 #include <utility>
 
 /* https://learnopengl.com/Lighting/Basic-Lighting */ 
 
 namespace {
-
-    class CameraResizeEventListener : public efengine::platform::IEventListener {
-        public:
-            explicit CameraResizeEventListener(efengine::scene::Camera* cam) {
-                m_camera = cam;
-            }
-            
-            // evento declarado en IEventListener
-            void OnWindowResize(u32 width, u32 height) override {
-                if(height > 0) {
-                    m_camera->SetAspect((f32)width / (f32)height);
-                }
-            }
-        private:
-            efengine::scene::Camera* m_camera;
-    };
 
     const char* kVertexSrc = R"(#version 330 core
 layout (location = 0) in vec3 aPos;
@@ -153,39 +134,42 @@ int main() {
     layout.Push(renderer::ShaderDataType::Float3);   // posición
     layout.Push(renderer::ShaderDataType::Float3);   // uv -> normal
 
+    glm::vec3 lightPos  = glm::vec3(1.2f, 1.0f, 2.0f);
+    glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
 
     renderer::VertexArray va;
     va.AddVertexBuffer(std::move(vbo), layout);
 
-    glm::vec3 cameraPos = glm::vec3(0.0f, 2.0f, 1.5f);
-    glm::vec3 lightPos  = glm::vec3(1.2f, 1.0f, 2.0f);
-    glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
-
     scene::Camera cam;
-    cam.LookAt(cameraPos, glm::vec3(0.0f));
-    cam.SetAspect(window.GetAspectRatio()); // Cubre el aspect en el arranque
+    cam.SetAspect(window.GetAspectRatio());
     
-    CameraResizeEventListener resizeListener(&cam);
-    window.SetEventListener(&resizeListener);
+    scene::CameraController controller(&cam);
+    window.SetEventListener(&controller);
+
+
+    f64 lastTime = window.GetTime();
+    f32 angle = 0.0f;
 
 
 
     // TODO: FFONTANA - Optimizacion: agregar continue al inicio para evitar el render con ventana minimizada.
     while (!window.ShouldClose()) {
         window.PollEvents();
-        if (window.IsKeyPressed(GLFW_KEY_ESCAPE)) {
+        if (window.IsKeyPressed(platform::Key::Escape)) {
             window.SetShouldClose(true);
         }
+
+        // calculo el delta al inicio del loop
+        f64 now = platform::Window::GetTime();
+        f32 deltaTime = (f32)(now - lastTime);
+        lastTime = now;
 
         gfx.Clear(0.1f, 0.1f, 0.12f, 1.0f);
         
         shaderOpt->Bind(); // activa el shader
 
-        glm::mat4 model = glm::rotate(
-            glm::mat4(1.0f),
-            (f32)glfwGetTime() * glm::radians(50.0f),
-            glm::vec3(0.5f, 1.0f, 0.0f)
-        );
+        angle += deltaTime * glm::radians(50.0f); // 50 grados por segundo no importa los fps
+        glm::mat4 model = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.5f, 1.0f, 0.0f));
 
         shaderOpt->SetMat4("uModel", model);
         shaderOpt->SetMat4("uView", cam.ViewMatrix());

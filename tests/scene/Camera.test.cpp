@@ -9,11 +9,13 @@ using namespace efengine;
     /* 
     Entendiendo la matriz de proyeccion 
     glm::perspective(fovy, aspect, near, far) arma una matrix 4x4 ( f = 1/tan(fov/2) )
-    m[0][0] = f/aspecto -> es la escala horizontal y depende del aspecto
+    m[0][0] = f/aspecto -> es la escala horizontal
     m[1][1] = f
-    m[2][2] = (far+near)/(near-far) -> de aca para abajo ni puta idea
-    m[2][3] = -1
-    m[3][2] = (2*far*near)/(near-far)
+    m[2][2] = (far+near)/(near-far) -> internamente es un sistema de ecuaciones que hacen que la geometría siempre esté entre el plano near y far
+    m[2][3] = -1 // se usan coordenadas homogéneas (x,y,z,w), para crear ilusión de perspectiva
+                    la tarjeta gráfica divide x,y,z por w después de multiplicar la matriz (división en perspectiva) TODO INTERNO GPU
+                    la cámara mira al eje Z negativo.
+    m[3][2] = (2*far*near)/(near-far) // idem m[2][2]
     */
 
 TEST_CASE("Camera::ProjectionMatrix coincide con glm::perspective") {

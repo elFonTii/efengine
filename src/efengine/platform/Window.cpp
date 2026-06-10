@@ -116,8 +116,8 @@ namespace platform {
         glfwSetWindowShouldClose(m_handle, shouldClose);
     }
 
-    bool Window::IsKeyPressed(int key) const {
-        return glfwGetKey(m_handle, key) == GLFW_PRESS;
+    bool Window::IsKeyPressed(Key _key) const {
+        return glfwGetKey(m_handle, (int)_key) == GLFW_PRESS;
     }
 
     f32 Window::GetAspectRatio() const {
@@ -127,6 +127,10 @@ namespace platform {
 
         return 1.0f; // ventana minimizada, se retorna 1 para evitar dividir por 0
     }
+
+    f64 Window::GetTime() {
+        return glfwGetTime();
+    };
 
     void Window::SetEventListener(IEventListener* listener) { m_listener = listener; }
 

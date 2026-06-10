@@ -1,7 +1,9 @@
 #pragma once
 
 #include <efengine/core/Types.h>
+#include <efengine/platform/InputCodes.h>
 #include <efengine/platform/IEventListener.h>
+
 
 // Forward declaration de GLFW, prometemos que va a estar definido.
 struct GLFWwindow;
@@ -41,13 +43,14 @@ namespace platform {
             void SetShouldClose(bool shouldClose);
 
             // Input
-            bool IsKeyPressed(int key) const;
+            bool IsKeyPressed(Key _key) const;
 
             // Accessors
             u32 GetWidth() const { return m_width; }
             u32 GetHeight() const { return m_height; }
             f32 GetAspectRatio() const;
             GLFWwindow* GetNativeHandle() const { return m_handle; }
+            static f64 GetTime();
 
             // Eventos
             void SetEventListener(IEventListener* listener);
