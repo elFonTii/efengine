@@ -1,5 +1,4 @@
 #include <efengine/application/Application.h>
-#include <efengine/platform/IEventListener.h>
 #include <efengine/scene/CameraController.h>
 #include <efengine/renderer/VertexLayout.h>
 #include <efengine/renderer/VertexArray.h>
@@ -16,22 +15,6 @@
 /* https://learnopengl.com/Lighting/Basic-Lighting */ 
 
 namespace {
-
-    class CameraResizeEventListener : public efengine::platform::IEventListener {
-        public:
-            explicit CameraResizeEventListener(efengine::scene::Camera* cam) {
-                m_camera = cam;
-            }
-            
-            // evento declarado en IEventListener
-            void OnWindowResize(u32 width, u32 height) override {
-                if(height > 0) {
-                    m_camera->SetAspect((f32)width / (f32)height);
-                }
-            }
-        private:
-            efengine::scene::Camera* m_camera;
-    };
 
     const char* kVertexSrc = R"(#version 330 core
 layout (location = 0) in vec3 aPos;
@@ -151,20 +134,18 @@ int main() {
     layout.Push(renderer::ShaderDataType::Float3);   // posición
     layout.Push(renderer::ShaderDataType::Float3);   // uv -> normal
 
+    glm::vec3 lightPos  = glm::vec3(1.2f, 1.0f, 2.0f);
+    glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
 
     renderer::VertexArray va;
     va.AddVertexBuffer(std::move(vbo), layout);
 
-    glm::vec3 cameraPos = glm::vec3(0.0f, 2.0f, 1.5f);
-    glm::vec3 lightPos  = glm::vec3(1.2f, 1.0f, 2.0f);
-    glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
-
     scene::Camera cam;
-    cam.LookAt(cameraPos, glm::vec3(0.0f));
-    cam.SetAspect(window.GetAspectRatio()); // Cubre el aspect en el arranque
+    cam.SetAspect(window.GetAspectRatio());
     
-    CameraResizeEventListener resizeListener(&cam);
-    window.SetEventListener(&resizeListener);
+    scene::CameraController controller(&cam);
+    window.SetEventListener(&controller);
+
 
     f64 lastTime = window.GetTime();
     f32 angle = 0.0f;
