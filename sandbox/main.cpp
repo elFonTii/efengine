@@ -8,8 +8,6 @@
 #include <efengine/core/Log.h>
 #include <efengine/core/Types.h>
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>   // GLFW_KEY_ESCAPE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -168,6 +166,9 @@ int main() {
     CameraResizeEventListener resizeListener(&cam);
     window.SetEventListener(&resizeListener);
 
+    f64 lastTime = window.GetTime();
+    f32 angle = 0.0f;
+
 
 
     // TODO: FFONTANA - Optimizacion: agregar continue al inicio para evitar el render con ventana minimizada.
@@ -177,15 +178,17 @@ int main() {
             window.SetShouldClose(true);
         }
 
+        // calculo el delta al inicio del loop
+        f64 now = platform::Window::GetTime();
+        f32 deltaTime = (f32)(now - lastTime);
+        lastTime = now;
+
         gfx.Clear(0.1f, 0.1f, 0.12f, 1.0f);
         
         shaderOpt->Bind(); // activa el shader
 
-        glm::mat4 model = glm::rotate(
-            glm::mat4(1.0f),
-            (f32)glfwGetTime() * glm::radians(50.0f),
-            glm::vec3(0.5f, 1.0f, 0.0f)
-        );
+        angle += deltaTime * glm::radians(50.0f); // 50 grados por segundo no importa los fps
+        glm::mat4 model = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.5f, 1.0f, 0.0f));
 
         shaderOpt->SetMat4("uModel", model);
         shaderOpt->SetMat4("uView", cam.ViewMatrix());
