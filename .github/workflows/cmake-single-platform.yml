@@ -1,29 +1,82 @@
 # Workflow de CMake para una sola plataforma (Linux).
-# Compila efengine y publica una release de GitHub cuando se mergea un PR
-# hacia la rama master.
+#
+# Dos responsabilidades, separadas en dos jobs:
+#   - build:   compila el motor en CADA push (cualquier rama) y en disparos
+#              manuales. Es el CI: atrapa fallos de compilación antes de que
+#              lleguen a master (justo lo que antes se colaba post-merge).
+#   - release: publica un tag + artefacto en GitHub, solo cuando un PR se
+#              mergea a master (necesita los datos del PR para el tag y notas).
 name: CMake on a single platform
 
 on:
-  # Se dispara cuando un Pull Request se cierra. Más abajo filtramos para
-  # actuar únicamente si el PR fue realmente mergeado (no solo cerrado).
+  # CI: compila en cada push a cualquier rama.
+  push:
+    branches:
+      - '**'
+  # Release: se dispara al cerrar un PR hacia master; abajo filtramos para
+  # actuar solo si realmente se mergeó (no un PR cerrado sin mergear).
   pull_request:
     types: [closed]
     branches:
       - master
+  # Permite lanzar el build a mano desde la pestaña Actions.
+  workflow_dispatch:
 
 # Tipo de build de CMake. Release para optimizar el binario que se publica.
 env:
   BUILD_TYPE: Release
 
-# Permisos necesarios para crear tags y releases con el GITHUB_TOKEN.
-permissions:
-  contents: write
+# Si llega un push más nuevo de la misma rama, cancela el build en curso para
+# no gastar minutos de runner en commits ya superados. El release corre sobre
+# otra ref (refs/pull/...), así que nunca queda en el mismo grupo: no se cancela.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  release:
-    # Solo continúa si el PR se mergeó; un PR cerrado sin mergear se ignora.
-    if: github.event.pull_request.merged == true
+  build:
+    name: Compilar
+    # Solo en push (cualquier rama) o disparo manual. Del evento de PR mergeado
+    # se encarga el job 'release'.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      # Dependencias de sistema que necesita GLFW para compilar en Linux
+      # (servidores X11/Wayland y OpenGL).
+      - name: Instalar dependencias de GLFW
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xorg-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            wayland-protocols \
+            libgl1-mesa-dev \
+            ninja-build
+
+      - name: Configurar CMake
+        run: >
+          cmake -B ${{ github.workspace }}/build
+          -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          -DEFENGINE_BUILD_TESTS=OFF
+
+      - name: Compilar
+        run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }}
+
+  release:
+    name: Publicar release
+    # Solo cuando un PR fue realmente mergeado a master.
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout del código
@@ -31,8 +84,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Dependencias de sistema que necesita GLFW para compilar en Linux
-      # (servidores X11/Wayland y OpenGL).
       - name: Instalar dependencias de GLFW
         run: |
           sudo apt-get update
