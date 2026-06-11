@@ -1,5 +1,3 @@
-
-//TODO: FFONTANA - ARREGLAR INCLUDE CON PATH RELATIVO DESDE RAIZ
 #include "efengine/platform/Window.h"
 
 #define GLFW_INCLUDE_NONE
