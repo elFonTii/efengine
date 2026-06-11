@@ -1,0 +1,86 @@
+# Workflow de CMake para una sola plataforma (Linux).
+# Compila efengine y publica una release de GitHub cuando se mergea un PR
+# hacia la rama master.
+name: CMake on a single platform
+
+on:
+  # Se dispara cuando un Pull Request se cierra. Más abajo filtramos para
+  # actuar únicamente si el PR fue realmente mergeado (no solo cerrado).
+  pull_request:
+    types: [closed]
+    branches:
+      - master
+
+# Tipo de build de CMake. Release para optimizar el binario que se publica.
+env:
+  BUILD_TYPE: Release
+
+# Permisos necesarios para crear tags y releases con el GITHUB_TOKEN.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # Solo continúa si el PR se mergeó; un PR cerrado sin mergear se ignora.
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Dependencias de sistema que necesita GLFW para compilar en Linux
+      # (servidores X11/Wayland y OpenGL).
+      - name: Instalar dependencias de GLFW
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xorg-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            wayland-protocols \
+            libgl1-mesa-dev \
+            ninja-build
+
+      - name: Configurar CMake
+        # Desactivamos los tests para el artefacto de release.
+        run: >
+          cmake -B ${{ github.workspace }}/build
+          -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          -DEFENGINE_BUILD_TESTS=OFF
+
+      - name: Compilar
+        run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }}
+
+      # Calcula la versión del proyecto leída de CMakeLists.txt y construye un
+      # tag único combinándola con el número del PR mergeado.
+      - name: Calcular versión y tag
+        id: version
+        run: |
+          PROJECT_VERSION=$(grep -oP 'project\(efengine VERSION \K[0-9]+\.[0-9]+(\.[0-9]+)?' CMakeLists.txt)
+          TAG="v${PROJECT_VERSION}-pr.${{ github.event.pull_request.number }}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "project_version=${PROJECT_VERSION}" >> "$GITHUB_OUTPUT"
+
+      # Empaqueta el ejecutable sandbox junto a sus assets en un .tar.gz.
+      - name: Empaquetar artefacto
+        run: |
+          PKG="efengine-${{ steps.version.outputs.tag }}-linux-x86_64"
+          mkdir -p "dist/${PKG}"
+          cp build/bin/sandbox "dist/${PKG}/"
+          cp -r assets "dist/${PKG}/assets"
+          tar -czf "dist/${PKG}.tar.gz" -C dist "${PKG}"
+          echo "Artefacto generado: dist/${PKG}.tar.gz"
+
+      - name: Crear release de GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            dist/*.tar.gz \
+            --target "${{ github.sha }}" \
+            --title "efengine ${{ steps.version.outputs.tag }}" \
+            --notes "Release generada automáticamente al mergear el PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
