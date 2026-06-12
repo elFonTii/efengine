@@ -5,10 +5,11 @@
 
 namespace efengine {
 namespace renderer {
+    enum class ColorSpace { Linear, sRGB};
 
     class Texture {
         public:
-            static std::optional<Texture> Create(const char* path); // entrada pública
+            static std::optional<Texture> Create(const char* path, ColorSpace color_space = ColorSpace::Linear);
             ~Texture();
 
             Texture(const Texture&)             = delete; // deshabilita copia
