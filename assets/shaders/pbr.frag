@@ -8,10 +8,16 @@ uniform vec3 uLightPos;
 uniform vec3 uLightColor;
 uniform vec3 uViewPos;
 
-void main() {
-    vec3  objectColor = vec3(1.0, 0.5, 0.31); 
+uniform sampler2D uAlbedoMap;
+uniform int       uHasAlbedoMap;
+uniform vec3      uAlbedoTint;
 
-    vec3 N = normalize(vTBN[2]);               // normal (indice 2 de la TBN) 
+void main() {
+    vec3 albedo = (uHasAlbedoMap == 1)
+                ? texture(uAlbedoMap, vUV).rgb * uAlbedoTint
+                : uAlbedoTint;
+
+    vec3 N = normalize(vTBN[2]);               // normal (indice 2 de la TBN)
     vec3 L = normalize(uLightPos - vFragPos);  // del fragmento HACIA la luz
     vec3 V = normalize(uViewPos - vFragPos);   // del fragmento HACIA la cámara
 
@@ -27,5 +33,10 @@ void main() {
     float spec = pow(max(dot(V, R), 0.0), shininess);
     vec3  specular = specularStrength * spec * uLightColor;
 
-    FragColor = vec4((ambient + diffuse + specular) * objectColor, 1.0);
+    // iluminacion en espacio lineal
+    vec3 color = (ambient + diffuse + specular) * albedo;
+    // ...y corrección gamma al final (lineal -> sRGB para el monitor).
+    color = pow(color, vec3(1.0 / 2.2));
+
+    FragColor = vec4(color, 1.0);
 }
