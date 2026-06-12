@@ -139,6 +139,10 @@ int main() {
         shaderOpt->SetVec3("uViewPos", cam.Position());
         shaderOpt->SetVec3("uLightPos", lightPos);
         shaderOpt->SetVec3("uLightColor", lightColor);
+        albedoOpt->Bind(0);
+        shaderOpt->SetInt("uAlbedoMap", 0);
+        shaderOpt->SetInt("uHasAlbedoMap", 1);
+        shaderOpt->SetVec3("uAlbedoTint", glm::vec3(1.0f));
 
         // Luego dibujar
         gfx.Draw(va, *shaderOpt);
