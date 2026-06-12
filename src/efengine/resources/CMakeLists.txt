@@ -1,4 +1,4 @@
 add_library(efengine_resources OBJECT)
-target_sources(efengine_resources PRIVATE ResourceManager.cpp)
+target_sources(efengine_resources PRIVATE ResourceManager.cpp FileIO.cpp)
 target_include_directories(efengine_resources PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(efengine_resources PUBLIC efengine_core)
