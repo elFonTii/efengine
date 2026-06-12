@@ -2,6 +2,7 @@
 #include <efengine/scene/CameraController.h>
 #include <efengine/renderer/VertexLayout.h>
 #include <efengine/renderer/VertexArray.h>
+#include <efengine/renderer/Texture.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/Buffer.h>
 #include <efengine/scene/Camera.h>
@@ -63,14 +64,16 @@ namespace {
 int main() {
 
     EF_LOG_INFO("=== efengine: sandbox ===");
-    application::Application app;
 
+    application::Application app;
     platform::Window&   window = app.GetWindow();
     renderer::Renderer& gfx    = app.GetRenderer();
 
-    // SETUP - Carga e inicialización de Shaders
-    std::optional<std::string> vertexShaderStream = LoadFromFS("assets/shaders/pbr.vert");
-    std::optional<std::string> fragmentShaderStream = LoadFromFS("assets/shaders/pbr.frag");
+    // SETUP - Inicialización de Shaders
+    const char* vshaderPath = "assets/shaders/pbr.vert";
+    const char* fshaderPath = "assets/shaders/pbr.frag";
+    std::optional<std::string> vertexShaderStream = LoadFromFS(vshaderPath);
+    std::optional<std::string> fragmentShaderStream = LoadFromFS(fshaderPath);
     if(!vertexShaderStream || !fragmentShaderStream) 
     { 
         EF_LOG_ERROR("Error cargando shaders");
@@ -84,23 +87,28 @@ int main() {
         return 1; 
     } 
     
+    // SETUP - Inicialización de Textura y Material
+    const char* rock_albedo = "assets/textures/rock/rock_diffuse.png";
+    if (!rock_albedo) 
+    {
+        EF_LOG_ERROR("No se pudo cargar rock_diffuse");
+        return 1;
+    }
+    auto albedoOpt = renderer::Texture::Create(rock_albedo, renderer::ColorSpace::sRGB);
+
+    // SETUP - Vertex Objects
     renderer::Buffer       vbo(vertices, sizeof(vertices));
     renderer::IndexBuffer  ebo(planeIndexes, 6);
-    
-    // SETUP - VL + VAO
     renderer::VertexLayout layout = setupVertexLayout();
     renderer::VertexArray va = setupVertexArray(std::move(vbo), std::move(ebo), layout);
 
-
+    // SETUP -  Inicialización de Escena
     glm::vec3 lightPos  = glm::vec3(1.2f, 1.0f, 2.0f);
     glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
-
-    // SETUP -  Inicialización de Cámara y Controller
     scene::Camera cam = setupCamera(window.GetAspectRatio());
     scene::CameraController controller(&cam);
 
     window.SetEventListener(&controller);
-
     f64 lastTime = window.GetTime();
     f32 angle = 0.0f;
 
