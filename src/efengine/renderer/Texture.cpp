@@ -37,14 +37,23 @@ namespace renderer {
                 break;
         }
 
-        if(channels == 3) {
-            format = GL_RGB;
-        } else if( channels == 4) {
-            format = GL_RGBA;
-        } else {
-            EF_LOG_ERROR("Texture::Create: fallo al determinar cantidad de canales.");
-            stbi_image_free(pixels);
-            return std::nullopt;
+        switch(channels) {
+            case 4:
+                format = GL_RGBA;
+                break;
+            case 3:
+                format = GL_RGB;
+                break;
+            case 2:
+                format = GL_RG;
+                break;
+            case 1:
+                format = GL_RED;
+                break;
+            default:
+                EF_LOG_ERROR("Texture::Create: fallo al determinar cantidad de canales.");
+                stbi_image_free(pixels);
+                return std::nullopt;
         }
 
 
