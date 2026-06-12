@@ -27,61 +27,86 @@ namespace {
         -0.5f,  0.5f, 0.0f,    0.0f, 0.0f, 1.0f,    0.0f, 1.0f,   1.0f, 0.0f, 0.0f, // 3 sup-izq
     };
 
+    std::optional<std::string> LoadFromFS(const char* path) {
+        auto result = resources::FileIO::ReadText(path);
+        return result;
+    }
 
+    scene::Camera setupCamera(f32 aspect) {
+        scene::Camera cam;
+        cam.SetAspect(aspect);
+
+        return cam;
+    }
+
+    renderer::VertexLayout setupVertexLayout() {
+        renderer::VertexLayout layout;
+
+        layout.Push(renderer::ShaderDataType::Float3);  // posición  loc 0
+        layout.Push(renderer::ShaderDataType::Float3);  // normal    loc 1
+        layout.Push(renderer::ShaderDataType::Float2);  // uv        loc 2
+        layout.Push(renderer::ShaderDataType::Float3);  // tangente  loc 3
+
+        return layout;
+    }
+
+    renderer::VertexArray setupVertexArray(renderer::Buffer vbo, renderer::IndexBuffer ebo, const renderer::VertexLayout& layout) {
+        renderer::VertexArray va;
+
+        va.AddVertexBuffer(std::move(vbo), layout);
+        va.SetIndexBuffer(std::move(ebo));
+
+        return va;
+    }
 }
 
 int main() {
 
-    EF_LOG_INFO("=== efengine Sandbox: Fase 5 (Phong) ===");
-
+    EF_LOG_INFO("=== efengine: sandbox ===");
     application::Application app;
+
     platform::Window&   window = app.GetWindow();
     renderer::Renderer& gfx    = app.GetRenderer();
 
-    // cargar shaders desde filesystem
-    auto vsSrc = resources::FileIO::ReadText("assets/shaders/pbr.vert");
-    auto fsSrc = resources::FileIO::ReadText("assets/shaders/pbr.frag");
-
-    if (!vsSrc || !fsSrc) {
-        EF_LOG_ERROR("No se pudieron leer los shaders");
-        return 1;
+    // SETUP - Carga e inicialización de Shaders
+    std::optional<std::string> vertexShaderStream = LoadFromFS("assets/shaders/pbr.vert");
+    std::optional<std::string> fragmentShaderStream = LoadFromFS("assets/shaders/pbr.frag");
+    if(!vertexShaderStream || !fragmentShaderStream) 
+    { 
+        EF_LOG_ERROR("Error cargando shaders");
+        return 1; 
     }
 
-    auto shaderOpt = renderer::Shader::Create(vsSrc->c_str(), fsSrc->c_str());
-    if (!shaderOpt) {
-        EF_LOG_ERROR("No se pudo crear el shader; abortando");
-        return 1;
-    }
+    auto shaderOpt = renderer::Shader::Create(vertexShaderStream->c_str(), fragmentShaderStream->c_str());
+    if (!shaderOpt) 
+    { 
+        EF_LOG_ERROR("Error creando shaders");
+        return 1; 
+    } 
     
     renderer::Buffer       vbo(vertices, sizeof(vertices));
     renderer::IndexBuffer  ebo(planeIndexes, 6);
     
-    renderer::VertexLayout layout;
-    layout.Push(renderer::ShaderDataType::Float3);  // posición  loc 0
-    layout.Push(renderer::ShaderDataType::Float3);  // normal    loc 1
-    layout.Push(renderer::ShaderDataType::Float2);  // uv        loc 2
-    layout.Push(renderer::ShaderDataType::Float3);  // tangente  loc 3
+    // SETUP - VL + VAO
+    renderer::VertexLayout layout = setupVertexLayout();
+    renderer::VertexArray va = setupVertexArray(std::move(vbo), std::move(ebo), layout);
 
-    renderer::VertexArray va;
-    va.AddVertexBuffer(std::move(vbo), layout);
-    va.SetIndexBuffer(std::move(ebo));
 
     glm::vec3 lightPos  = glm::vec3(1.2f, 1.0f, 2.0f);
     glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
 
-    scene::Camera cam;
-    cam.SetAspect(window.GetAspectRatio());
-    
+    // SETUP -  Inicialización de Cámara y Controller
+    scene::Camera cam = setupCamera(window.GetAspectRatio());
     scene::CameraController controller(&cam);
-    window.SetEventListener(&controller);
 
+    window.SetEventListener(&controller);
 
     f64 lastTime = window.GetTime();
     f32 angle = 0.0f;
 
 
 
-    // TODO: FFONTANA - Optimizacion: agregar continue al inicio para evitar el render con ventana minimizada.
+    // LOOP
     while (!window.ShouldClose()) {
         window.PollEvents();
         if (window.IsKeyPressed(platform::Key::Escape)) {
@@ -112,6 +137,6 @@ int main() {
         window.SwapBuffers();
     }
 
-    EF_LOG_INFO("=== Sandbox finalizado limpiamente ===");
+    EF_LOG_INFO("=== efengine: sandbox shutdown ===");
     return 0;
 }
