@@ -99,26 +99,17 @@ namespace renderer {
     void Shader::SetInt(const char* name, i32 value) const {
         EF_ASSERT(m_program != 0, "Shader::SetInt: programa vacio (movido o no inicializado)");
         
-        i32 uniformLocation = glGetUniformLocation(m_program, name);
-
-        if(uniformLocation == -1) {
-            EF_LOG_WARNING("Shader::SetInt: fallo al obtener la ubicación del uniform: %s", name);
-            return;
-        }
-
-        glUniform1i(uniformLocation, value);
+        i32 loc = getUniformLocation(name);
+        if (loc == -1) return;
+        glUniform1i(loc, value);
     }
 
     void Shader::SetFloat(const char* name, f32 value) const {
         EF_ASSERT(m_program != 0, "Shader::SetFloat: programa vacio (movido no inicializado)");
 
-        i32 uniformLocation = glGetUniformLocation(m_program, name);
-
-        if(uniformLocation == -1) {
-            EF_LOG_WARNING("Shader::SetFloat: fallo al obtener la ubicación del uniform: %s", name);
-            return;
-        }
-        glUniform1f(uniformLocation, value);
+        i32 loc = getUniformLocation(name);
+        if (loc == -1) return;
+        glUniform1i(loc, value);
     }
 
     void Shader::SetVec3(const char* name, const glm::vec3& value) const {
@@ -136,14 +127,10 @@ namespace renderer {
     void Shader::SetMat4(const char* name, const glm::mat4& value) const {
         EF_ASSERT(m_program != 0, "Shader::SetMat4: programa vacio (movido no inicializado)");
 
-        i32 uniformLocation = glGetUniformLocation(m_program, name);
-
-        if(uniformLocation == -1) {
-            EF_LOG_WARNING("Shader::SetMat4: fallo al obtener la ubicación del uniform: %s", name);
-            return;
-        }
+        i32 loc = getUniformLocation(name);
+        if (loc == -1) return;
         //                                     No transponer
-        glUniformMatrix4fv(uniformLocation, 1, GL_FALSE, glm::value_ptr(value));
+        glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(value));
     }
 
     i32 Shader::getUniformLocation(const char* name) const {
@@ -160,7 +147,7 @@ namespace renderer {
         } else {
             i32 location = glGetUniformLocation(m_program, name);
             m_uniformCache[name] = location; // lo agrego al caché
-            
+
             if(location == -1) EF_LOG_WARNING("Shader: uniform no encontrado (omitido): %s", name);
             return location;
         }
