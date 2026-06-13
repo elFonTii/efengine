@@ -1,16 +1,17 @@
 #pragma once
 #include <efengine/core/Types.h>
 #include <glm/glm.hpp>
-    // forward dec
-    class Shader; 
-    class Texture;
-    
+
 // material no posee, solo contiene observadores para shaders y texturas.
 namespace efengine {
 namespace renderer {
+    // forward dec
+    class Shader; 
+    class Texture;
+
     class Material {
         public:
-            explicit Material(const Shader* shader) {};
+            explicit Material(const Shader* shader) : m_shader(shader) {}
 
             // setters
             void SetAlbedoMap(const Texture* texture);
