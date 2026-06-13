@@ -2,6 +2,7 @@
 #include <efengine/scene/CameraController.h>
 #include <efengine/renderer/VertexLayout.h>
 #include <efengine/renderer/VertexArray.h>
+#include <efengine/renderer/Material.h>
 #include <efengine/renderer/Texture.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/Buffer.h>
@@ -74,6 +75,7 @@ int main() {
     const char* fshaderPath = "assets/shaders/pbr.frag";
     std::optional<std::string> vertexShaderStream = LoadFromFS(vshaderPath);
     std::optional<std::string> fragmentShaderStream = LoadFromFS(fshaderPath);
+
     if(!vertexShaderStream || !fragmentShaderStream) 
     { 
         EF_LOG_ERROR("Error cargando shaders");
@@ -89,12 +91,34 @@ int main() {
     
     // SETUP - Inicialización de Textura y Material
     const char* rock_albedo = "assets/textures/rock/rock_diffuse.png";
-    if (!rock_albedo) 
+    const char* rock_roughness = "assets/textures/rock/rock_roughness.png";
+    const char* rock_displacement = "assets/textures/rock/rock_displacement.png";
+    const char* rock_normal = "assets/textures/rock/rock_normal.png";
+    const char* rock_ao = "assets/textures/rock/rock_ao.png";
+
+
+
+    // TODO FFONTANA - HELPER PARA CARGAR MAPAS PBR, Y ALBEDO APARTE
+    if (!rock_albedo || !rock_roughness || !rock_displacement || !rock_normal || !rock_ao) 
     {
-        EF_LOG_ERROR("No se pudo cargar rock_diffuse");
+        EF_LOG_ERROR("No se pudo cargar alguno de los mapas de textura");
         return 1;
     }
+
     auto albedoOpt = renderer::Texture::Create(rock_albedo, renderer::ColorSpace::sRGB);
+    auto roughnessOpt = renderer::Texture::Create(rock_roughness); // default - linear
+    auto normalOpt = renderer::Texture::Create(rock_normal);
+    auto aoOpt = renderer::Texture::Create(rock_normal);
+
+
+
+
+    renderer::Material material (&*shaderOpt);
+    material.SetAlbedoMap(&*albedoOpt);
+    material.SetRoughnessMap(&*roughnessOpt);
+    material.SetNormalMap(&*normalOpt);
+    material.SetAOMap(&*aoOpt);
+    
 
     // SETUP - Vertex Objects
     renderer::Buffer       vbo(vertices, sizeof(vertices));
@@ -104,7 +128,7 @@ int main() {
 
     // SETUP -  Inicialización de Escena
     glm::vec3 lightPos  = glm::vec3(1.2f, 1.0f, 2.0f);
-    glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
+    glm::vec3 lightColor = glm::vec3(25.0f);
     scene::Camera cam = setupCamera(window.GetAspectRatio());
     scene::CameraController controller(&cam);
 
@@ -131,18 +155,19 @@ int main() {
         shaderOpt->Bind(); // activa el shader
 
         angle += deltaTime * glm::radians(50.0f); // 50 grados por segundo no importa los fps
-        glm::mat4 model = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.5f, 1.0f, 0.0f));
+        glm::mat4 model = glm::mat4(1.0f); 
 
         shaderOpt->SetMat4("uModel", model);
         shaderOpt->SetMat4("uView", cam.ViewMatrix());
         shaderOpt->SetMat4("uProjection", cam.ProjectionMatrix());
         shaderOpt->SetVec3("uViewPos", cam.Position());
-        shaderOpt->SetVec3("uLightPos", lightPos);
-        shaderOpt->SetVec3("uLightColor", lightColor);
-        albedoOpt->Bind(0);
-        shaderOpt->SetInt("uAlbedoMap", 0);
-        shaderOpt->SetInt("uHasAlbedoMap", 1);
-        shaderOpt->SetVec3("uAlbedoTint", glm::vec3(1.0f));
+        shaderOpt->SetInt("uLightCount", 1);
+        shaderOpt->SetVec3("uLightPositions[0]", lightPos);
+        shaderOpt->SetVec3("uLightColors[0]", lightColor);
+        shaderOpt->SetFloat("uAmbientFactor", 0.3f);
+
+        // bind del shader
+        material.Bind();
 
         // Luego dibujar
         gfx.Draw(va, *shaderOpt);
