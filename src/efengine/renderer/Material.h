@@ -31,6 +31,8 @@ namespace renderer {
             void Bind() const;
 
         private:
+            static void bindMap(const Shader& shader, const Texture* texture, u32 unit, const char* mapUniform, const char* hasUniform);
+
             const Shader* m_shader;
             
             const Texture* m_albedo    = null;
