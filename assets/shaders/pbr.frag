@@ -29,6 +29,20 @@ uniform sampler2D uRoughnessMap;
 uniform int       uHasRoughnessMap;
 uniform float     uRoughness;
 
+// --- Normal ---
+uniform sampler2D uNormalMap;
+uniform int       uHasNormalMap;
+
+// --- Ambient Occlusion ---
+uniform sampler2D uAOMap;
+uniform int       uHasAOMap;
+uniform float     uAOStrength;   // 0 = sin AO, 1 = AO pleno
+
+// --- Height / Displacement (Parallax Occlusion Mapping) ---
+uniform sampler2D uHeightMap;
+uniform int       uHasHeightMap;
+uniform float     uHeightScale;  // profundidad del relieve (p. ej. 0.05)
+
 const float PI = 3.14159265359;
 
 // Normal Distribution Function (Trowbridge-Reitz GGX): qué fracción de las
@@ -77,7 +91,14 @@ void main() {
     float metallic  = (uHasMetallicMap == 1)  ? texture(uMetallicMap, vUV).r  : uMetallic;
     float roughness = (uHasRoughnessMap == 1) ? texture(uRoughnessMap, vUV).r : uRoughness;
 
-    vec3 N = normalize(vTBN[2]);               // normal geométrica (sin normal map todavía)
+    // Normal: del normal map (tangente→mundo vía TBN) o la geométrica como fallback.
+    vec3 N;
+    if (uHasNormalMap == 1) {
+        vec3 n = texture(uNormalMap, vUV).rgb * 2.0 - 1.0;  // [0,1] → [-1,1]
+        N = normalize(vTBN * n);
+    } else {
+        N = normalize(vTBN[2]);
+    }
     vec3 V = normalize(uViewPos - vFragPos);   // del fragmento hacia la cámara
 
     // F0: reflectancia base con incidencia normal. Dieléctricos ≈ 0.04;
@@ -111,7 +132,10 @@ void main() {
     }
 
     // --- Ambiente + composición ---
-    vec3 ambient = uAmbientFactor * albedo;
+    // El AO solo modula la luz indirecta (ambiente), no la directa.
+    // uAOStrength interpola entre "sin oclusión" (1.0) y el valor del mapa.
+    float ao = (uHasAOMap == 1) ? mix(1.0, texture(uAOMap, vUV).r, uAOStrength) : 1.0;
+    vec3 ambient = uAmbientFactor * albedo * ao;
     vec3 color   = ambient + Lo;
 
     // Tone mapping (Reinhard) y corrección gamma, una sola vez al final.
