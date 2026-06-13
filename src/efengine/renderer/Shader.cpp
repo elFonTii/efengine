@@ -31,7 +31,6 @@ namespace renderer {
         }
     }
 
-    // TODO: FFONTANA - HACE FALTA MÉTODO COMUN PARA CHEQUEO DE PROGRAMA Y LOCALIZACIÓN DEL UNIFORM
     std::optional<Shader> Shader::Create(const char* vertexSrc, const char* fragmentSrc) {
         EF_ASSERT(vertexSrc != null, "Shader::Create: vertexSrc no puede ser null");
         EF_ASSERT(fragmentSrc != null, "Shader::Create: fragmentSrc no puede ser null");
