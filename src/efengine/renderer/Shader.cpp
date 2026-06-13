@@ -145,5 +145,25 @@ namespace renderer {
         //                                     No transponer
         glUniformMatrix4fv(uniformLocation, 1, GL_FALSE, glm::value_ptr(value));
     }
+
+    i32 Shader::getUniformLocation(const char* name) const {
+        EF_ASSERT(m_program != 0, "Shader:getUniformLocation: programa vacio (movido o no inicializado)");
+
+        auto result = m_uniformCache.find(name); // no retorna valor, retorna un puntero iterador apuntando al mapa encontrado
+
+        // TODO: FFONTANA - ES UN VALIOSO HELPER SEGURISIMO
+        // Manera segura para acceder a una busqueda
+        if (result != m_uniformCache.end()) {
+            int32_t value = result->second;
+
+            return value; // si encuentra, retorna la ubicación cacheada
+        } else {
+            i32 location = glGetUniformLocation(m_program, name);
+            m_uniformCache[name] = location; // lo agrego al caché
+            
+            if(location == -1) EF_LOG_WARNING("Shader: uniform no encontrado (omitido): %s", name);
+            return location;
+        }
+    }
 }
 }
