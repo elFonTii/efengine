@@ -3,7 +3,11 @@
 #include <efengine/core/Types.h>
 #include <efengine/renderer/VertexArray.h>
 #include <efengine/renderer/Model.h>
+#include <efengine/renderer/Material.h>
 #include <efengine/renderer/Shader.h>
+
+#include <string>
+#include <unordered_map>
 
 namespace efengine {
 namespace renderer {
@@ -13,6 +17,7 @@ namespace renderer {
         public:
             void Clear(f32 r, f32 g, f32 b, f32 a) const;
             void Draw(const Model& va, const Shader& shader) const;
+            void Draw(const Model& model, const std::unordered_map<std::string, const Material*>& materials) const;
             void Draw(const VertexArray& va, const Shader& shader) const;
     };
 
