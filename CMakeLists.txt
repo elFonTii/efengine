@@ -60,6 +60,14 @@ FetchContent_Declare(
     GIT_TAG f0569113c93ad095470c54bf34a17b36646bbbb5
 )
 
+# assimp - Importador de modelos 3D (FBX, OBJ, glTF, ...). En v1 solo usamos el
+# importador FBX. Build mínimo: estático, sin tests/tools/exportadores.
+FetchContent_Declare(
+    assimp
+    GIT_REPOSITORY https://github.com/assimp/assimp.git
+    GIT_TAG v5.4.3
+)
+
 # Opciones de GLFW: no compilar sus docs/tests/examples.
 # GLFW crea un target 'docs' propio si encuentra Doxygen, que colisiona con el
 # nuestro. Apagarlos evita la colisión y acelera el build.
@@ -79,6 +87,21 @@ FetchContent_MakeAvailable(glfw glad glm stb)
 if(EFENGINE_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
 endif()
+
+# Opciones de assimp: build mínimo. Deben fijarse ANTES de MakeAvailable(assimp).
+# Solo el importador FBX; sin exportadores, tests, tools ni samples.
+# BUILD_SHARED_LIBS OFF => assimp estático: no hay DLL que copiar junto al .exe.
+# (glfw/glad/glm/stb ya se poblaron arriba, así que esto solo afecta a assimp.)
+set(ASSIMP_BUILD_TESTS                    OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ASSIMP_TOOLS             OFF CACHE BOOL "" FORCE)
+set(ASSIMP_INSTALL                        OFF CACHE BOOL "" FORCE)
+set(ASSIMP_NO_EXPORT                      ON  CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_FBX_IMPORTER             ON  CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ZLIB                     ON  CACHE BOOL "" FORCE)
+set(ASSIMP_WARNINGS_AS_ERRORS             OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS                     OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(assimp)
 
 # stb no trae CMakeLists: tras poblarlo, exponemos su carpeta como include
 # mediante un target INTERFACE. La implementación se compila una sola vez en
