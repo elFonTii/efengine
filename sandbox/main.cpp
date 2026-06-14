@@ -128,7 +128,7 @@ int main() {
             window.SetShouldClose(true);
         }
 
-        gfx.Clear(0.1f, 0.1f, 0.12f, 1.0f);
+        gfx.Clear(0.18f, 0.18f, 0.18f, 1.0f);
 
         shaderOpt->Bind();
         shaderOpt->SetMat4("uModel", modelMat);
