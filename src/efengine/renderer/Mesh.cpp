@@ -9,7 +9,8 @@
 
 namespace efengine {
 namespace renderer {
-    Mesh::Mesh(const std::vector<Vertex>& vertices, const std::vector<u32>& indices) {
+    Mesh::Mesh(const std::vector<Vertex>& vertices, const std::vector<u32>& indices, std::string materialName)
+        : m_materialName(std::move(materialName)) {
         EF_ASSERT(!vertices.empty(), "Mesh::Mesh: Los vértices al construir el mesh están vacíos");
         EF_ASSERT(!indices.empty(), "Mesh::Mesh: Los índices de vértices al construir el mesh están vacíos");
 
