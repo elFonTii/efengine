@@ -27,8 +27,10 @@ namespace scene {
             
              Camera* m_camera;
 
-            glm::vec3 m_target { 0.0f };            // punto que orbita
-            f32 m_distance = 2.5f;                  // radio de la órbita
+            glm::vec3 m_target { 0.0f, 10.0f, 0.0f };            // punto que orbita
+            f32 m_distance = 30.0f;                  // radio de la órbita
+            f32 m_minDistance = 5.0f;                   // distancia mínima al target
+            f32 m_maxDistance = 100.0f;                 // distancia máxima al target
 
             f32 m_yaw      = 0.0f;
             f32 m_pitch    = glm::radians(45.0f);
@@ -43,7 +45,7 @@ namespace scene {
             // control rotación
             bool m_rotating = false;
             f32 m_rotateSpeed = 0.005f;
-            f32 m_zoomSpeed   = 0.5f;
+            f32 m_zoomSpeed   = 5.0f;
     };
 }
 }
