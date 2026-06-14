@@ -108,7 +108,7 @@ namespace renderer {
 
         i32 loc = getUniformLocation(name);
         if (loc == -1) return;
-        glUniform1i(loc, value);
+        glUniform1f(loc, value);
     }
 
     void Shader::SetVec3(const char* name, const glm::vec3& value) const {

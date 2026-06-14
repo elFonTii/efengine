@@ -2,6 +2,8 @@
 #include <efengine/resources/ModelLoader.h>
 #include <efengine/resources/FileIO.h>
 #include <efengine/renderer/Model.h>
+#include <efengine/renderer/Mesh.h>
+#include <efengine/renderer/Vertex.h>
 #include <efengine/renderer/Material.h>
 #include <efengine/renderer/Texture.h>
 #include <efengine/renderer/Shader.h>
@@ -37,13 +39,11 @@ namespace {
         set.normal    = renderer::Texture::Create((base + "nor_gl_4k.jpg").c_str());
         set.roughness = renderer::Texture::Create((base + "rough_4k.jpg").c_str());
         set.ao        = renderer::Texture::Create((base + "ao_4k.jpg").c_str());
-        set.height    = renderer::Texture::Create((base + "height_4k.jpg").c_str());
 
-        if (!set.albedo || !set.normal || !set.roughness || !set.ao || !set.height) {
+        if (!set.albedo || !set.normal || !set.roughness || !set.ao) {
             return std::nullopt;
         }
 
-        // El street rat no trae mapa de alpha (malla solida, sin recortes).
         return set;
     }
 
@@ -53,11 +53,40 @@ namespace {
         mat.SetNormalMap(&*set.normal);
         mat.SetRoughnessMap(&*set.roughness);
         mat.SetAOMap(&*set.ao);
-        mat.SetHeightMap(&*set.height);
-        if (set.opacity) {
-            mat.SetOpacityMap(&*set.opacity);
-        }
+        if (set.height)  mat.SetHeightMap(&*set.height);
+        if (set.opacity) mat.SetOpacityMap(&*set.opacity);
         return mat;
+    }
+
+    std::optional<TextureSet> loadBrownMud() {
+        const std::string base = "assets/textures/brown_mud/brown_mud_03_";
+
+        TextureSet set;
+        set.albedo    = renderer::Texture::Create((base + "diff_2k.png").c_str(), renderer::ColorSpace::sRGB);
+        set.normal    = renderer::Texture::Create((base + "nor_gl_2k.png").c_str());
+        set.roughness = renderer::Texture::Create((base + "rough_2k.png").c_str());
+        set.ao        = renderer::Texture::Create((base + "ao_2k.png").c_str());
+        set.height    = renderer::Texture::Create((base + "disp_2k.png").c_str());
+
+        if (!set.albedo || !set.normal || !set.roughness || !set.ao || !set.height) {
+            return std::nullopt;
+        }
+        return set;
+    }
+
+    renderer::Model makePlane(const std::string& materialName, f32 halfSize, f32 tiles) {
+        const std::vector<renderer::Vertex> vertices = {
+            // position                            normal         uv                tangent
+            { {-halfSize, 0.0f, -halfSize}, {0.0f, 1.0f, 0.0f}, {0.0f,  0.0f},  {1.0f, 0.0f, 0.0f} },
+            { { halfSize, 0.0f, -halfSize}, {0.0f, 1.0f, 0.0f}, {tiles, 0.0f},  {1.0f, 0.0f, 0.0f} },
+            { { halfSize, 0.0f,  halfSize}, {0.0f, 1.0f, 0.0f}, {tiles, tiles}, {1.0f, 0.0f, 0.0f} },
+            { {-halfSize, 0.0f,  halfSize}, {0.0f, 1.0f, 0.0f}, {0.0f,  tiles}, {1.0f, 0.0f, 0.0f} },
+        };
+        const std::vector<u32> indices = { 0, 1, 2, 2, 3, 0 };
+
+        std::vector<renderer::Mesh> meshes;
+        meshes.emplace_back(vertices, indices, materialName);
+        return renderer::Model(std::move(meshes));
     }
 }
 
@@ -91,7 +120,6 @@ int main() {
 
     renderer::Material streetRatMat = makeMaterial(*shaderOpt, *streetRatTex);
 
-    // El FBX trae dos materiales (cuerpo y pelo); ambos reusan el set del cuerpo.
     std::unordered_map<std::string, const renderer::Material*> materiales = {
         { "street_rat",      &streetRatMat },
         { "street_rat_hair", &streetRatMat },
@@ -103,19 +131,31 @@ int main() {
         return 1;
     }
 
-    // El street rat viene en metros (~0.15 u de alto); se escala y se centra
-    // sobre el target de la camara (y=200, distancia 500).
     const f32 kEscala = 10.0f;
     glm::mat4 modelMat =
         glm::translate(glm::mat4(1.0f), glm::vec3(0.0f)) *
         glm::scale(glm::mat4(1.0f), glm::vec3(kEscala));
 
+    auto brownMudTex = loadBrownMud();
+    if (!brownMudTex) {
+        EF_LOG_ERROR("No se pudieron cargar las texturas de brown_mud");
+        return 1;
+    }
+    renderer::Material groundMat = makeMaterial(*shaderOpt, *brownMudTex);
+    groundMat.heightScale = 0.08f;
+
+    renderer::Model groundModel = makePlane("ground", 300.0f, 24.0f);
+    std::unordered_map<std::string, const renderer::Material*> groundMateriales = {
+        { "ground", &groundMat },
+    };
+    glm::mat4 groundModelMat = glm::mat4(1.0f);
+
     glm::vec3 lightPos_0   = glm::vec3(50.0f, 80.0f, 0.0f);
     glm::vec3 lightPos_1   = glm::vec3(-50.0f, 80.0f, 0.0f);
-    glm::vec3 lightPos_2  = glm::vec3(0, -80.0f, 0.0f);
+    glm::vec3 lightPos_2  = glm::vec3(0, 90.0f, 0.0f);
 
 
-    glm::vec3 lightColor = glm::vec3(15000.0f);
+    glm::vec3 lightColor = glm::vec3(5000.0f);
 
     scene::Camera cam;
     cam.SetAspect(window.GetAspectRatio());
@@ -128,7 +168,7 @@ int main() {
             window.SetShouldClose(true);
         }
 
-        gfx.Clear(0.1f, 0.1f, 0.12f, 1.0f);
+        gfx.Clear(0.18f, 0.18f, 0.18f, 1.0f);
 
         shaderOpt->Bind();
         shaderOpt->SetMat4("uModel", modelMat);
@@ -142,9 +182,13 @@ int main() {
         shaderOpt->SetVec3("uLightColors[1]", lightColor);
         shaderOpt->SetVec3("uLightPositions[2]", lightPos_2);
         shaderOpt->SetVec3("uLightColors[2]", lightColor);
-        shaderOpt->SetFloat("uAmbientFactor", 0.02f);
+        shaderOpt->SetFloat("uAmbientFactor", 0.08f);
 
         gfx.Draw(*modelOpt, materiales);
+
+        shaderOpt->Bind();
+        shaderOpt->SetMat4("uModel", groundModelMat);
+        gfx.Draw(groundModel, groundMateriales);
 
         window.SwapBuffers();
     }
