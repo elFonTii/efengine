@@ -127,9 +127,10 @@ void main() {
     vec3 viewDirT = normalize(transpose(vTBN) * (uViewPos - vFragPos));
     vec2 uv = (uHasHeightMap == 1) ? ParallaxOcclusionMapping(vUV, viewDirT) : vUV;
 
-    // Recorta artefactos en los bordes del plano (UV desplazada fuera de [0,1]).
-    if (uHasHeightMap == 1 && (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0))
-        discard;
+    // No se recorta la UV desplazada: el POM solo se usa sobre superficies con
+    // material tileable (UV continua + GL_REPEAT), donde el offset envuelve sin
+    // costura. Un discard a [0,1] solo tendria sentido en un quad unico mapeado
+    // exactamente a [0,1], y romperia tanto el tiling como las mallas atlaseadas.
 
     float alpha = (uHasOpacityMap == 1) ? texture(uOpacityMap, uv).r : 1.0;
     if (alpha < uAlphaCutoff) discard;
