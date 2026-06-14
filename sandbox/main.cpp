@@ -1,195 +1,152 @@
 #include <efengine/application/Application.h>
-#include <efengine/scene/CameraController.h>
-#include <efengine/renderer/VertexLayout.h>
-#include <efengine/renderer/VertexArray.h>
+#include <efengine/resources/ModelLoader.h>
+#include <efengine/resources/FileIO.h>
+#include <efengine/renderer/Model.h>
 #include <efengine/renderer/Material.h>
 #include <efengine/renderer/Texture.h>
 #include <efengine/renderer/Shader.h>
-#include <efengine/renderer/Buffer.h>
 #include <efengine/scene/Camera.h>
+#include <efengine/scene/CameraController.h>
 #include <efengine/core/Types.h>
 #include <efengine/core/Log.h>
-#include <efengine/resources/FileIO.h>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/glm.hpp>
-#include <utility>
 
-/* https://learnopengl.com/Lighting/Basic-Lighting */ 
+#include <optional>
+#include <string>
+#include <unordered_map>
 
 namespace {
     using namespace efengine;
 
-    u32 planeIndexes[] = { 0,1,2, 2,3,0};
-    f32 vertices[] = {
-        // posición            // normal           // uv        // tangente
-        -0.5f, -0.5f, 0.0f,    0.0f, 0.0f, 1.0f,    0.0f, 0.0f,   1.0f, 0.0f, 0.0f, // 0 inf-izq
-        0.5f, -0.5f, 0.0f,    0.0f, 0.0f, 1.0f,    1.0f, 0.0f,   1.0f, 0.0f, 0.0f, // 1 inf-der
-        0.5f,  0.5f, 0.0f,    0.0f, 0.0f, 1.0f,    1.0f, 1.0f,   1.0f, 0.0f, 0.0f, // 2 sup-der
-        -0.5f,  0.5f, 0.0f,    0.0f, 0.0f, 1.0f,    0.0f, 1.0f,   1.0f, 0.0f, 0.0f, // 3 sup-izq
+    struct TextureSet {
+        std::optional<renderer::Texture> albedo;
+        std::optional<renderer::Texture> normal;
+        std::optional<renderer::Texture> roughness;
+        std::optional<renderer::Texture> ao;
+        std::optional<renderer::Texture> height;
+        std::optional<renderer::Texture> opacity;
     };
 
-    std::optional<std::string> LoadFromFS(const char* path) {
-        auto result = resources::FileIO::ReadText(path);
-        return result;
+    std::optional<TextureSet> loadStreetRat() {
+        const std::string base = "assets/textures/street_rat/street_rat_";
+
+        TextureSet set;
+        set.albedo    = renderer::Texture::Create((base + "diff_4k.jpg").c_str(), renderer::ColorSpace::sRGB);
+        set.normal    = renderer::Texture::Create((base + "nor_gl_4k.jpg").c_str());
+        set.roughness = renderer::Texture::Create((base + "rough_4k.jpg").c_str());
+        set.ao        = renderer::Texture::Create((base + "ao_4k.jpg").c_str());
+        set.height    = renderer::Texture::Create((base + "height_4k.jpg").c_str());
+
+        if (!set.albedo || !set.normal || !set.roughness || !set.ao || !set.height) {
+            return std::nullopt;
+        }
+
+        // El street rat no trae mapa de alpha (malla solida, sin recortes).
+        return set;
     }
 
-    scene::Camera setupCamera(f32 aspect) {
-        scene::Camera cam;
-        cam.SetAspect(aspect);
-
-        return cam;
-    }
-
-    renderer::VertexLayout setupVertexLayout() {
-        renderer::VertexLayout layout;
-
-        layout.Push(renderer::ShaderDataType::Float3);  // posición  loc 0
-        layout.Push(renderer::ShaderDataType::Float3);  // normal    loc 1
-        layout.Push(renderer::ShaderDataType::Float2);  // uv        loc 2
-        layout.Push(renderer::ShaderDataType::Float3);  // tangente  loc 3
-
-        return layout;
-    }
-
-    renderer::VertexArray setupVertexArray(renderer::Buffer vbo, renderer::IndexBuffer ebo, const renderer::VertexLayout& layout) {
-        renderer::VertexArray va;
-
-        va.AddVertexBuffer(std::move(vbo), layout);
-        va.SetIndexBuffer(std::move(ebo));
-
-        return va;
+    renderer::Material makeMaterial(const renderer::Shader& shader, const TextureSet& set) {
+        renderer::Material mat(&shader);
+        mat.SetAlbedoMap(&*set.albedo);
+        mat.SetNormalMap(&*set.normal);
+        mat.SetRoughnessMap(&*set.roughness);
+        mat.SetAOMap(&*set.ao);
+        mat.SetHeightMap(&*set.height);
+        if (set.opacity) {
+            mat.SetOpacityMap(&*set.opacity);
+        }
+        return mat;
     }
 }
 
 int main() {
+    using namespace efengine;
 
-    EF_LOG_INFO("=== efengine: sandbox ===");
+    EF_LOG_INFO("=== efengine: sandbox street rat ===");
 
     application::Application app;
     platform::Window&   window = app.GetWindow();
     renderer::Renderer& gfx    = app.GetRenderer();
 
-    // SETUP - Inicialización de Shaders
-    // Cook-Torrance
-    const char* vshaderPath = "assets/shaders/pbr.vert";
-    const char* fshaderPath = "assets/shaders/pbr.frag";
-    std::optional<std::string> vertexShaderStream = LoadFromFS(vshaderPath);
-    std::optional<std::string> fragmentShaderStream = LoadFromFS(fshaderPath);
-    // Phong
-    const char* phongVshaderPath = "assets/shaders/phong.vert";
-    const char* phongFshaderPath =  "assets/shaders/phong.frag";
-    std::optional<std::string> phongVShaderStream = LoadFromFS(phongVshaderPath);
-    std::optional<std::string> phongFShaderStream = LoadFromFS(phongFshaderPath);
-
-    if(!vertexShaderStream || !fragmentShaderStream) 
-    { 
-        EF_LOG_ERROR("Error cargando shaders cook torrance");
-        return 1; 
-    }
-
-        if(!phongVShaderStream || !phongFShaderStream) 
-    { 
-        EF_LOG_ERROR("Error cargando shaders phong");
-        return 1; 
-    }
-
-    auto shaderOpt = renderer::Shader::Create(vertexShaderStream->c_str(), fragmentShaderStream->c_str());
-    auto phongShaderOpt = renderer::Shader::Create(phongVShaderStream->c_str(), phongFShaderStream->c_str());
-
-    if (!shaderOpt || !phongShaderOpt)  
-    { 
-        EF_LOG_ERROR("Error creando shaders");
-        return 1; 
-    } 
-    
-    // SETUP - Inicialización de Textura y Material
-    const char* rock_albedo = "assets/textures/rock/rock_diffuse.png";
-    const char* rock_roughness = "assets/textures/rock/rock_roughness.png";
-    const char* rock_displacement = "assets/textures/rock/rock_displacement.png";
-    const char* rock_normal = "assets/textures/rock/rock_normal.png";
-    const char* rock_ao = "assets/textures/rock/rock_ao.png";
-
-    auto albedoOpt = renderer::Texture::Create(rock_albedo, renderer::ColorSpace::sRGB);
-    auto displacementOpt = renderer::Texture::Create(rock_displacement);
-    auto roughnessOpt = renderer::Texture::Create(rock_roughness);
-    auto normalOpt = renderer::Texture::Create(rock_normal);
-    auto aoOpt = renderer::Texture::Create(rock_ao);
-
-    if (!albedoOpt || !displacementOpt || !roughnessOpt || !normalOpt || !aoOpt) {
-        EF_LOG_ERROR("No se pudo cargar alguno de los mapas");
+    auto vsrc = resources::FileIO::ReadText("assets/shaders/pbr.vert");
+    auto fsrc = resources::FileIO::ReadText("assets/shaders/pbr.frag");
+    if (!vsrc || !fsrc) {
+        EF_LOG_ERROR("No se pudieron leer los shaders PBR");
         return 1;
-    }   
+    }
 
-    renderer::Material material (&*shaderOpt);
-    material.SetAlbedoMap(&*albedoOpt);
-    material.SetHeightMap(&*displacementOpt);
-    material.SetRoughnessMap(&*roughnessOpt);
-    material.SetNormalMap(&*normalOpt);
-    material.SetAOMap(&*aoOpt);
+    auto shaderOpt = renderer::Shader::Create(vsrc->c_str(), fsrc->c_str());
+    if (!shaderOpt) {
+        EF_LOG_ERROR("No se pudo crear el shader PBR");
+        return 1;
+    }
 
-    // SETUP - Vertex Objects
-    renderer::Buffer       vbo(vertices, sizeof(vertices));
-    renderer::IndexBuffer  ebo(planeIndexes, 6);
-    renderer::VertexLayout layout = setupVertexLayout();
-    renderer::VertexArray va = setupVertexArray(std::move(vbo), std::move(ebo), layout);
+    auto streetRatTex = loadStreetRat();
+    if (!streetRatTex) {
+        EF_LOG_ERROR("No se pudieron cargar las texturas del street rat");
+        return 1;
+    }
 
-    // SETUP -  Inicialización de Escena
-    glm::vec3 lightPos  = glm::vec3(1.2f, 1.0f, 2.0f);
-    glm::vec3 lightColor = glm::vec3(25.0f);
-    scene::Camera cam = setupCamera(window.GetAspectRatio());
+    renderer::Material streetRatMat = makeMaterial(*shaderOpt, *streetRatTex);
+
+    // El FBX trae dos materiales (cuerpo y pelo); ambos reusan el set del cuerpo.
+    std::unordered_map<std::string, const renderer::Material*> materiales = {
+        { "street_rat",      &streetRatMat },
+        { "street_rat_hair", &streetRatMat },
+    };
+
+    auto modelOpt = resources::ModelLoader::Load("assets/models/street_rat_4k.fbx");
+    if (!modelOpt) {
+        EF_LOG_ERROR("No se pudo cargar el modelo");
+        return 1;
+    }
+
+    // El street rat viene en metros (~0.15 u de alto); se escala y se centra
+    // sobre el target de la camara (y=200, distancia 500).
+    const f32 kEscala = 10.0f;
+    glm::mat4 modelMat =
+        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f)) *
+        glm::scale(glm::mat4(1.0f), glm::vec3(kEscala));
+
+    glm::vec3 lightPos_0   = glm::vec3(50.0f, 80.0f, 0.0f);
+    glm::vec3 lightPos_1   = glm::vec3(-50.0f, 80.0f, 0.0f);
+    glm::vec3 lightPos_2  = glm::vec3(0, -80.0f, 0.0f);
+
+
+    glm::vec3 lightColor = glm::vec3(15000.0f);
+
+    scene::Camera cam;
+    cam.SetAspect(window.GetAspectRatio());
     scene::CameraController controller(&cam);
-
     window.SetEventListener(&controller);
-    f64 lastTime = window.GetTime();
-    f32 angle = 0.0f;
 
-
-
-    // LOOP
     while (!window.ShouldClose()) {
         window.PollEvents();
         if (window.IsKeyPressed(platform::Key::Escape)) {
             window.SetShouldClose(true);
         }
 
-        // calculo el delta al inicio del loop
-        f64 now = platform::Window::GetTime();
-        f32 deltaTime = (f32)(now - lastTime);
-        lastTime = now;
-
         gfx.Clear(0.1f, 0.1f, 0.12f, 1.0f);
-        
-        glm::mat4 modelPBR   = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f));
-        //glm::mat4 modelPhong = glm::translate(glm::mat4(1.0f), glm::vec3( 0.6f, 0.0f, 0.0f));
 
-        // --- Plano PBR ---
-        material.Bind();   // bindea el shader PBR + sube uniforms del material
-        shaderOpt->SetMat4("uModel", modelPBR);
+        shaderOpt->Bind();
+        shaderOpt->SetMat4("uModel", modelMat);
         shaderOpt->SetMat4("uView", cam.ViewMatrix());
         shaderOpt->SetMat4("uProjection", cam.ProjectionMatrix());
         shaderOpt->SetVec3("uViewPos", cam.Position());
-        shaderOpt->SetInt("uLightCount", 1);
-        shaderOpt->SetVec3("uLightPositions[0]", lightPos);
+        shaderOpt->SetInt("uLightCount", 3);
+        shaderOpt->SetVec3("uLightPositions[0]", lightPos_0);
         shaderOpt->SetVec3("uLightColors[0]", lightColor);
-        shaderOpt->SetFloat("uAmbientFactor", 0.03f);
-        gfx.Draw(va, *shaderOpt);
+        shaderOpt->SetVec3("uLightPositions[1]", lightPos_1);
+        shaderOpt->SetVec3("uLightColors[1]", lightColor);
+        shaderOpt->SetVec3("uLightPositions[2]", lightPos_2);
+        shaderOpt->SetVec3("uLightColors[2]", lightColor);
+        shaderOpt->SetFloat("uAmbientFactor", 0.02f);
 
-        /* 
-        // --- Plano Phong ---
-        phongShaderOpt->Bind();
-        phongShaderOpt->SetMat4("uModel", modelPhong);
-        phongShaderOpt->SetMat4("uView", cam.ViewMatrix());
-        phongShaderOpt->SetMat4("uProjection", cam.ProjectionMatrix());
-        phongShaderOpt->SetVec3("uViewPos", cam.Position());
-        phongShaderOpt->SetVec3("uLightPos", lightPos);
-        phongShaderOpt->SetVec3("uLightColor", glm::vec3(1.0f));
-        albedoOpt->Bind(0);
-        phongShaderOpt->SetInt("uAlbedoMap", 0);
-        gfx.Draw(va, *phongShaderOpt);
-        */
+        gfx.Draw(*modelOpt, materiales);
+
         window.SwapBuffers();
-    
     }
 
     EF_LOG_INFO("=== efengine: sandbox shutdown ===");

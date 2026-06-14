@@ -43,6 +43,10 @@ uniform sampler2D uHeightMap;
 uniform int       uHasHeightMap;
 uniform float     uHeightScale;  // profundidad del relieve (p. ej. 0.05)
 
+uniform sampler2D uOpacityMap;
+uniform int       uHasOpacityMap;
+uniform float     uAlphaCutoff;
+
 const float PI = 3.14159265359;
 
 // Normal Distribution Function (Trowbridge-Reitz GGX): qué fracción de las
@@ -127,6 +131,9 @@ void main() {
     if (uHasHeightMap == 1 && (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0))
         discard;
 
+    float alpha = (uHasOpacityMap == 1) ? texture(uOpacityMap, uv).r : 1.0;
+    if (alpha < uAlphaCutoff) discard;
+
     // --- Propiedades del material (textura si existe, escalar si no) ---
     vec3 albedo = (uHasAlbedoMap == 1)
                 ? texture(uAlbedoMap, uv).rgb * uAlbedoTint
@@ -143,6 +150,7 @@ void main() {
     } else {
         N = normalize(vTBN[2]);
     }
+    if (!gl_FrontFacing) N = -N;
     vec3 V = normalize(uViewPos - vFragPos);   // del fragmento hacia la cámara
 
     // F0: reflectancia base con incidencia normal. Dieléctricos ≈ 0.04;
