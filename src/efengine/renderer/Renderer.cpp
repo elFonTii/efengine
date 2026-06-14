@@ -3,6 +3,7 @@
 #include <glad/gl.h>
 
 #include <efengine/core/Assert.h>
+#include <efengine/core/Log.h>
 
 namespace efengine {
 namespace renderer {
@@ -10,6 +11,25 @@ namespace renderer {
     void Renderer::Clear(f32 r, f32 g, f32 b, f32 a) const {
         glClearColor(r, g, b, a);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    }
+
+    void Renderer::Draw(const Model& model, const Shader& shader) const {
+        for (const Mesh& mesh : model.meshes()) {
+            Draw(mesh.vertexArray(), shader); // Realiza un dibujado por cada mesh dentro del fbx
+        }
+    }
+
+    void Renderer::Draw(const Model& model, const std::unordered_map<std::string, const Material*>& materials) const {
+        for (const Mesh& mesh : model.meshes()) {
+            auto it = materials.find(mesh.materialName());
+            if (it == materials.end() || it->second == null) {
+                EF_LOG_WARNING("Renderer::Draw: sin material para malla '%s'", mesh.materialName().c_str());
+                continue;
+            }
+            const Material& mat = *it->second;
+            mat.Bind();
+            Draw(mesh.vertexArray(), mat.shader());
+        }
     }
 
     void Renderer::Draw(const VertexArray& va, const Shader& shader) const {

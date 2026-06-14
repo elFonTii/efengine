@@ -16,13 +16,13 @@ namespace scene {
 
 
         private:
-            glm::vec3 m_position { 0.0f, 0.0f, 1.5f };
+            glm::vec3 m_position { 0.0f, 0.0f, 0.0f };
             glm::vec3 m_target   { 0.0f, 0.0f, 0.0f };
             glm::vec3 m_up       { 0.0f, 1.0f, 0.0f };
             f32 m_fov    = 45.0f;
             f32 m_aspect = 1.0f;
             f32 m_near   = 0.1f;
-            f32 m_far    = 100.0f;
+            f32 m_far    = 5000.0f;
     };
 }
 }

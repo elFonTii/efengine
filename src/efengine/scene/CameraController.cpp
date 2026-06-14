@@ -58,7 +58,7 @@ namespace scene {
 
     void CameraController::OnMouseScroll(f32 xOffset, f32 yOffset) {
         m_distance -= yOffset * m_zoomSpeed; // controlar distancia hasta cubo
-        m_distance = glm::clamp(m_distance, 1.0f, 20.0f); // limite
+        m_distance = glm::clamp(m_distance, m_minDistance, m_maxDistance); // limite
 
         UpdateCamera();
     }

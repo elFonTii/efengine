@@ -12,6 +12,7 @@ namespace renderer {
     void Material::SetRoughnessMap(const Texture* texture) { m_roughness = texture; }
     void Material::SetMetallicMap(const Texture* texture) { m_metallic = texture; }
     void Material::SetHeightMap(const Texture* texture) { m_height = texture; }
+    void Material::SetOpacityMap(const Texture* texture) { m_opacity = texture; }
 
 
 
@@ -31,12 +32,14 @@ namespace renderer {
         m_shader->SetFloat("uRoughness", roughness);
         m_shader->SetFloat("uAOStrength", aoStrength);
         m_shader->SetFloat("uHeightScale", heightScale);
+        m_shader->SetFloat("uAlphaCutoff", alphaCutoff);
         bindMap(*m_shader, m_albedo,    0, "uAlbedoMap",    "uHasAlbedoMap");
         bindMap(*m_shader, m_normal,    1, "uNormalMap",    "uHasNormalMap");
         bindMap(*m_shader, m_ao,        2, "uAOMap",        "uHasAOMap");
         bindMap(*m_shader, m_roughness, 3, "uRoughnessMap", "uHasRoughnessMap");
         bindMap(*m_shader, m_metallic,  4, "uMetallicMap",  "uHasMetallicMap");
         bindMap(*m_shader, m_height,    5, "uHeightMap",    "uHasHeightMap");
+        bindMap(*m_shader, m_opacity,   6, "uOpacityMap",   "uHasOpacityMap");
     }
 }
 }
