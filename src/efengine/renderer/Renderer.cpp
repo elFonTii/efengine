@@ -12,6 +12,12 @@ namespace renderer {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
 
+    void Renderer::Draw(const Model& model, const Shader& shader) const {
+        for (const Mesh& mesh : model.meshes()) {
+            Draw(mesh.vertexArray(), shader); // Realiza un dibujado por cada mesh dentro del fbx
+        }
+    }
+
     void Renderer::Draw(const VertexArray& va, const Shader& shader) const {
         EF_ASSERT(va.vertexCount() > 0, "Renderer::Draw: VertexArray sin vertices");
 
