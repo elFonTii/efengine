@@ -53,7 +53,7 @@ namespace {
         mat.SetNormalMap(&*set.normal);
         mat.SetRoughnessMap(&*set.roughness);
         mat.SetAOMap(&*set.ao);
-        mat.SetHeightMap(&*set.height);
+       //  mat.SetHeightMap(&*set.height);
         if (set.opacity) {
             mat.SetOpacityMap(&*set.opacity);
         }
@@ -142,7 +142,7 @@ int main() {
         shaderOpt->SetVec3("uLightColors[1]", lightColor);
         shaderOpt->SetVec3("uLightPositions[2]", lightPos_2);
         shaderOpt->SetVec3("uLightColors[2]", lightColor);
-        shaderOpt->SetFloat("uAmbientFactor", 0.02f);
+        shaderOpt->SetFloat("uAmbientFactor", 0.08f);
 
         gfx.Draw(*modelOpt, materiales);
 

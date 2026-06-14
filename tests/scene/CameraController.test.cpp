@@ -10,13 +10,13 @@ using namespace efengine;
 TEST_CASE("CameraController: orbitar preserva la distancia al target") {
     scene::Camera cam;
     scene::CameraController controller(&cam);
-
-    f32 d0 = glm::length(cam.Position());
+    const glm::vec3 target(0.0f, 10.0f, 0.0f);
+    f32 d0 = glm::length(cam.Position() - target);
 
     controller.OnMouseButton((i32)platform::MouseButton::Left, (i32)platform::InputAction::Press, 0);
     controller.OnMouseMove(150.0f, 130.0f);   // arrastre
 
-    CHECK(glm::length(cam.Position()) == doctest::Approx(d0));
+    CHECK(glm::length(cam.Position() - target) == doctest::Approx(d0));
 }
 
 TEST_CASE("CameraController: el scroll acerca la cámara") {
@@ -35,11 +35,8 @@ TEST_CASE("CameraController: el pitch se limita a +-89 grados") {
 
     controller.OnMouseButton((i32)platform::MouseButton::Left, (i32)platform::InputAction::Press, 0);
     controller.OnMouseMove(0.0f, 100000.0f);   // arrastre vertical brutal -> satura el pitch
-
-    // Con el clamp, la altura nunca alcanza la distancia completa (no pasa "por el polo").
-    // std::abs hace el test independiente de hacia qué lado clampee el signo.
-    f32 maxY = 30.0f * std::sin(glm::radians(89.0f));
-    CHECK(std::abs(cam.Position().y) == doctest::Approx(maxY));
+    f32 maxY = 10.0f + 30.0f * std::sin(glm::radians(89.0f));
+    CHECK(cam.Position().y == doctest::Approx(maxY));
 }
 
 TEST_CASE("CameraController: sin arrastre, mover el mouse no orbita") {
