@@ -1,8 +1,10 @@
 #pragma once
 
 #include <efengine/core/Types.h>
+#include <unordered_map>
 #include <glm/glm.hpp>
 #include <optional>
+#include <string>
 
 namespace efengine {
 namespace renderer {
@@ -29,8 +31,11 @@ namespace renderer {
             u32  id() const { return m_program; }
 
         private:
-            explicit Shader(u32 program);   // privado: solo Create, ya validado
+            explicit Shader(u32 program);
+            i32 getUniformLocation(const char* name) const;
+
             u32 m_program = 0;
+            mutable std::unordered_map<std::string, i32> m_uniformCache; // cache de uniform
     };
 
 }
