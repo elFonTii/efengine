@@ -23,7 +23,6 @@ namespace resources {
             aiProcess_Triangulate |
             aiProcess_GenSmoothNormals |
             aiProcess_CalcTangentSpace |
-            aiProcess_JoinIdenticalVertices |
             aiProcess_PreTransformVertices
         );
 
@@ -31,6 +30,9 @@ namespace resources {
             EF_LOG_ERROR("ModelLoader::Load: %s", importer.GetErrorString());
             return std::nullopt;
         }
+
+        EF_LOG_INFO("ModelLoader: '%s' - %u mallas, %u materiales",
+            path, scene->mNumMeshes, scene->mNumMaterials);
 
         std::vector<renderer::Mesh> meshes;
         meshes.reserve(scene->mNumMeshes);
@@ -74,7 +76,11 @@ namespace resources {
                 }
             }
 
-            meshes.emplace_back(vertices, indices);
+            aiString matName;
+            if (scene->mNumMaterials > 0) {
+                scene->mMaterials[m->mMaterialIndex]->Get(AI_MATKEY_NAME, matName);
+            }
+            meshes.emplace_back(vertices, indices, std::string(matName.C_Str()));
         }
 
         return renderer::Model(std::move(meshes));
