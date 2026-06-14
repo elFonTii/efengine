@@ -71,19 +71,33 @@ int main() {
     renderer::Renderer& gfx    = app.GetRenderer();
 
     // SETUP - Inicialización de Shaders
+    // Cook-Torrance
     const char* vshaderPath = "assets/shaders/pbr.vert";
     const char* fshaderPath = "assets/shaders/pbr.frag";
     std::optional<std::string> vertexShaderStream = LoadFromFS(vshaderPath);
     std::optional<std::string> fragmentShaderStream = LoadFromFS(fshaderPath);
+    // Phong
+    const char* phongVshaderPath = "assets/shaders/phong.vert";
+    const char* phongFshaderPath =  "assets/shaders/phong.frag";
+    std::optional<std::string> phongVShaderStream = LoadFromFS(phongVshaderPath);
+    std::optional<std::string> phongFShaderStream = LoadFromFS(phongFshaderPath);
 
     if(!vertexShaderStream || !fragmentShaderStream) 
     { 
-        EF_LOG_ERROR("Error cargando shaders");
+        EF_LOG_ERROR("Error cargando shaders cook torrance");
+        return 1; 
+    }
+
+        if(!phongVShaderStream || !phongFShaderStream) 
+    { 
+        EF_LOG_ERROR("Error cargando shaders phong");
         return 1; 
     }
 
     auto shaderOpt = renderer::Shader::Create(vertexShaderStream->c_str(), fragmentShaderStream->c_str());
-    if (!shaderOpt) 
+    auto phongShaderOpt = renderer::Shader::Create(phongVShaderStream->c_str(), phongFShaderStream->c_str());
+
+    if (!shaderOpt || !phongShaderOpt)  
     { 
         EF_LOG_ERROR("Error creando shaders");
         return 1; 
@@ -96,29 +110,23 @@ int main() {
     const char* rock_normal = "assets/textures/rock/rock_normal.png";
     const char* rock_ao = "assets/textures/rock/rock_ao.png";
 
-
-
-    // TODO FFONTANA - HELPER PARA CARGAR MAPAS PBR, Y ALBEDO APARTE
-    if (!rock_albedo || !rock_roughness || !rock_displacement || !rock_normal || !rock_ao) 
-    {
-        EF_LOG_ERROR("No se pudo cargar alguno de los mapas de textura");
-        return 1;
-    }
-
     auto albedoOpt = renderer::Texture::Create(rock_albedo, renderer::ColorSpace::sRGB);
-    auto roughnessOpt = renderer::Texture::Create(rock_roughness); // default - linear
+    auto displacementOpt = renderer::Texture::Create(rock_displacement);
+    auto roughnessOpt = renderer::Texture::Create(rock_roughness);
     auto normalOpt = renderer::Texture::Create(rock_normal);
-    auto aoOpt = renderer::Texture::Create(rock_normal);
+    auto aoOpt = renderer::Texture::Create(rock_ao);
 
-
-
+    if (!albedoOpt || !displacementOpt || !roughnessOpt || !normalOpt || !aoOpt) {
+        EF_LOG_ERROR("No se pudo cargar alguno de los mapas");
+        return 1;
+    }   
 
     renderer::Material material (&*shaderOpt);
     material.SetAlbedoMap(&*albedoOpt);
+    material.SetHeightMap(&*displacementOpt);
     material.SetRoughnessMap(&*roughnessOpt);
     material.SetNormalMap(&*normalOpt);
     material.SetAOMap(&*aoOpt);
-    
 
     // SETUP - Vertex Objects
     renderer::Buffer       vbo(vertices, sizeof(vertices));
@@ -152,26 +160,36 @@ int main() {
 
         gfx.Clear(0.1f, 0.1f, 0.12f, 1.0f);
         
-        shaderOpt->Bind(); // activa el shader
+        glm::mat4 modelPBR   = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f));
+        //glm::mat4 modelPhong = glm::translate(glm::mat4(1.0f), glm::vec3( 0.6f, 0.0f, 0.0f));
 
-        angle += deltaTime * glm::radians(50.0f); // 50 grados por segundo no importa los fps
-        glm::mat4 model = glm::mat4(1.0f); 
-
-        shaderOpt->SetMat4("uModel", model);
+        // --- Plano PBR ---
+        material.Bind();   // bindea el shader PBR + sube uniforms del material
+        shaderOpt->SetMat4("uModel", modelPBR);
         shaderOpt->SetMat4("uView", cam.ViewMatrix());
         shaderOpt->SetMat4("uProjection", cam.ProjectionMatrix());
         shaderOpt->SetVec3("uViewPos", cam.Position());
         shaderOpt->SetInt("uLightCount", 1);
         shaderOpt->SetVec3("uLightPositions[0]", lightPos);
         shaderOpt->SetVec3("uLightColors[0]", lightColor);
-        shaderOpt->SetFloat("uAmbientFactor", 0.3f);
-
-        // bind del shader
-        material.Bind();
-
-        // Luego dibujar
+        shaderOpt->SetFloat("uAmbientFactor", 0.03f);
         gfx.Draw(va, *shaderOpt);
+
+        /* 
+        // --- Plano Phong ---
+        phongShaderOpt->Bind();
+        phongShaderOpt->SetMat4("uModel", modelPhong);
+        phongShaderOpt->SetMat4("uView", cam.ViewMatrix());
+        phongShaderOpt->SetMat4("uProjection", cam.ProjectionMatrix());
+        phongShaderOpt->SetVec3("uViewPos", cam.Position());
+        phongShaderOpt->SetVec3("uLightPos", lightPos);
+        phongShaderOpt->SetVec3("uLightColor", glm::vec3(1.0f));
+        albedoOpt->Bind(0);
+        phongShaderOpt->SetInt("uAlbedoMap", 0);
+        gfx.Draw(va, *phongShaderOpt);
+        */
         window.SwapBuffers();
+    
     }
 
     EF_LOG_INFO("=== efengine: sandbox shutdown ===");
