@@ -38,7 +38,7 @@ TEST_CASE("CameraController: el pitch se limita a +-89 grados") {
 
     // Con el clamp, la altura nunca alcanza la distancia completa (no pasa "por el polo").
     // std::abs hace el test independiente de hacia qué lado clampee el signo.
-    f32 maxY = 2.5f * std::sin(glm::radians(89.0f));
+    f32 maxY = 30.0f * std::sin(glm::radians(89.0f));
     CHECK(std::abs(cam.Position().y) == doctest::Approx(maxY));
 }
 

@@ -24,7 +24,7 @@ TEST_CASE("Camera::ProjectionMatrix coincide con glm::perspective") {
     cam.SetAspect(aspect);
 
     glm::mat4 actual   = cam.ProjectionMatrix();
-    glm::mat4 expected = glm::perspective(glm::radians(45.0f), 16.0f/9.0f, 0.1f, 100.0f); // por practicidad, se hace contra los defaults de la cámara.
+    glm::mat4 expected = glm::perspective(glm::radians(45.0f), 16.0f/9.0f, 0.1f, 5000.0f); // por practicidad, se hace contra los defaults de la cámara.
 
     for(int c = 0; c < 4; c++) {
         for(int r = 0; r < 4; r++) {
