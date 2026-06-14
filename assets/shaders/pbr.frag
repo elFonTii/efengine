@@ -82,19 +82,63 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+// Parallax Occlusion Mapping: desplaza la UV según el ángulo de visión para
+// simular profundidad real. viewDirT está en espacio tangente. El mapa se
+// interpreta como altura (blanco = alto); usamos profundidad = 1 - altura.
+vec2 ParallaxOcclusionMapping(vec2 uv, vec3 viewDirT) {
+    // Más capas cuando miramos en rasante (donde el efecto es más notorio).
+    const float minLayers = 8.0;
+    const float maxLayers = 32.0;
+    float numLayers = mix(maxLayers, minLayers, max(viewDirT.z, 0.0));
+
+    float layerDepth        = 1.0 / numLayers;
+    float currentLayerDepth = 0.0;
+
+    // Desplazamiento de UV por capa (offset limiting: sin dividir por z).
+    vec2 deltaUV = (viewDirT.xy * uHeightScale) / numLayers;
+
+    vec2  currentUV    = uv;
+    float currentDepth = 1.0 - texture(uHeightMap, currentUV).r;
+
+    // Avanzamos capa por capa hasta cruzar la superficie del relieve.
+    while (currentLayerDepth < currentDepth) {
+        currentUV          -= deltaUV;
+        currentDepth        = 1.0 - texture(uHeightMap, currentUV).r;
+        currentLayerDepth  += layerDepth;
+    }
+
+    // Interpolamos entre la capa actual y la anterior para suavizar el escalón.
+    vec2  prevUV      = currentUV + deltaUV;
+    float afterDepth  = currentDepth - currentLayerDepth;
+    float beforeDepth = (1.0 - texture(uHeightMap, prevUV).r) - currentLayerDepth + layerDepth;
+    float weight      = afterDepth / (afterDepth - beforeDepth);
+
+    return mix(currentUV, prevUV, weight);
+}
+
 void main() {
+    // --- Parallax Occlusion Mapping: desplaza las UV antes de muestrear nada ---
+    // viewDirT: dirección hacia la cámara en espacio tangente (mundo→tangente
+    // vía transpose(TBN), que es la inversa para una base ortonormal).
+    vec3 viewDirT = normalize(transpose(vTBN) * (uViewPos - vFragPos));
+    vec2 uv = (uHasHeightMap == 1) ? ParallaxOcclusionMapping(vUV, viewDirT) : vUV;
+
+    // Recorta artefactos en los bordes del plano (UV desplazada fuera de [0,1]).
+    if (uHasHeightMap == 1 && (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0))
+        discard;
+
     // --- Propiedades del material (textura si existe, escalar si no) ---
     vec3 albedo = (uHasAlbedoMap == 1)
-                ? texture(uAlbedoMap, vUV).rgb * uAlbedoTint
+                ? texture(uAlbedoMap, uv).rgb * uAlbedoTint
                 : uAlbedoTint;
 
-    float metallic  = (uHasMetallicMap == 1)  ? texture(uMetallicMap, vUV).r  : uMetallic;
-    float roughness = (uHasRoughnessMap == 1) ? texture(uRoughnessMap, vUV).r : uRoughness;
+    float metallic  = (uHasMetallicMap == 1)  ? texture(uMetallicMap, uv).r  : uMetallic;
+    float roughness = (uHasRoughnessMap == 1) ? texture(uRoughnessMap, uv).r : uRoughness;
 
     // Normal: del normal map (tangente→mundo vía TBN) o la geométrica como fallback.
     vec3 N;
     if (uHasNormalMap == 1) {
-        vec3 n = texture(uNormalMap, vUV).rgb * 2.0 - 1.0;  // [0,1] → [-1,1]
+        vec3 n = texture(uNormalMap, uv).rgb * 2.0 - 1.0;  // [0,1] → [-1,1]
         N = normalize(vTBN * n);
     } else {
         N = normalize(vTBN[2]);
@@ -134,7 +178,7 @@ void main() {
     // --- Ambiente + composición ---
     // El AO solo modula la luz indirecta (ambiente), no la directa.
     // uAOStrength interpola entre "sin oclusión" (1.0) y el valor del mapa.
-    float ao = (uHasAOMap == 1) ? mix(1.0, texture(uAOMap, vUV).r, uAOStrength) : 1.0;
+    float ao = (uHasAOMap == 1) ? mix(1.0, texture(uAOMap, uv).r, uAOStrength) : 1.0;
     vec3 ambient = uAmbientFactor * albedo * ao;
     vec3 color   = ambient + Lo;
 
