@@ -23,5 +23,28 @@ namespace resources {
             return &inserted->second;
         }
     }
+
+        renderer::Texture* ResourceManager::GetTexture(const char* path, renderer::ColorSpace space){
+        EF_ASSERT(path != null, "ResourceManager::GetTexture: Intentando acceder a un directorio nulo");
+        
+        if (auto it = m_textures.find(path); it != m_textures.end()) {
+            // found
+            if(it->second.space != space) {
+                EF_LOG_WARNING("ResourceManager: '%s' ya cacheada con otro ColorSpace, se reutiliza", path);
+            }
+
+            return &it->second.texture;
+        } else {
+            // not found, not cached -> load the texture.
+            auto result = renderer::Texture::Create(path, space);
+            if(!result) return null;
+
+            auto [inserted, ok] = m_textures.emplace(path, TextureSlot{ std::move(*result), space });
+            EF_ASSERT(ok, "ResourceManager::GetTexture: emplace no insertó tras un miss");
+
+            // insertó, retornar
+            return &inserted->second.texture;
+        }
+    }
 }
 }
