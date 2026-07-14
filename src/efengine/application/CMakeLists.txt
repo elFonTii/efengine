@@ -5,4 +5,5 @@ target_link_libraries(efengine_application PUBLIC
     efengine_core
     efengine_platform
     efengine_renderer
+    efengine_resources
 )
