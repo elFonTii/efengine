@@ -1,5 +1,6 @@
 #include "ResourceManager.h"
 #include <efengine/resources/ModelLoader.h>
+#include <efengine/resources/FileIO.h>
 #include <efengine/core/Assert.h>
 #include <utility>
 
@@ -24,7 +25,7 @@ namespace resources {
         }
     }
 
-        renderer::Texture* ResourceManager::GetTexture(const char* path, renderer::ColorSpace space){
+    renderer::Texture* ResourceManager::GetTexture(const char* path, renderer::ColorSpace space){
         EF_ASSERT(path != null, "ResourceManager::GetTexture: Intentando acceder a un directorio nulo");
         
         if (auto it = m_textures.find(path); it != m_textures.end()) {
@@ -45,6 +46,32 @@ namespace resources {
             // insertó, retornar
             return &inserted->second.texture;
         }
+    }
+
+    renderer::Shader* ResourceManager::GetShader(const char* name, const char* vertPath, const char* fragPath) {
+        EF_ASSERT(vertPath != null && fragPath !=null, "ResourceManager::GetShader: Intentando acceder a un directorio nulo");
+        EF_ASSERT(name != null, "ResourceManager::GetShader: Intentando almacenar un shader sin nombre");
+
+        if (auto it = m_shaders.find(name); it != m_shaders.end()) {
+            // found
+            return &it->second;
+        } else {
+            // cargar vertex y fragment
+            auto vertex = FileIO::ReadText(vertPath);
+            auto fragment = FileIO::ReadText(fragPath);
+            if(!vertex || !fragment) return null;
+
+            // crear shader
+            auto result = renderer::Shader::Create(vertex->c_str(), fragment->c_str());
+            if(!result) return null;
+
+            auto [inserted, ok] = m_shaders.emplace(name, std::move(*result));
+            EF_ASSERT(ok, "ResourceManager::GetShader: emplace no insertó tras un miss");
+
+            return &inserted->second;
+        }
+
+
     }
 }
 }
