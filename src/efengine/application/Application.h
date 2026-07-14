@@ -27,7 +27,7 @@ namespace application {
             platform::Window   m_window;
             renderer::Context  m_context;
             renderer::Renderer m_renderer;
-            resources::ResourceManager& m_resources;
+            resources::ResourceManager m_resources;
     };
 
 } // namespace application
