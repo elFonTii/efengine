@@ -12,3 +12,9 @@ TEST_CASE("ResourceManager::GetTexture ruta inexistente -> null") {
     resources::ResourceManager rm;
     CHECK(rm.GetTexture("assets/no_existe.png", renderer::ColorSpace::sRGB) == nullptr);
 }
+
+TEST_CASE("ResourceManager::GetShader archivos inexistentes -> null") {
+    using namespace efengine;
+    resources::ResourceManager rm;
+    CHECK(rm.GetShader("pbr", "assets/no.vert", "assets/no.frag") == nullptr);
+}
