@@ -9,6 +9,7 @@ add_executable(efengine_tests
     renderer/VertexLayout.test.cpp
     renderer/Vertex.test.cpp
     resources/FileIO.test.cpp
+    resources/ResourceManager.test.cpp
     scene/Camera.test.cpp
     scene/CameraController.test.cpp
 )
