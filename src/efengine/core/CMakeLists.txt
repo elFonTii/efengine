@@ -9,6 +9,7 @@ target_sources(efengine_core PRIVATE
     Types.cpp
     Log.cpp
     Assert.cpp
+    Time.cpp
 )
 
 # Raíz de includes del proyecto: se incluye como <efengine/core/Log.h>.
