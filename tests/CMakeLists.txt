@@ -5,6 +5,7 @@
 add_executable(efengine_tests
     main.cpp
     core/Types.test.cpp
+    core/Time.test.cpp
     platform/InputCodes.test.cpp
     renderer/VertexLayout.test.cpp
     renderer/Vertex.test.cpp
