@@ -15,6 +15,7 @@
 
 #include <optional>
 #include <string>
+#include <cmath>
 #include <unordered_map>
 
 namespace {
@@ -74,6 +75,7 @@ int main() {
     platform::Window&          window = app.GetWindow();
     renderer::Renderer&        gfx    = app.GetRenderer();
     resources::ResourceManager& rm    = app.GetResources();
+    core::Time& time                  =  app.GetTime();
 
     renderer::Shader* pbr = rm.GetShader("pbr", "assets/shaders/pbr.vert", "assets/shaders/pbr.frag");
     renderer::Model*  rat = rm.GetModel("assets/models/street_rat_4k.fbx");
@@ -106,7 +108,6 @@ int main() {
     };
     glm::mat4 groundModelMat = glm::mat4(1.0f);
 
-    glm::vec3 lightPos_0 = glm::vec3(50.0f, 80.0f, 0.0f);
     glm::vec3 lightPos_1 = glm::vec3(-50.0f, 80.0f, 0.0f);
     glm::vec3 lightPos_2 = glm::vec3(0, 90.0f, 0.0f);
 
@@ -118,12 +119,18 @@ int main() {
     window.SetEventListener(&controller);
 
     while (!window.ShouldClose()) {
+        time.Tick();
+        const f32 elapsed = static_cast<f32>(time.Elapsed());
+
+
         window.PollEvents();
         if (window.IsKeyPressed(platform::Key::Escape)) {
             window.SetShouldClose(true);
         }
 
         gfx.Clear(0.18f, 0.18f, 0.18f, 1.0f);
+        
+        const glm::vec3 lightPos_0 = glm::vec3( 50.0f * std::cos(elapsed), 80.0f, 50.0f * std::sin(elapsed));
 
         pbr->Bind();
         pbr->SetMat4("uModel", modelMat);
