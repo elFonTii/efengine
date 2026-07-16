@@ -14,6 +14,7 @@ add_executable(efengine_tests
     resources/ResourceManager.test.cpp
     scene/Camera.test.cpp
     scene/CameraController.test.cpp
+    scene/Scene.test.cpp
 )
 
 # Include path raíz: los tests consumen el motor como <efengine/...>.
