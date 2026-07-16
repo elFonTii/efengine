@@ -14,8 +14,8 @@ namespace scene {
             math::Transform transform = {}
         );
 
-        const renderer::Model* model;
         math::Transform transform;
+        const renderer::Model* model;
         renderer::MaterialMap  materials;
     };
 }

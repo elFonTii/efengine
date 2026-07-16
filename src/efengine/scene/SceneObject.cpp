@@ -8,8 +8,8 @@ namespace scene {
     SceneObject::SceneObject(const renderer::Model* model,
                              renderer::MaterialMap  materials,
                              math::Transform        transform)
-        : transform(transform)
-        , model(model)
+        : model(model)
+        , transform(transform)
         , materials(std::move(materials)) {
         EF_ASSERT(model != null, "SceneObject::SceneObject: model nulo");
     }
