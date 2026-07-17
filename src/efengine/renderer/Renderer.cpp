@@ -19,7 +19,7 @@ namespace renderer {
         }
     }
 
-    void Renderer::Draw(const Model& model, const std::unordered_map<std::string, const Material*>& materials) const {
+    void Renderer::Draw(const Model& model, const MaterialMap& materials) const {
         for (const Mesh& mesh : model.meshes()) {
             auto it = materials.find(mesh.materialName());
             if (it == materials.end() || it->second == null) {

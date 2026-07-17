@@ -17,7 +17,7 @@ namespace renderer {
         public:
             void Clear(f32 r, f32 g, f32 b, f32 a) const;
             void Draw(const Model& va, const Shader& shader) const;
-            void Draw(const Model& model, const std::unordered_map<std::string, const Material*>& materials) const;
+            void Draw(const Model& model, const MaterialMap& materials) const;
             void Draw(const VertexArray& va, const Shader& shader) const;
     };
 

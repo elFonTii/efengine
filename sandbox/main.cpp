@@ -7,6 +7,9 @@
 #include <efengine/renderer/Shader.h>
 #include <efengine/scene/Camera.h>
 #include <efengine/scene/CameraController.h>
+#include <efengine/scene/Scene.h>
+#include <efengine/scene/SceneObject.h>
+#include <efengine/math/Transform.h>
 #include <efengine/core/Types.h>
 #include <efengine/core/Log.h>
 
@@ -92,21 +95,23 @@ int main() {
     renderer::Material groundMat    = std::move(*groundMatOpt);
     groundMat.heightScale = 0.08f;
 
-    std::unordered_map<std::string, const renderer::Material*> materiales = {
+    renderer::MaterialMap ratMats = {
         { "street_rat",      &streetRatMat },
         { "street_rat_hair", &streetRatMat },
     };
 
-    const f32 kEscala = 10.0f;
-    glm::mat4 modelMat =
-        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f)) *
-        glm::scale(glm::mat4(1.0f), glm::vec3(kEscala));
-
     renderer::Model groundModel = makePlane("ground", 300.0f, 24.0f);
-    std::unordered_map<std::string, const renderer::Material*> groundMateriales = {
+    renderer::MaterialMap groundMats = {
         { "ground", &groundMat },
     };
-    glm::mat4 groundModelMat = glm::mat4(1.0f);
+
+    scene::Scene scene;
+
+    math::Transform ratTransform;
+    ratTransform.scale = glm::vec3(10.0f);
+    const u32 ratHandle = scene.Add({ rat, ratMats, ratTransform });
+
+    scene.Add({ &groundModel, groundMats });
 
     glm::vec3 lightPos_1 = glm::vec3(-50.0f, 80.0f, 0.0f);
     glm::vec3 lightPos_2 = glm::vec3(0, 90.0f, 0.0f);
@@ -132,8 +137,9 @@ int main() {
         
         const glm::vec3 lightPos_0 = glm::vec3( 50.0f * std::cos(elapsed), 80.0f, 50.0f * std::sin(elapsed));
 
+        scene.Get(ratHandle).transform.rotation.y += time.DeltaTime() * 20.0f; // rota la rata 20 grados x seg
+
         pbr->Bind();
-        pbr->SetMat4("uModel", modelMat);
         pbr->SetMat4("uView", cam.ViewMatrix());
         pbr->SetMat4("uProjection", cam.ProjectionMatrix());
         pbr->SetVec3("uViewPos", cam.Position());
@@ -146,11 +152,11 @@ int main() {
         pbr->SetVec3("uLightColors[2]", lightColor);
         pbr->SetFloat("uAmbientFactor", 0.08f);
 
-        gfx.Draw(*rat, materiales);
-
-        pbr->Bind();
-        pbr->SetMat4("uModel", groundModelMat);
-        gfx.Draw(groundModel, groundMateriales);
+        for (const scene::SceneObject& obj : scene.objects()) {
+            pbr->Bind();
+            pbr->SetMat4("uModel", obj.transform.Matrix());
+            gfx.Draw(*obj.model, obj.materials);
+        }
 
         window.SwapBuffers();
     }

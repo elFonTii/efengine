@@ -6,6 +6,7 @@ add_executable(efengine_tests
     main.cpp
     core/Types.test.cpp
     core/Time.test.cpp
+    math/Transform.test.cpp
     platform/InputCodes.test.cpp
     renderer/VertexLayout.test.cpp
     renderer/Vertex.test.cpp
@@ -13,6 +14,7 @@ add_executable(efengine_tests
     resources/ResourceManager.test.cpp
     scene/Camera.test.cpp
     scene/CameraController.test.cpp
+    scene/Scene.test.cpp
 )
 
 # Include path raíz: los tests consumen el motor como <efengine/...>.

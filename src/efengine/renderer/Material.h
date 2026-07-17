@@ -1,6 +1,8 @@
 #pragma once
 #include <efengine/core/Types.h>
 #include <glm/glm.hpp>
+#include <string>
+#include <unordered_map>
 
 // material no posee, solo contiene observadores para shaders y texturas.
 namespace efengine {
@@ -47,5 +49,7 @@ namespace renderer {
             const Texture* m_height    = null;
             const Texture* m_opacity   = null;
     };
+
+    using MaterialMap = std::unordered_map<std::string, const Material*>;
 }
 }
