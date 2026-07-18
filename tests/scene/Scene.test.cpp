@@ -92,3 +92,44 @@ TEST_CASE("Scene::Add preserva los objetos previos al crecer") {
     CHECK(s.objects().size() == 9u);
     CHECK(s.Get(firstHandle).transform.position.x == doctest::Approx(7.0f));
 }
+
+TEST_CASE("Scene arranca sin luces") {
+    scene::Scene s;
+
+    CHECK(s.lights().empty());
+}
+
+TEST_CASE("Scene::AddLight devuelve handles consecutivos desde 0") {
+    scene::Scene s;
+
+    const u32 first  = s.AddLight({ glm::vec3(1.0f), glm::vec3(5000.0f) });
+    const u32 second = s.AddLight({ glm::vec3(2.0f), glm::vec3(5000.0f) });
+
+    CHECK(first  == 0u);
+    CHECK(second == 1u);
+    CHECK(s.lights().size() == 2u);
+}
+
+TEST_CASE("Scene::GetLight devuelve la luz agregada") {
+    scene::Scene s;
+    const u32 handle = s.AddLight({ glm::vec3(10.0f, 20.0f, 30.0f), glm::vec3(5000.0f) });
+
+    CHECK(s.GetLight(handle).position.y == doctest::Approx(20.0f));
+    CHECK(s.GetLight(handle).color.r    == doctest::Approx(5000.0f));
+}
+
+TEST_CASE("Scene::GetLight da acceso mutable: mover la luz se ve en lights()") {
+    scene::Scene s;
+    const u32 handle = s.AddLight({ glm::vec3(0.0f), glm::vec3(5000.0f) });
+
+    // Esto es exactamente lo que hará el sandbox para orbitar la luz.
+    s.GetLight(handle).position = glm::vec3(50.0f, 80.0f, 0.0f);
+
+    CHECK(s.lights()[handle].position.x == doctest::Approx(50.0f));
+}
+
+TEST_CASE("Scene::ambientFactor default es 0.08") {
+    scene::Scene s;
+
+    CHECK(s.ambientFactor == doctest::Approx(0.08f));
+}
