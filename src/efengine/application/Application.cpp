@@ -20,7 +20,7 @@ namespace application {
         m_time.Tick();
         m_window.PollEvents();
         m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
-        m_debugUI.NewFrame();   // abre el frame de ImGui; el cliente ya puede emitir widgets
+        m_debugUI.NewFrame();
     }
 
     void Application::EndFrame() {

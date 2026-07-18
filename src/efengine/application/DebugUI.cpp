@@ -13,9 +13,6 @@ namespace application {
         ImGui::CreateContext();
         ImGui::StyleColorsDark();
 
-        // install_callbacks=true ENCADENA los callbacks GLFW que Window ya
-        // registró en su ctor (DebugUI se construye después de m_window), así
-        // ImGui recibe input y el CameraController sigue recibiendo el suyo.
         const bool okGlfw = ImGui_ImplGlfw_InitForOpenGL(window.GetNativeHandle(), true);
         EF_ASSERT(okGlfw, "DebugUI: fallo al iniciar el backend GLFW de ImGui");
 
@@ -44,5 +41,5 @@ namespace application {
     bool DebugUI::WantsMouse()    const { return ImGui::GetIO().WantCaptureMouse; }
     bool DebugUI::WantsKeyboard() const { return ImGui::GetIO().WantCaptureKeyboard; }
 
-} // namespace application
-} // namespace efengine
+}
+}

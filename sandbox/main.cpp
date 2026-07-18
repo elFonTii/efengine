@@ -14,11 +14,11 @@
 #include <efengine/core/Log.h>
 
 #include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>   // glm::value_ptr para pasar vec3 a ImGui
+#include <glm/gtc/type_ptr.hpp>
 #include <glm/glm.hpp>
 
 #include <imgui.h>
-#include <cstdio>   // snprintf
+#include <cstdio>
 
 #include <optional>
 #include <string>
@@ -148,13 +148,10 @@ int main() {
         app.BeginFrame();
         if (app.IsKeyPressed(platform::Key::Escape)) app.Close();
 
-        // La cámara ignora el mouse cuando ImGui lo captura (arrastrar un widget
-        // no debe orbitar). BeginFrame ya corrió NewFrame → WantsMouse es válido.
         controller.SetInputEnabled(!app.GetDebugUI().WantsMouse());
 
         // --- Panel de edición de escena en runtime ---
         ImGui::Begin("Escena");
-
         ImGui::Checkbox("Animate", &animate);
         ImGui::SliderFloat("Ambient", &scene.ambientFactor, 0.0f, 1.0f);
 
