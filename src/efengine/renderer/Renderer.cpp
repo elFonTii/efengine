@@ -94,7 +94,7 @@ namespace renderer {
         for (const Mesh& mesh : model.meshes()) {
             auto it = materials.find(mesh.materialName());
             if (it == materials.end() || it->second == null) {
-                EF_LOG_WARNING("Renderer::Draw: sin material para malla '%s'", mesh.materialName().c_str());
+                EF_LOG_WARNING("Renderer::applyFrameUnforms: sin material para malla '%s'", mesh.materialName().c_str());
                 continue;
             }
             const Material& mat = *it->second;
