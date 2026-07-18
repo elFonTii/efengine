@@ -67,10 +67,6 @@ namespace renderer {
         m_frameShaders.clear();
     }
 
-    void Renderer::Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix) {
-
-    };
-
     void Renderer::applyFrameUniforms(const Shader& shader) {
         if (!m_frameShaders.insert(&shader).second) return; // para evitar duplicados, si no es nuevo sale.
 
@@ -88,6 +84,24 @@ namespace renderer {
             shader.SetVec3(lightName.c_str(), m_lights[i].position);
             shader.SetVec3(lightColor.c_str(), m_lights[i].color);
             
+        }
+    };
+
+    void Renderer::Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix) {
+        for (const Mesh& mesh : model.meshes()) {
+            auto it = materials.find(mesh.materialName());
+            if (it == materials.end() || it->second == null) {
+                EF_LOG_WARNING("Renderer::Draw: sin material para malla '%s'", mesh.materialName().c_str());
+                continue;
+            }
+            const Material& mat = *it->second;
+
+            applyFrameUniforms(mat.shader());
+            mat.shader().Bind();
+            mat.shader().SetMat4("uModel", modelMatrix);
+            mat.Bind();
+            
+            Draw(mesh.vertexArray(), mat.shader());
         }
     };
 }
