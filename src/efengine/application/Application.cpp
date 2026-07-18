@@ -21,11 +21,8 @@ namespace application {
         m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
     }
 
-    void Application::EndFrame() {
-        m_window.SwapBuffers();
-    }
+    void Application::EndFrame() { m_window.SwapBuffers(); }
 
-    // la tarea es "traducir" la scena a render
     void Application::RenderScene(const scene::Scene& scene, const scene::Camera& camera) {
         m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.lights(), scene.ambientFactor);
 
@@ -40,5 +37,17 @@ namespace application {
         }
     }
 
-} // namespace application
-} // namespace efengine
+    f32 Application::DeltaTime() const { return m_time.DeltaTime(); }
+
+    f64 Application::Elapsed() const { return m_time.Elapsed(); }
+    
+    bool Application::IsKeyPressed(platform::Key key) const { return m_window.IsKeyPressed(key); }
+
+    void Application::Close() { m_window.SetShouldClose(true); }
+    
+    void Application::SetClearColor(f32 r, f32 g, f32 b, f32 a) {
+    m_clearColor[0] = r; m_clearColor[1] = g; m_clearColor[2] = b; m_clearColor[3] = a;
+}
+    
+}
+}
