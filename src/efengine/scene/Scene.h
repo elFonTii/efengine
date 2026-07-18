@@ -23,8 +23,6 @@ namespace scene{
             Light& GetLight(u32 handle);
             const Light& GetLight(u32 handle) const;
 
-            
-
             // Para iterar y dibujar
             const std::vector<SceneObject>& objects() const { return m_objects; }
             const std::vector<Light>& lights() const { return m_lights; }

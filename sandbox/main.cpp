@@ -75,30 +75,40 @@ int main() {
     EF_LOG_INFO("=== efengine: sandbox street rat ===");
 
     application::Application app;
-    platform::Window&          window = app.GetWindow();
-    renderer::Renderer&        gfx    = app.GetRenderer();
-    resources::ResourceManager& rm    = app.GetResources();
-    core::Time& time                  =  app.GetTime();
+    app.SetClearColor(0.18f, 0.18f, 0.18f);
+    resources::ResourceManager& rm = app.GetResources();
 
-    renderer::Shader* pbr = rm.GetShader("pbr", "assets/shaders/pbr.vert", "assets/shaders/pbr.frag");
-    renderer::Model*  rat = rm.GetModel("assets/models/street_rat_4k.fbx");
+    renderer::Shader* pbr  = rm.GetShader("pbr", "assets/shaders/pbr.vert", "assets/shaders/pbr.frag");
+    renderer::Model*  rat  = rm.GetModel("assets/models/street_rat_4k.fbx");
+    renderer::Model*  lamp = rm.GetModel("assets/models/industrial_pipe_lamp_2k.fbx");
 
     auto streetRatMatOpt = makePbrMaterial(rm, pbr, "assets/textures/street_rat/street_rat_", "4k", ".jpg", false);
-    auto groundMatOpt    = makePbrMaterial(rm, pbr, "assets/textures/brown_mud/brown_mud_03_", "2k", ".png", true);
+    auto groundMatOpt    = makePbrMaterial(rm, pbr, "assets/textures/brown_mud/brown_mud_03_", "2k", ".jpg", true);
+    auto lampMatOpt      = makePbrMaterial(rm, pbr, "assets/textures/industrial_lamp/industrial_pipe_lamp_", "2k", ".jpg", true);
 
-    if (!pbr || !rat || !streetRatMatOpt || !groundMatOpt) {
+    if (!pbr || !rat || !lamp || !streetRatMatOpt || !groundMatOpt || !lampMatOpt) {
         EF_LOG_ERROR("No se pudieron cargar los recursos");
         return 1;
     }
 
     renderer::Material streetRatMat = std::move(*streetRatMatOpt);
     renderer::Material groundMat    = std::move(*groundMatOpt);
-    groundMat.heightScale = 0.08f;
+    renderer::Material lampMat      = std::move(*lampMatOpt);
+    groundMat.heightScale = 0.0f;
+
+    lampMat.heightScale   = 0.0f;
+    lampMat.metallic   = 0.8f;
+    lampMat.roughness = 1.0f;
 
     renderer::MaterialMap ratMats = {
         { "street_rat",      &streetRatMat },
         { "street_rat_hair", &streetRatMat },
     };
+
+    renderer::MaterialMap lampMats;
+    for (const renderer::Mesh& mesh : lamp->meshes()) {
+        lampMats[mesh.materialName()] = &lampMat;
+    }
 
     renderer::Model groundModel = makePlane("ground", 300.0f, 24.0f);
     renderer::MaterialMap groundMats = {
@@ -106,6 +116,7 @@ int main() {
     };
 
     scene::Scene scene;
+    scene.ambientFactor = 0.08f;
 
     math::Transform ratTransform;
     ratTransform.scale = glm::vec3(10.0f);
@@ -113,52 +124,30 @@ int main() {
 
     scene.Add({ &groundModel, groundMats });
 
-    glm::vec3 lightPos_1 = glm::vec3(-50.0f, 80.0f, 0.0f);
-    glm::vec3 lightPos_2 = glm::vec3(0, 90.0f, 0.0f);
+    math::Transform lampTransform;
+    lampTransform.position = glm::vec3(30.0f, 0.0f, 0.0f);
+    lampTransform.scale    = glm::vec3(1.0f);
+    scene.Add({ lamp, lampMats, lampTransform });
 
-    glm::vec3 lightColor = glm::vec3(5000.0f);
+    const u32 sun = scene.AddLight({ glm::vec3( 50.0f, 80.0f, 0.0f), glm::vec3(5000.0f) });
+    scene.AddLight({ glm::vec3(-50.0f, 80.0f, 0.0f), glm::vec3(5000.0f) });
+    scene.AddLight({ glm::vec3(  0.0f, 90.0f, 0.0f), glm::vec3(5000.0f) });
 
     scene::Camera cam;
-    cam.SetAspect(window.GetAspectRatio());
+    cam.SetAspect(app.GetWindow().GetAspectRatio());
     scene::CameraController controller(&cam);
-    window.SetEventListener(&controller);
+    app.GetWindow().SetEventListener(&controller);
 
-    while (!window.ShouldClose()) {
-        time.Tick();
-        const f32 elapsed = static_cast<f32>(time.Elapsed());
+    while (app.Running()) {
+        app.BeginFrame();
+        if (app.IsKeyPressed(platform::Key::Escape)) app.Close();
 
+        const f32 elapsed = static_cast<f32>(app.Elapsed());
+        scene.GetLight(sun).position = glm::vec3(50.0f * std::cos(elapsed), 80.0f, 50.0f * std::sin(elapsed));
+        scene.Get(ratHandle).transform.rotation.y += app.DeltaTime() * 20.0f; // 20 grados/seg
 
-        window.PollEvents();
-        if (window.IsKeyPressed(platform::Key::Escape)) {
-            window.SetShouldClose(true);
-        }
-
-        gfx.Clear(0.18f, 0.18f, 0.18f, 1.0f);
-        
-        const glm::vec3 lightPos_0 = glm::vec3( 50.0f * std::cos(elapsed), 80.0f, 50.0f * std::sin(elapsed));
-
-        scene.Get(ratHandle).transform.rotation.y += time.DeltaTime() * 20.0f; // rota la rata 20 grados x seg
-
-        pbr->Bind();
-        pbr->SetMat4("uView", cam.ViewMatrix());
-        pbr->SetMat4("uProjection", cam.ProjectionMatrix());
-        pbr->SetVec3("uViewPos", cam.Position());
-        pbr->SetInt("uLightCount", 3);
-        pbr->SetVec3("uLightPositions[0]", lightPos_0);
-        pbr->SetVec3("uLightColors[0]", lightColor);
-        pbr->SetVec3("uLightPositions[1]", lightPos_1);
-        pbr->SetVec3("uLightColors[1]", lightColor);
-        pbr->SetVec3("uLightPositions[2]", lightPos_2);
-        pbr->SetVec3("uLightColors[2]", lightColor);
-        pbr->SetFloat("uAmbientFactor", 0.08f);
-
-        for (const scene::SceneObject& obj : scene.objects()) {
-            pbr->Bind();
-            pbr->SetMat4("uModel", obj.transform.Matrix());
-            gfx.Draw(*obj.model, obj.materials);
-        }
-
-        window.SwapBuffers();
+        app.RenderScene(scene, cam);
+        app.EndFrame();
     }
 
     EF_LOG_INFO("=== efengine: sandbox shutdown ===");
