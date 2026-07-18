@@ -98,13 +98,14 @@ namespace renderer {
                 continue;
             }
             const Material& mat = *it->second;
+            const Shader& shader = mat.shader();
 
-            applyFrameUniforms(mat.shader());
-            mat.shader().Bind();
-            mat.shader().SetMat4("uModel", modelMatrix);
+            applyFrameUniforms(shader);
+            shader.Bind();
+            shader.SetMat4("uModel", modelMatrix);
             mat.Bind();
 
-            Draw(mesh.vertexArray(), mat.shader());
+            Draw(mesh.vertexArray(), shader);
         }
     };
 }
