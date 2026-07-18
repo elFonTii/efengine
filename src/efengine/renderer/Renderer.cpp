@@ -67,6 +67,7 @@ namespace renderer {
         m_frameShaders.clear();
     }
 
+    // por frame
     void Renderer::applyFrameUniforms(const Shader& shader) {
         if (!m_frameShaders.insert(&shader).second) return; // para evitar duplicados, si no es nuevo sale.
 
@@ -74,6 +75,7 @@ namespace renderer {
         shader.SetMat4("uView", m_view);
         shader.SetMat4("uProjection", m_projection);
         shader.SetVec3("uViewPos", m_viewPos);
+        shader.SetFloat("uAmbientFactor", m_ambient);
         shader.SetInt("uLightCount", static_cast<i32>(m_lights.size()));
         
         // recorrer luces, construir nombre y agregar
@@ -87,6 +89,7 @@ namespace renderer {
         }
     };
 
+    // Recarga los shaders por objeto
     void Renderer::Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix) {
         for (const Mesh& mesh : model.meshes()) {
             auto it = materials.find(mesh.materialName());
@@ -100,7 +103,7 @@ namespace renderer {
             mat.shader().Bind();
             mat.shader().SetMat4("uModel", modelMatrix);
             mat.Bind();
-            
+
             Draw(mesh.vertexArray(), mat.shader());
         }
     };
