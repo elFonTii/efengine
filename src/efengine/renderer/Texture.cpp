@@ -80,6 +80,26 @@ namespace renderer {
         return Texture(id, (u32)width, (u32)height);
     }
 
+    // Textura vacía para usar como color attachment de un framebuffer
+    Texture Texture::CreateColorAttachment(u32 width, u32 height) {
+    u32 id = 0;
+    glGenTextures(1, &id);
+    EF_ASSERT(id != 0, "Texture::CreateColorAttachment: No hay contexto GL");
+
+    glBindTexture(GL_TEXTURE_2D, id);
+    // el nullptr al final hace q se reserve memoria de GPU pero no sube los datos, lo hace al renderizar el framebuffer
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei)width, (GLsizei)height,
+                 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    return Texture(id, width, height);
+}
+
     Texture::Texture(u32 id, u32 width, u32 height) {
         m_id = id;
         m_width = width;
