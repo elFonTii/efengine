@@ -7,9 +7,11 @@
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/PointLight.h>
 
-
+#include <glm/glm.hpp>
 #include <string>
+#include <vector>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace efengine {
 namespace renderer {
@@ -27,6 +29,13 @@ namespace renderer {
 
         private:
             void applyFrameUniforms(const Shader& shader);
+
+            glm::mat4 m_view = { 1.0f };
+            glm::mat4 m_projection = { 1.0f };
+            glm::vec3 m_viewPos { 0.0f };
+            f32 m_ambient = 0.0f;
+            std::vector<PointLight> m_lights;
+            std::unordered_set<const Shader*> m_frameShaders;
     };
 
 }
