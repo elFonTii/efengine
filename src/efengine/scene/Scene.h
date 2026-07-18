@@ -12,6 +12,8 @@ namespace scene{
 
     class Scene{
         public:
+            f32 ambientFactor = 0.08f;
+
             u32 Add(SceneObject object);
             u32 AddLight(Light light);
 
@@ -25,6 +27,7 @@ namespace scene{
 
             // Para iterar y dibujar
             const std::vector<SceneObject>& objects() const { return m_objects; }
+            const std::vector<Light>& lights() const { return m_lights; }
 
         private:
             std::vector<SceneObject> m_objects;
