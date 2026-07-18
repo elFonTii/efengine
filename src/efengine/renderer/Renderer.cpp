@@ -5,6 +5,7 @@
 #include <efengine/core/Assert.h>
 #include <efengine/core/Log.h>
 
+
 namespace efengine {
 namespace renderer {
 
@@ -64,6 +65,29 @@ namespace renderer {
 
         // Se limpia antes de registrar en cada frame
         m_frameShaders.clear();
-
     }
+
+    void Renderer::Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix) {
+
+    };
+
+    void Renderer::applyFrameUniforms(const Shader& shader) {
+        if (!m_frameShaders.insert(&shader).second) return; // para evitar duplicados, si no es nuevo sale.
+
+        shader.Bind();
+        shader.SetMat4("uView", m_view);
+        shader.SetMat4("uProjection", m_projection);
+        shader.SetVec3("uViewPos", m_viewPos);
+        shader.SetInt("uLightCount", static_cast<i32>(m_lights.size()));
+        
+        // recorrer luces, construir nombre y agregar
+        for (u32 i = 0; i < m_lights.size(); ++i) {
+            const std::string lightName = "uLightPositions[" + std::to_string(i) + "]";
+            const std::string lightColor= "uLightColors[" + std::to_string(i) + "]";
+
+            shader.SetVec3(lightName.c_str(), m_lights[i].position);
+            shader.SetVec3(lightColor.c_str(), m_lights[i].color);
+            
+        }
+    };
 }
