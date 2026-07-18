@@ -106,6 +106,7 @@ namespace renderer {
             mat.Bind();
 
             Draw(mesh.vertexArray(), shader);
-        }
+            }
     };
+}
 }
