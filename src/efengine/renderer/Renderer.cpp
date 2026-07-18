@@ -48,5 +48,22 @@ namespace renderer {
         glUseProgram(0);
     }
 
-}
+    void Renderer::BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, f32 ambientFactor) {
+        // inicializacion simplemente
+        m_view = view;
+        m_projection = projection;
+        m_ambient = ambientFactor;
+        m_viewPos = viewPos;
+        m_lights.assign(lights.begin(), lights.end());
+
+        // si la cantidad de luces es mayor a las soportadas por el shader recortar
+        if(m_lights.size() > kMaxLights) {
+            m_lights.resize(kMaxLights);
+            EF_LOG_WARNING("Se intentan agregar más luces de las que el shader soporta.");
+        }
+
+        // Se limpia antes de registrar en cada frame
+        m_frameShaders.clear();
+
+    }
 }
