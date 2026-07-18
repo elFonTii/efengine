@@ -10,7 +10,8 @@ namespace application {
 
     Application::Application()
         : m_window( platform::WindowProps{ "efengine", 800, 600, true } )
-        , m_context( m_window ) {
+        , m_context( m_window )
+        , m_debugUI( m_window ) {
         // m_renderer se construye por defecto (Rule of Zero, sin estado GL).
         EF_LOG_INFO("Application inicializada");
     }
@@ -19,9 +20,13 @@ namespace application {
         m_time.Tick();
         m_window.PollEvents();
         m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
+        m_debugUI.NewFrame();   // abre el frame de ImGui; el cliente ya puede emitir widgets
     }
 
-    void Application::EndFrame() { m_window.SwapBuffers(); }
+    void Application::EndFrame() {
+        m_debugUI.Render();     // dibuja el overlay sobre la imagen final (backbuffer)
+        m_window.SwapBuffers();
+    }
 
     void Application::RenderScene(const scene::Scene& scene, const scene::Camera& camera) {
         m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.lights(), scene.ambientFactor);

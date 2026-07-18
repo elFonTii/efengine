@@ -18,8 +18,9 @@ namespace scene {
             void OnMouseButton(i32 button, i32 action, i32 mods)   override;
             void OnMouseScroll(f32 xOffset, f32 yOffset)           override;
 
-            void SetInvertX(bool invert); 
+            void SetInvertX(bool invert);
             void SetInvertY(bool invert);
+            void SetInputEnabled(bool enabled);
 
         private:
             void UpdateCamera();
@@ -41,6 +42,8 @@ namespace scene {
 
             bool m_invertX = false;
             bool m_invertY = false;
+
+            bool m_inputEnabled = true;   // cuando false, ignora el input de mouse (ej: ImGui tiene el foco)
 
             // control rotación
             bool m_rotating = false;

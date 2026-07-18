@@ -1,6 +1,7 @@
 #pragma once
 
 #include <efengine/platform/Window.h>
+#include <efengine/application/DebugUI.h>
 #include <efengine/renderer/Context.h>
 #include <efengine/renderer/Renderer.h>
 #include <efengine/resources/ResourceManager.h>
@@ -22,6 +23,7 @@ namespace application {
             renderer::Renderer& GetRenderer() { return m_renderer; }
             resources::ResourceManager& GetResources() { return m_resources; }
             core::Time& GetTime() { return m_time; }
+            application::DebugUI& GetDebugUI() { return m_debugUI; }
 
             // FRAME API
             bool Running() const { return !m_window.ShouldClose(); }
@@ -49,6 +51,9 @@ namespace application {
             renderer::Context  m_context;
             renderer::Renderer m_renderer;
             resources::ResourceManager m_resources;
+            // DebugUI 5.º: ImGui_ImplOpenGL3_Init llama funciones GL, necesita el
+            // contexto GL vivo (post-Context) y la Window para los backends.
+            application::DebugUI m_debugUI;
             core::Time m_time;
 
     };

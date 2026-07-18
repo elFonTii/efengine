@@ -14,7 +14,11 @@
 #include <efengine/core/Log.h>
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>   // glm::value_ptr para pasar vec3 a ImGui
 #include <glm/glm.hpp>
+
+#include <imgui.h>
+#include <cstdio>   // snprintf
 
 #include <optional>
 #include <string>
@@ -138,13 +142,60 @@ int main() {
     scene::CameraController controller(&cam);
     app.GetWindow().SetEventListener(&controller);
 
+    bool animate = true;
+
     while (app.Running()) {
         app.BeginFrame();
         if (app.IsKeyPressed(platform::Key::Escape)) app.Close();
 
-        const f32 elapsed = static_cast<f32>(app.Elapsed());
-        scene.GetLight(sun).position = glm::vec3(50.0f * std::cos(elapsed), 80.0f, 50.0f * std::sin(elapsed));
-        scene.Get(ratHandle).transform.rotation.y += app.DeltaTime() * 20.0f; // 20 grados/seg
+        // La cámara ignora el mouse cuando ImGui lo captura (arrastrar un widget
+        // no debe orbitar). BeginFrame ya corrió NewFrame → WantsMouse es válido.
+        controller.SetInputEnabled(!app.GetDebugUI().WantsMouse());
+
+        // --- Panel de edición de escena en runtime ---
+        ImGui::Begin("Escena");
+
+        ImGui::Checkbox("Animate", &animate);
+        ImGui::SliderFloat("Ambient", &scene.ambientFactor, 0.0f, 1.0f);
+
+        if (ImGui::CollapsingHeader("Objetos", ImGuiTreeNodeFlags_DefaultOpen)) {
+            for (u32 i = 0; i < scene.objects().size(); ++i) {
+                ImGui::PushID((int)i);                 // ids únicos por objeto
+                char label[32];
+                std::snprintf(label, sizeof(label), "Objeto %u", i);
+                if (ImGui::TreeNode(label)) {
+                    math::Transform& t = scene.Get(i).transform;
+                    ImGui::DragFloat3("Posicion", glm::value_ptr(t.position), 0.1f);
+                    ImGui::DragFloat3("Rotacion", glm::value_ptr(t.rotation), 0.5f);   // grados
+                    ImGui::DragFloat3("Escala",   glm::value_ptr(t.scale),    0.05f);
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+        }
+
+        if (ImGui::CollapsingHeader("Luces", ImGuiTreeNodeFlags_DefaultOpen)) {
+            for (u32 i = 0; i < scene.lights().size(); ++i) {
+                ImGui::PushID(1000 + (int)i);          // rango de ids separado de los objetos
+                char label[32];
+                std::snprintf(label, sizeof(label), "Luz %u", i);
+                if (ImGui::TreeNode(label)) {
+                    renderer::PointLight& l = scene.GetLight(i);
+                    ImGui::DragFloat3("Posicion",  glm::value_ptr(l.position), 0.5f);
+                    ImGui::DragFloat3("Color/Int", glm::value_ptr(l.color),   10.0f, 0.0f, 20000.0f);
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+        }
+
+        ImGui::End();
+
+        if (animate) {
+            const f32 elapsed = static_cast<f32>(app.Elapsed());
+            scene.GetLight(sun).position = glm::vec3(50.0f * std::cos(elapsed), 80.0f, 50.0f * std::sin(elapsed));
+            scene.Get(ratHandle).transform.rotation.y += app.DeltaTime() * 20.0f; // 20 grados/seg
+        }
 
         app.RenderScene(scene, cam);
         app.EndFrame();
