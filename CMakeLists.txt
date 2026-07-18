@@ -68,6 +68,15 @@ FetchContent_Declare(
     GIT_TAG v5.4.3
 )
 
+# Dear ImGui - GUI inmediata para tooling de debug en runtime. No trae
+# CMakeLists propio: tras poblarlo se arma un target manual (igual que stb).
+# Se fija a un tag estable (no docking branch: un solo panel no lo necesita).
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG v1.91.5
+)
+
 # Opciones de GLFW: no compilar sus docs/tests/examples.
 # GLFW crea un target 'docs' propio si encuentra Doxygen, que colisiona con el
 # nuestro. Apagarlos evita la colisión y acelera el build.
@@ -108,6 +117,25 @@ FetchContent_MakeAvailable(assimp)
 # src/efengine/renderer/stb_image_impl.cpp.
 add_library(stb INTERFACE)
 target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
+
+# Dear ImGui: no trae CMakeLists. Lo poblamos y compilamos un target STATIC con
+# el core + los backends GLFW/OpenGL3. El backend GL3 usa su loader interno, así
+# que sólo necesita glfw para el backend de ventana/input.
+FetchContent_MakeAvailable(imgui)
+add_library(imgui STATIC
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+)
+target_include_directories(imgui PUBLIC
+    ${imgui_SOURCE_DIR}
+    ${imgui_SOURCE_DIR}/backends
+)
+target_link_libraries(imgui PUBLIC glfw)
 
 # GLAD 2.x no crea un target "glad" por sí solo: hay que generarlo con
 # glad_add_library(). Aquí pedimos OpenGL 3.3 Core (base compatible y común).

@@ -31,12 +31,14 @@ namespace scene {
     }
 
     void CameraController::OnMouseButton(i32 button, i32 action, i32 mods) {
+        if(!m_inputEnabled) return;
         if(button == (i32)platform::MouseButton::Left) {
              m_rotating = (action == (i32)platform::InputAction::Press);
         }
     }
 
     void CameraController::OnMouseMove(f32 x, f32 y) {
+        if(!m_inputEnabled) return;
         if(m_rotating) {
             f32 signX = m_invertX ? -1.0f : 1.0f;
             f32 signY = m_invertY ? -1.0f : 1.0f;
@@ -57,6 +59,7 @@ namespace scene {
     }
 
     void CameraController::OnMouseScroll(f32 xOffset, f32 yOffset) {
+        if(!m_inputEnabled) return;
         m_distance -= yOffset * m_zoomSpeed; // controlar distancia hasta cubo
         m_distance = glm::clamp(m_distance, m_minDistance, m_maxDistance); // limite
 
@@ -73,8 +76,10 @@ namespace scene {
         m_invertX = invert;
     }
 
-    void CameraController::SetInvertY(bool invert) { 
+    void CameraController::SetInvertY(bool invert) {
         m_invertY = invert;
     }
+
+    void CameraController::SetInputEnabled(bool enabled) { m_inputEnabled = enabled; }
 }
 }
