@@ -5,7 +5,7 @@
 #include <efengine/renderer/Model.h>
 #include <efengine/renderer/Material.h>
 #include <efengine/renderer/Shader.h>
-#include <efengine/renderer/Light.h>
+#include <efengine/renderer/PointLight.h>
 
 
 #include <string>
@@ -22,13 +22,11 @@ namespace renderer {
             void Draw(const Model& va, const Shader& shader) const;
             void Draw(const Model& model, const MaterialMap& materials) const;
             void Draw(const VertexArray& va, const Shader& shader) const;
-            void BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<Light>& lights, f32 ambientFactor);
+            void BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, f32 ambientFactor);
             void Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix);
 
-        private: 
-
-
-
+        private:
+            void applyFrameUniforms(const Shader& shader);
     };
 
 }
