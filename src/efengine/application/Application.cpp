@@ -9,9 +9,35 @@ namespace efengine {
 namespace application {
 
     Application::Application()
-        : m_window( platform::WindowProps{ "efengine", 800, 600, true } )
-        , m_context( m_window ) {
-        // m_renderer se construye por defecto (Rule of Zero, sin estado GL).
+        : m_window( platform::WindowProps{ "efengine", 1280, 720, true } )
+        , m_context( m_window )
+        , m_sceneFB(m_window.GetWidth(), m_window.GetWidth()) {
+        
+        const f32 quadVertices[] = {
+        // pos      uv
+        -1.0f, -1.0f, 0.0f, 0.0f,
+        1.0f, -1.0f, 1.0f, 0.0f,
+        1.0f,  1.0f, 1.0f, 1.0f,
+        -1.0f,  1.0f, 0.0f, 1.0f,
+        };
+
+        const u32 quadIndices[] = { 0, 1, 2, 2, 3, 0 };   // dos triángulos
+
+        renderer::Buffer       vbo(quadVertices, sizeof(quadVertices));
+        renderer::IndexBuffer  ebo(quadIndices, 6);
+        renderer::VertexLayout layout;
+        layout.Push(renderer::ShaderDataType::Float2);
+        layout.Push(renderer::ShaderDataType::Float2); 
+        m_fullscreenQuad.AddVertexBuffer(std::move(vbo), layout);
+        m_fullscreenQuad.SetIndexBuffer(std::move(ebo));
+
+        m_screenShader = m_resources.GetShader("screen", "assets/shaders/screen.vert", "assets/shaders/screen.frag");
+        if (!m_screenShader) {
+            EF_LOG_ERROR("Application::Application: no se pudo cargar el shader 'screen'; el present pass no dibujará");
+        } else {
+            m_screenShader->Bind();
+            m_screenShader->SetInt("uScreenTexture", 0);
+        }
         EF_LOG_INFO("Application inicializada");
     }
 

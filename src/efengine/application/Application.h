@@ -3,6 +3,7 @@
 #include <efengine/platform/Window.h>
 #include <efengine/renderer/Context.h>
 #include <efengine/renderer/Renderer.h>
+#include <efengine/renderer/Framebuffer.h>
 #include <efengine/resources/ResourceManager.h>
 #include <efengine/core/Time.h>
 #include <efengine/platform/InputCodes.h>
@@ -41,14 +42,18 @@ namespace application {
             
             // ORDEN CRÍTICO (contrato, principio 11): Window 1.º (crea + activa
             // el contexto GL); Context 2.º (carga GLAD sobre ese contexto);
-            // Renderer 3.º. El orden de init en C++ sigue el orden de declaración.
+            // Framebuffer 3.º. necesita GL + tamaño de ventana
+            // Renderer 4.º. El orden de init en C++ sigue el orden de declaración.
             // ResourceManager 4.º. (crea recursos cpu, necesita el contexto entero vivo)
             // time no participa del contrato, sólo depende de chrono y el baseline
             // del tiempo se fija en el primer tick, puede ir en cualquier lado.
-            platform::Window   m_window;
-            renderer::Context  m_context;
-            renderer::Renderer m_renderer;
-            resources::ResourceManager m_resources;
+            platform::Window   m_window; // 1
+            renderer::Context  m_context; // 2
+            renderer::Framebuffer m_sceneFB; // 3
+            renderer::Renderer m_renderer; // 4
+            resources::ResourceManager m_resources; // 5
+            renderer::VertexArray m_fullscreenQuad; // 6
+            renderer::Shader* m_screenShader = null;
             core::Time m_time;
 
     };
