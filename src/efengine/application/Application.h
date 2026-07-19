@@ -1,6 +1,7 @@
 #pragma once
 
 #include <efengine/platform/Window.h>
+#include <efengine/application/DebugUI.h>
 #include <efengine/renderer/Context.h>
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Framebuffer.h>
@@ -23,6 +24,7 @@ namespace application {
             renderer::Renderer& GetRenderer() { return m_renderer; }
             resources::ResourceManager& GetResources() { return m_resources; }
             core::Time& GetTime() { return m_time; }
+            application::DebugUI& GetDebugUI() { return m_debugUI; }
 
             // FRAME API
             bool Running() const { return !m_window.ShouldClose(); }
@@ -52,6 +54,7 @@ namespace application {
             renderer::Framebuffer m_sceneFB; // 3
             renderer::Renderer m_renderer; // 4
             resources::ResourceManager m_resources; // 5
+            application::DebugUI m_debugUI;
             renderer::VertexArray m_fullscreenQuad; // 6
             renderer::Shader* m_screenShader = null;
             core::Time m_time;

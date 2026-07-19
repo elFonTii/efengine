@@ -11,7 +11,8 @@ namespace application {
     Application::Application()
         : m_window( platform::WindowProps{ "efengine", 1280, 720, true } )
         , m_context( m_window )
-        , m_sceneFB(m_window.GetWidth(), m_window.GetWidth()) {
+        , m_sceneFB(m_window.GetWidth(), m_window.GetWidth())
+        , m_debugUI( m_window ) {
         
         const f32 quadVertices[] = {
         // pos      uv
@@ -44,9 +45,13 @@ namespace application {
     void Application::BeginFrame() {
         m_time.Tick();
         m_window.PollEvents();
+        m_debugUI.NewFrame();
     }
 
-    void Application::EndFrame() { m_window.SwapBuffers(); }
+    void Application::EndFrame() {
+        m_debugUI.Render();     // dibuja el overlay sobre la imagen final (backbuffer)
+        m_window.SwapBuffers();
+    }
 
     void Application::RenderScene(const scene::Scene& scene, const scene::Camera& camera) {
         const u32 w = m_window.GetWidth();
