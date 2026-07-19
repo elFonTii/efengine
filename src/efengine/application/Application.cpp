@@ -11,7 +11,7 @@ namespace application {
     Application::Application()
         : m_window( platform::WindowProps{ "efengine", 1280, 720, true } )
         , m_context( m_window )
-        , m_sceneFB(m_window.GetWidth(), m_window.GetWidth())
+        , m_sceneFB(m_window.GetWidth(), m_window.GetHeight())
         , m_debugUI( m_window ) {
         
         const f32 quadVertices[] = {
