@@ -44,22 +44,35 @@ namespace application {
     void Application::BeginFrame() {
         m_time.Tick();
         m_window.PollEvents();
-        m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
     }
 
     void Application::EndFrame() { m_window.SwapBuffers(); }
 
     void Application::RenderScene(const scene::Scene& scene, const scene::Camera& camera) {
+        const u32 w = m_window.GetWidth();
+        const u32 h = m_window.GetHeight();
+        if(w != 0 && h != 0) m_sceneFB.Resize(w, h);
+
+        // 2 cargas:  al FBO de la escena y Backbuffer de Window
+        
+        // Al Framebuffer
+        m_sceneFB.Bind();
+        m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
         m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.lights(), scene.ambientFactor);
 
-        // enviar los scene objects
         for(const scene::SceneObject& obj : scene.objects()) {
-            if(!obj.model) {
-                EF_LOG_WARNING("Se intenta renderizar un objeto sin modelo.");
-                continue;
-            } else {
-                m_renderer.Submit(*obj.model, obj.materials, obj.transform.Matrix());
-            }
+            if(!obj.model) { EF_LOG_WARNING("Se intenta renderizar un objeto sin modelo"); continue; }
+            m_renderer.Submit(*obj.model, obj.materials, obj.transform.Matrix());
+        }
+
+        // Al Backbuffer
+        m_sceneFB.Unbind();
+        m_renderer.SetViewport(w, h);
+        m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
+        if(m_screenShader) {
+            m_screenShader->Bind();
+            m_sceneFB.ColorTexture().Bind(0);
+            m_renderer.Draw(m_fullscreenQuad, *m_screenShader);
         }
     }
 
