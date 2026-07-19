@@ -21,6 +21,7 @@ namespace renderer {
             static constexpr u32 kMaxLights = 4; // DEBE COINCIDIR CON MAX_LIGHTS DEL SHADER PRINCIPAL
 
             void Clear(f32 r, f32 g, f32 b, f32 a) const;
+            void SetViewport(u32 width, u32 height) const; // por el momento para evitar que Application llame gl crudo
             void Draw(const Model& va, const Shader& shader) const;
             void Draw(const Model& model, const MaterialMap& materials) const;
             void Draw(const VertexArray& va, const Shader& shader) const;

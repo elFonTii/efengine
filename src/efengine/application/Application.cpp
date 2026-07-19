@@ -9,17 +9,42 @@ namespace efengine {
 namespace application {
 
     Application::Application()
-        : m_window( platform::WindowProps{ "efengine", 800, 600, true } )
+        : m_window( platform::WindowProps{ "efengine", 1280, 720, true } )
         , m_context( m_window )
+        , m_sceneFB(m_window.GetWidth(), m_window.GetWidth())
         , m_debugUI( m_window ) {
-        // m_renderer se construye por defecto (Rule of Zero, sin estado GL).
+        
+        const f32 quadVertices[] = {
+        // pos      uv
+        -1.0f, -1.0f, 0.0f, 0.0f,
+        1.0f, -1.0f, 1.0f, 0.0f,
+        1.0f,  1.0f, 1.0f, 1.0f,
+        -1.0f,  1.0f, 0.0f, 1.0f,
+        };
+
+        const u32 quadIndices[] = { 0, 1, 2, 2, 3, 0 };   // dos triángulos
+
+        renderer::Buffer       vbo(quadVertices, sizeof(quadVertices));
+        renderer::IndexBuffer  ebo(quadIndices, 6);
+        renderer::VertexLayout layout;
+        layout.Push(renderer::ShaderDataType::Float2);
+        layout.Push(renderer::ShaderDataType::Float2); 
+        m_fullscreenQuad.AddVertexBuffer(std::move(vbo), layout);
+        m_fullscreenQuad.SetIndexBuffer(std::move(ebo));
+
+        m_screenShader = m_resources.GetShader("screen", "assets/shaders/screen.vert", "assets/shaders/screen.frag");
+        if (!m_screenShader) {
+            EF_LOG_ERROR("Application::Application: no se pudo cargar el shader 'screen'; el present pass no dibujará");
+        } else {
+            m_screenShader->Bind();
+            m_screenShader->SetInt("uScreenTexture", 0);
+        }
         EF_LOG_INFO("Application inicializada");
     }
 
     void Application::BeginFrame() {
         m_time.Tick();
         m_window.PollEvents();
-        m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
         m_debugUI.NewFrame();
     }
 
@@ -29,16 +54,30 @@ namespace application {
     }
 
     void Application::RenderScene(const scene::Scene& scene, const scene::Camera& camera) {
+        const u32 w = m_window.GetWidth();
+        const u32 h = m_window.GetHeight();
+        if(w != 0 && h != 0) m_sceneFB.Resize(w, h);
+
+        // 2 cargas:  al FBO de la escena y Backbuffer de Window
+        
+        // Al Framebuffer
+        m_sceneFB.Bind();
+        m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
         m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.lights(), scene.ambientFactor);
 
-        // enviar los scene objects
         for(const scene::SceneObject& obj : scene.objects()) {
-            if(!obj.model) {
-                EF_LOG_WARNING("Se intenta renderizar un objeto sin modelo.");
-                continue;
-            } else {
-                m_renderer.Submit(*obj.model, obj.materials, obj.transform.Matrix());
-            }
+            if(!obj.model) { EF_LOG_WARNING("Se intenta renderizar un objeto sin modelo"); continue; }
+            m_renderer.Submit(*obj.model, obj.materials, obj.transform.Matrix());
+        }
+
+        // Al Backbuffer
+        m_sceneFB.Unbind();
+        m_renderer.SetViewport(w, h);
+        m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
+        if(m_screenShader) {
+            m_screenShader->Bind();
+            m_sceneFB.ColorTexture().Bind(0);
+            m_renderer.Draw(m_fullscreenQuad, *m_screenShader);
         }
     }
 
