@@ -14,6 +14,8 @@ namespace renderer {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
 
+    void Renderer::SetViewport(u32 width, u32 height) const { glViewport(0,0, (GLsizei) width, (GLsizei) height); }
+
     void Renderer::Draw(const Model& model, const Shader& shader) const {
         for (const Mesh& mesh : model.meshes()) {
             Draw(mesh.vertexArray(), shader); // Realiza un dibujado por cada mesh dentro del fbx
