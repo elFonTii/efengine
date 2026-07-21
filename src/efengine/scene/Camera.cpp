@@ -26,6 +26,15 @@ namespace scene {
         m_aspect = aspect;
     }
 
+    void Camera::SetExposure(f32 exposure) { 
+        EF_ASSERT(exposure > 0.0f, "La exposición debe ser positiva" );
+        m_exposure = exposure;
+    }
+
+    f32 Camera::Exposure() const {
+        return m_exposure;
+    }
+
     const glm::vec3& Camera::Position() const  { return m_position; }
 
     

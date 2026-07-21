@@ -13,6 +13,8 @@ namespace scene {
 
         void LookAt(const glm::vec3& position, const glm::vec3& target, const glm::vec3& up = glm::vec3(0.0f, 1.0f, 0.0f));
         void SetAspect(f32 aspect);
+        void SetExposure(f32 exposure);
+        f32 Exposure() const;
 
 
         private:
@@ -23,6 +25,7 @@ namespace scene {
             f32 m_aspect = 1.0f;
             f32 m_near   = 0.1f;
             f32 m_far    = 5000.0f;
+            f32 m_exposure = 1.0f;
     };
 }
 }
