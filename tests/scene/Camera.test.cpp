@@ -65,3 +65,14 @@ TEST_CASE("Camera::Position debe reflejar el LookAt"){
     CHECK(cam.Position().y == doctest::Approx(pos.y));
     CHECK(cam.Position().z == doctest::Approx(pos.z));
 }
+
+TEST_CASE("Camera: exposición por defecto es 1.0") {
+    scene::Camera cam;
+    CHECK(cam.Exposure() == doctest::Approx(1.0f));
+}
+
+TEST_CASE("Camera::SetExposure hace round-trip") {
+    scene::Camera cam;
+    cam.SetExposure(2.5f);
+    CHECK(cam.Exposure() == doctest::Approx(2.5f));
+}

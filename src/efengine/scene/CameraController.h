@@ -31,7 +31,7 @@ namespace scene {
             glm::vec3 m_target { 0.0f, 10.0f, 0.0f };            // punto que orbita
             f32 m_distance = 30.0f;                  // radio de la órbita
             f32 m_minDistance = 5.0f;                   // distancia mínima al target
-            f32 m_maxDistance = 100.0f;                 // distancia máxima al target
+            f32 m_maxDistance = 1000.0f;                 // distancia máxima al target
 
             f32 m_yaw      = 0.0f;
             f32 m_pitch    = glm::radians(45.0f);
