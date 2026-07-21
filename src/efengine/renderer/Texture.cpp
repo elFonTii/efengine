@@ -97,6 +97,9 @@ namespace renderer {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glBindTexture(GL_TEXTURE_2D, 0);
 
+    // Attachment HDR (pre-tonemapping)
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, (GLsizei) width, (GLsizei) height, 0, GL_RGBA, GL_FLOAT, nullptr);
+
     return Texture(id, width, height);
 }
 
