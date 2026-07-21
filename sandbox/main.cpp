@@ -143,17 +143,19 @@ int main() {
     app.GetWindow().SetEventListener(&controller);
 
     bool animate = true;
+    
 
     while (app.Running()) {
         app.BeginFrame();
         if (app.IsKeyPressed(platform::Key::Escape)) app.Close();
-
         controller.SetInputEnabled(!app.GetDebugUI().WantsMouse());
-
+        auto exposure = cam.Exposure();
+        
         // --- Panel de edición de escena en runtime ---
         ImGui::Begin("Escena");
         ImGui::Checkbox("Animate", &animate);
         ImGui::SliderFloat("Ambient", &scene.ambientFactor, 0.0f, 1.0f);
+        if(ImGui::SliderFloat("Exposure", &exposure, 0.0f, 5.0f) == true) { cam.SetExposure(exposure); }
 
         if (ImGui::CollapsingHeader("Objetos", ImGuiTreeNodeFlags_DefaultOpen)) {
             for (u32 i = 0; i < scene.objects().size(); ++i) {
