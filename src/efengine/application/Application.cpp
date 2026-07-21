@@ -32,9 +32,9 @@ namespace application {
         m_fullscreenQuad.AddVertexBuffer(std::move(vbo), layout);
         m_fullscreenQuad.SetIndexBuffer(std::move(ebo));
 
-        m_tonemapShader = m_resources.GetShader("screen", "assets/shaders/screen.vert", "assets/shaders/tonemap.frag");
+        m_tonemapShader = m_resources.GetShader("tonemap", "assets/shaders/screen.vert", "assets/shaders/tonemap.frag");
         if (!m_tonemapShader) {
-            EF_LOG_ERROR("Application::Application: no se pudo cargar el shader 'screen'; el present pass no dibujará");
+            EF_LOG_ERROR("Application::Application: no se pudo cargar el shader 'tonemap'; el present pass no dibujará");
         } else {
             m_tonemapShader->Bind();
             m_tonemapShader->SetInt("uScreenTexture", 0);
@@ -77,6 +77,7 @@ namespace application {
         if(m_tonemapShader) {
             m_tonemapShader->Bind();
             m_sceneFB.ColorTexture().Bind(0);
+            m_tonemapShader->SetFloat("uExposure", camera.Exposure());
             m_renderer.Draw(m_fullscreenQuad, *m_tonemapShader);
         }
     }
