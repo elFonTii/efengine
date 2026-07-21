@@ -27,7 +27,7 @@ namespace scene {
     }
 
     void Camera::SetExposure(f32 exposure) { 
-        EF_ASSERT(exposure > 0.0f, "La exposición debe ser positiva" );
+        EF_ASSERT(exposure >= 0.0f, "La exposición debe ser positiva" );
         m_exposure = exposure;
     }
 
