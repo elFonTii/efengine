@@ -191,9 +191,7 @@ void main() {
     vec3 ambient = uAmbientFactor * albedo * ao;
     vec3 color   = ambient + Lo;
 
-    // Tone mapping (Reinhard) y corrección gamma, una sola vez al final.
-    color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0 / 2.2));
-
+    // Radiancia lineal HDR sin tonemapear: el tone mapping + gamma ahora ocurren
+    // una sola vez en el present pass (assets/shaders/tonemap.frag), Ciclo 1 HDR.
     FragColor = vec4(color, 1.0);
 }
