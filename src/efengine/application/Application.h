@@ -56,7 +56,7 @@ namespace application {
             resources::ResourceManager m_resources; // 5
             application::DebugUI m_debugUI;
             renderer::VertexArray m_fullscreenQuad; // 6
-            renderer::Shader* m_screenShader = null;
+            renderer::Shader* m_tonemapShader = null;
             core::Time m_time;
 
     };

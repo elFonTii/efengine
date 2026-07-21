@@ -32,12 +32,12 @@ namespace application {
         m_fullscreenQuad.AddVertexBuffer(std::move(vbo), layout);
         m_fullscreenQuad.SetIndexBuffer(std::move(ebo));
 
-        m_screenShader = m_resources.GetShader("screen", "assets/shaders/screen.vert", "assets/shaders/screen.frag");
-        if (!m_screenShader) {
+        m_tonemapShader = m_resources.GetShader("screen", "assets/shaders/screen.vert", "assets/shaders/tonemap.frag");
+        if (!m_tonemapShader) {
             EF_LOG_ERROR("Application::Application: no se pudo cargar el shader 'screen'; el present pass no dibujará");
         } else {
-            m_screenShader->Bind();
-            m_screenShader->SetInt("uScreenTexture", 0);
+            m_tonemapShader->Bind();
+            m_tonemapShader->SetInt("uScreenTexture", 0);
         }
         EF_LOG_INFO("Application inicializada");
     }
@@ -74,10 +74,10 @@ namespace application {
         m_sceneFB.Unbind();
         m_renderer.SetViewport(w, h);
         m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
-        if(m_screenShader) {
-            m_screenShader->Bind();
+        if(m_tonemapShader) {
+            m_tonemapShader->Bind();
             m_sceneFB.ColorTexture().Bind(0);
-            m_renderer.Draw(m_fullscreenQuad, *m_screenShader);
+            m_renderer.Draw(m_fullscreenQuad, *m_tonemapShader);
         }
     }
 
