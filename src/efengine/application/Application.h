@@ -5,6 +5,9 @@
 #include <efengine/renderer/Context.h>
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Framebuffer.h>
+#include <efengine/renderer/TonemapPass.h>
+#include <efengine/renderer/BloomPass.h>
+#include <efengine/renderer/PostChain.h>
 #include <efengine/resources/ResourceManager.h>
 #include <efengine/core/Time.h>
 #include <efengine/platform/InputCodes.h>
@@ -25,6 +28,7 @@ namespace application {
             resources::ResourceManager& GetResources() { return m_resources; }
             core::Time& GetTime() { return m_time; }
             application::DebugUI& GetDebugUI() { return m_debugUI; }
+            renderer::BloomPass& GetBloomPass() { return m_bloomPass; }
 
             // FRAME API
             bool Running() const { return !m_window.ShouldClose(); }
@@ -56,7 +60,9 @@ namespace application {
             resources::ResourceManager m_resources; // 5
             application::DebugUI m_debugUI;
             renderer::VertexArray m_fullscreenQuad; // 6
-            renderer::Shader* m_tonemapShader = null;
+            renderer::TonemapPass m_tonemapPass;
+            renderer::BloomPass m_bloomPass;
+            renderer::PostChain m_postChain;
             core::Time m_time;
 
     };
