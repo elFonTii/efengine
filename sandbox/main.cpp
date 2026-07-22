@@ -156,6 +156,13 @@ int main() {
         ImGui::Checkbox("Animate", &animate);
         ImGui::SliderFloat("Ambient", &scene.ambientFactor, 0.0f, 1.0f);
         if(ImGui::SliderFloat("Exposure", &exposure, 0.0f, 5.0f) == true) { cam.SetExposure(exposure); }
+        renderer::BloomSettings& s = app.GetBloomPass().settings(); 
+        if (ImGui::CollapsingHeader("Bloom")) {
+            ImGui::SliderFloat("Threshold",  &s.threshold,  0.0f, 5.0f);
+            ImGui::SliderFloat("Knee",       &s.knee,       0.0f, 1.0f);
+            ImGui::SliderFloat("Intensity",  &s.intensity,  0.0f, 0.5f);
+            ImGui::SliderInt  ("Iterations", &s.iterations, 1,    10);
+}
 
         if (ImGui::CollapsingHeader("Objetos", ImGuiTreeNodeFlags_DefaultOpen)) {
             for (u32 i = 0; i < scene.objects().size(); ++i) {
