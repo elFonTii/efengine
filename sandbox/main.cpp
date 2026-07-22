@@ -163,6 +163,10 @@ int main() {
             ImGui::SliderFloat("Intensity",  &s.intensity,  0.0f, 0.5f);
             ImGui::SliderInt  ("Iterations", &s.iterations, 1,    10);
 }
+        renderer::FxaaSettings& fx = app.GetFxaaPass().settings();
+        if (ImGui::CollapsingHeader("FXAA")) {
+            ImGui::Checkbox("Enabled", &fx.enabled);
+        }
 
         if (ImGui::CollapsingHeader("Objetos", ImGuiTreeNodeFlags_DefaultOpen)) {
             for (u32 i = 0; i < scene.objects().size(); ++i) {
