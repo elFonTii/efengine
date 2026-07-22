@@ -10,6 +10,7 @@ add_executable(efengine_tests
     platform/InputCodes.test.cpp
     renderer/VertexLayout.test.cpp
     renderer/Vertex.test.cpp
+    renderer/PostChain.test.cpp
     resources/FileIO.test.cpp
     resources/ResourceManager.test.cpp
     scene/Camera.test.cpp
