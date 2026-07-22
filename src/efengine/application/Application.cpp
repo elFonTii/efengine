@@ -21,6 +21,9 @@ namespace application {
                m_resources.GetShader("blur",           "assets/shaders/screen.vert", "assets/shaders/blur.frag"),
                m_resources.GetShader("bloomcomposite", "assets/shaders/screen.vert", "assets/shaders/bloom_composite.frag"),
                m_window.GetWidth(), m_window.GetHeight() )
+        , m_fxaaPass( m_renderer, m_fullscreenQuad,
+                m_resources.GetShader("fxaa", "assets/shaders/screen.vert", "assets/shaders/fxaa.frag")
+         )
         , m_postChain( m_window.GetWidth(), m_window.GetHeight()){
         
         const f32 quadVertices[] = {
@@ -37,6 +40,7 @@ namespace application {
         renderer::IndexBuffer  ebo(quadIndices, 6);
         m_postChain.Add(&m_bloomPass);
         m_postChain.Add(&m_tonemapPass);
+        m_postChain.Add(&m_fxaaPass);   // último eslabón → escribe al backbuffer; tonemap pasa a un scratch LDR
         renderer::VertexLayout layout;
         layout.Push(renderer::ShaderDataType::Float2);
         layout.Push(renderer::ShaderDataType::Float2); 
