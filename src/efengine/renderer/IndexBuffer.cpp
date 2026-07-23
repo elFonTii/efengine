@@ -12,6 +12,7 @@ namespace renderer {
         EF_ASSERT(indices != null, "IndexBuffer: indices no puede ser null");
         EF_ASSERT(count > 0, "IndexBuffer: count debe ser > 0");
 
+        /* GL 3.3 binding de EBO y subida de datos
         glGenBuffers(1, &m_id);
         EF_ASSERT(m_id != 0, "IndexBuffer: glGenBuffers fallo");
 
@@ -19,6 +20,14 @@ namespace renderer {
         glBufferData(GL_ELEMENT_ARRAY_BUFFER,
                      static_cast<GLsizeiptr>(count) * static_cast<GLsizeiptr>(sizeof(u32)),
                      indices, GL_STATIC_DRAW);
+        */
+
+        // GL 4.5
+        glCreateBuffers(1, &m_id);
+        EF_ASSERT(m_id != 0, "IndexBuffer: glCreateBuffers fallo");
+        glNamedBufferData(m_id,
+                          static_cast<GLsizeiptr>(count) * static_cast<GLsizeiptr>(sizeof(u32)),
+                          indices, GL_STATIC_DRAW);
 
         m_count = count;
     }
