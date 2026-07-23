@@ -1,4 +1,4 @@
-#version 330 core
+#version 450 core
 layout (location = 0) in vec2 aPos;   // posición en NDC [-1, 1]
 layout (location = 1) in vec2 aUV;    // coordenada de textura [0, 1]
 
