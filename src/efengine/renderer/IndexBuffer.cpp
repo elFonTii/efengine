@@ -53,10 +53,5 @@ namespace renderer {
         return *this;
     }
 
-    void IndexBuffer::Bind() const {
-        EF_ASSERT(m_id != 0, "IndexBuffer::Bind: EBO vacio (movido o no inicializado)");
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_id);
-    }
-
 }
 }

@@ -51,10 +51,5 @@ namespace renderer {
         return *this;
     }
 
-    void Buffer::Bind() const {
-        EF_ASSERT(m_id != 0, "Buffer::Bind: buffer vacio (movido o no inicializado)");
-        glBindBuffer(GL_ARRAY_BUFFER, m_id);
-    }
-
 }
 }

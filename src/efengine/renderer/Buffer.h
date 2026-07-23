@@ -16,8 +16,7 @@ namespace renderer {
             Buffer& operator=(const Buffer&) = delete;
             Buffer(Buffer&& other) noexcept;
             Buffer& operator=(Buffer&& other) noexcept;
-
-            void  Bind() const;
+            
             u32 id() const { return m_id; }
             usize size() const { return m_size; }
 
