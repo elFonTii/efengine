@@ -1,6 +1,6 @@
 # efengine
 
-Motor gráfico en **C++17 / OpenGL 3.3 Core**, construido desde cero como proyecto de largo plazo. Compila sin excepciones, sin `new`/`delete` crudos y con RAII en todos los subsistemas.
+Motor gráfico en **C++17 / OpenGL 4.5 Core**, construido desde cero como proyecto de largo plazo. Compila sin excepciones, sin `new`/`delete` crudos y con RAII en todos los subsistemas.
 
 - **Ventanas e input:** GLFW 3.4
 - **Loader GL:** GLAD 2 (generado en build time)

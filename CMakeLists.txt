@@ -138,9 +138,8 @@ target_include_directories(imgui PUBLIC
 target_link_libraries(imgui PUBLIC glfw)
 
 # GLAD 2.x no crea un target "glad" por sí solo: hay que generarlo con
-# glad_add_library(). Aquí pedimos OpenGL 3.3 Core (base compatible y común).
-# Para subir de versión, cambia gl:core=3.3 (p. ej. gl:core=4.6).
-glad_add_library(glad STATIC API gl:core=3.3)
+# glad_add_library().
+glad_add_library(glad STATIC API gl:core=4.5)
 
 # DOCUMENTACIÓN (Doxygen)
 # Target opcional 'docs'. Si Doxygen no está instalado, simplemente se omite

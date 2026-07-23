@@ -17,8 +17,8 @@ namespace renderer {
             IndexBuffer& operator=(const IndexBuffer&) = delete;
             IndexBuffer(IndexBuffer&& other) noexcept;
             IndexBuffer& operator=(IndexBuffer&& other) noexcept;
-
-            void Bind() const;                 // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_id)
+            
+            u32  id() const { return m_id; }
             u32  count() const { return m_count; }
 
         private:

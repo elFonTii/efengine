@@ -1,4 +1,4 @@
-#version 330 core
+#version 450 core
 
 in vec3 vFragPos;   // posición del fragmento en espacio mundo
 in vec2 vUV;

@@ -1,4 +1,4 @@
-#version 330 core
+#version 450 core
 
 // FXAA (Fast Approximate Anti-Aliasing) — variante compacta de Timothy Lottes
 // (la "console" FXAA popularizada por NVIDIA / geeks3d). Opera sobre la imagen
