@@ -16,8 +16,8 @@ namespace application {
         const bool okGlfw = ImGui_ImplGlfw_InitForOpenGL(window.GetNativeHandle(), true);
         EF_ASSERT(okGlfw, "DebugUI: fallo al iniciar el backend GLFW de ImGui");
 
-        // "#version 330" = GLSL de OpenGL 3.3 Core, igual que el contexto de Window.
-        const bool okGl = ImGui_ImplOpenGL3_Init("#version 330");
+        // "#version 450" = GLSL de OpenGL 4.5 Core, igual que el contexto de Window.
+        const bool okGl = ImGui_ImplOpenGL3_Init("#version 450");
         EF_ASSERT(okGl, "DebugUI: fallo al iniciar el backend OpenGL3 de ImGui");
     }
 
