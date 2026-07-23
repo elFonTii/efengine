@@ -12,11 +12,18 @@ namespace renderer {
         EF_ASSERT(data != null, "Buffer: data no puede ser null");
         EF_ASSERT(size > 0, "Buffer: size debe ser > 0");
 
+        /* GL 3.3 (binding de VBO y subida de datos)
         glGenBuffers(1, &m_id);
         EF_ASSERT(m_id != 0, "Buffer: glGenBuffers fallo");
 
         glBindBuffer(GL_ARRAY_BUFFER, m_id);
         glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(size), data, GL_STATIC_DRAW);
+        */
+
+        // GL 4.5, DSA direct state access papaa
+        glCreateBuffers(1, &m_id);
+        EF_ASSERT(m_id != 0, "Buffer: glCreateBuffers fallo");
+        glNamedBufferData(m_id, static_cast<GLsizeiptr>(size), data, GL_STATIC_DRAW);
 
         // m_size solo se asigna tras el éxito: si glGenBuffers falla, el objeto
         // queda con m_id == 0 y m_size == 0 (estado "vacío" coherente).
