@@ -101,12 +101,10 @@ namespace renderer {
     }
 
     void VertexArray::SetIndexBuffer(IndexBuffer&& indexBuffer) {
-        glBindVertexArray(m_id);
-        indexBuffer.Bind();
-        m_indexBuffer = std::move(indexBuffer);
-        glBindVertexArray(0);
+    glVertexArrayElementBuffer(m_id, indexBuffer.id());
+    m_indexBuffer = std::move(indexBuffer);
     }
-
+    
     u32 VertexArray::indexCount() const {
         EF_ASSERT(hasIndexBuffer(), "VertexArray::indexCount: no hay index buffer");
         return m_indexBuffer->count();
