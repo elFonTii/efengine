@@ -16,6 +16,8 @@ namespace renderer {
     class Shader {
         public:
             static std::optional<Shader> Create(const char* vertexSrc, const char* fragmentSrc);
+            static std::optional<Shader> CreateCompute(const char* computeSrc);
+            
             ~Shader();
 
             Shader(const Shader&)            = delete;

@@ -69,6 +69,35 @@ namespace renderer {
         return Shader(program);
     }
 
+     std::optional<Shader> Shader::CreateCompute(const char* computeSrc) {
+        EF_ASSERT(computeSrc != null, "Shader::CreateCompute: computeSrc no puede ser null");
+
+        const u32 comp = compilar_stage(GL_COMPUTE_SHADER, computeSrc);
+        if (comp == 0) {
+            return std::nullopt;
+        }
+
+        const u32 program = glCreateProgram();
+        EF_ASSERT(program != 0, "Shader::CreateCompute: glCreateProgram devolvio 0 (sin contexto GL)");
+        glAttachShader(program, comp);
+        glLinkProgram(program);
+
+        // El stage ya no se necesita tras linkear.
+        glDeleteShader(comp);
+
+        GLint ok = GL_FALSE;
+        glGetProgramiv(program, GL_LINK_STATUS, &ok);
+        if (ok != GL_TRUE) {
+            char log[512] = {};
+            glGetProgramInfoLog(program, sizeof(log), null, log);
+            EF_LOG_ERROR("Shader::CreateCompute: fallo al linkear el programa: %s", log);
+            glDeleteProgram(program);
+            return std::nullopt;
+        }
+
+        return Shader(program);
+    }
+
     Shader::Shader(u32 program) : m_program(program) {}
 
     Shader::~Shader() {
