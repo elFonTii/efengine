@@ -5,6 +5,7 @@
 #include <efengine/renderer/Material.h>
 #include <efengine/renderer/Texture.h>
 #include <efengine/renderer/Shader.h>
+#include <efengine/renderer/DirectionalLight.h>
 #include <efengine/scene/Camera.h>
 #include <efengine/scene/CameraController.h>
 #include <efengine/scene/Scene.h>
@@ -28,8 +29,6 @@
 namespace {
     using namespace efengine;
 
-    // Arma un material PBR pidiendo al manager las texturas por convención de
-    // nombre: <base>{diff,nor_gl,rough,ao,disp}_<res><ext>. albedo va en sRGB,
     std::optional<renderer::Material> makePbrMaterial(
             resources::ResourceManager& rm, const renderer::Shader* shader,
             const std::string& base, const std::string& res, const std::string& ext,
@@ -65,7 +64,7 @@ namespace {
             { { halfSize, 0.0f,  halfSize}, {0.0f, 1.0f, 0.0f}, {tiles, tiles}, {1.0f, 0.0f, 0.0f} },
             { {-halfSize, 0.0f,  halfSize}, {0.0f, 1.0f, 0.0f}, {0.0f,  tiles}, {1.0f, 0.0f, 0.0f} },
         };
-        const std::vector<u32> indices = { 0, 1, 2, 2, 3, 0 };
+        const std::vector<u32> indices = { 0, 3, 2, 2, 1, 0 }; // CCW visto desde +Y: winding concuerda con la normal (0,1,0)
 
         std::vector<renderer::Mesh> meshes;
         meshes.emplace_back(vertices, indices, materialName);
@@ -137,12 +136,15 @@ int main() {
     scene.AddLight({ glm::vec3(-50.0f, 80.0f, 0.0f), glm::vec3(5000.0f) });
     scene.AddLight({ glm::vec3(  0.0f, 90.0f, 0.0f), glm::vec3(5000.0f) });
 
+    scene.SetSun({ glm::normalize(glm::vec3(-0.3f, -1.0f, -0.2f)), glm::vec3(3.0f) });
+
     scene::Camera cam;
     cam.SetAspect(app.GetWindow().GetAspectRatio());
     scene::CameraController controller(&cam);
     app.GetWindow().SetEventListener(&controller);
 
     bool animate = true;
+    bool animateSun = false;
     
 
     while (app.Running()) {
@@ -186,7 +188,7 @@ int main() {
 
         if (ImGui::CollapsingHeader("Luces", ImGuiTreeNodeFlags_DefaultOpen)) {
             for (u32 i = 0; i < scene.lights().size(); ++i) {
-                ImGui::PushID(1000 + (int)i);          // rango de ids separado de los objetos
+                ImGui::PushID(1000 + (int)i);
                 char label[32];
                 std::snprintf(label, sizeof(label), "Luz %u", i);
                 if (ImGui::TreeNode(label)) {
@@ -199,12 +201,33 @@ int main() {
             }
         }
 
+        if (ImGui::CollapsingHeader("Sol / Sombras", ImGuiTreeNodeFlags_DefaultOpen)) {
+            renderer::DirectionalLight& sunLight = scene.sun();
+            ImGui::DragFloat3("Direccion Sol", glm::value_ptr(sunLight.direction), 0.01f, -1.0f, 1.0f);
+            ImGui::DragFloat3("Color/Int Sol", glm::value_ptr(sunLight.color),     0.05f,  0.0f, 20.0f);
+
+            renderer::ShadowSettings& sh = app.GetShadowPass().settings();
+            ImGui::Checkbox   ("Sombras",        &sh.enabled);
+            ImGui::SliderFloat("Ortho HalfSize", &sh.orthoHalfSize, 5.0f,  200.0f);
+            ImGui::SliderFloat("Distancia Luz",  &sh.distance,      10.0f, 400.0f);
+            ImGui::SliderFloat("Near",           &sh.nearPlane,     0.1f,  50.0f);
+            ImGui::SliderFloat("Far",            &sh.farPlane,      50.0f, 600.0f);
+            ImGui::SliderFloat("Bias Min",       &sh.biasMin,       0.0f,  0.01f,  "%.4f");
+            ImGui::SliderFloat("Bias Max",       &sh.biasMax,       0.0f,  0.02f,  "%.4f");
+            ImGui::Checkbox("Animar Sol", &animateSun);
+        }
+
         ImGui::End();
 
         if (animate) {
             const f32 elapsed = static_cast<f32>(app.Elapsed());
             scene.GetLight(sun).position = glm::vec3(50.0f * std::cos(elapsed), 80.0f, 50.0f * std::sin(elapsed));
             scene.Get(ratHandle).transform.rotation.y += app.DeltaTime() * 20.0f; // 20 grados/seg
+        }
+
+        if (animateSun) {
+            const f32 t = static_cast<f32>(app.Elapsed());
+            scene.sun().direction = glm::normalize(glm::vec3(std::cos(t) * 0.5f, -1.0f, std::sin(t) * 0.5f));
         }
 
         app.RenderScene(scene, cam);

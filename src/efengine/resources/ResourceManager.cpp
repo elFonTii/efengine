@@ -70,8 +70,29 @@ namespace resources {
 
             return &inserted->second;
         }
+    }
 
+    renderer::Shader* ResourceManager::GetComputeShader(const char* name, const char* computePath) {
+        EF_ASSERT(computePath != null, "ResourceManager::GetComputeShader: Intentando acceder a un directorio nulo");
+        EF_ASSERT(name != null, "ResourceManager::GetComputeShader: Intentando almacenar un shader sin nombre");
 
+        if (auto it = m_shaders.find(name); it != m_shaders.end()) {
+            // found
+            return &it->second;
+        } else {
+            // cargar vertex y fragment
+            auto compute = FileIO::ReadText(computePath);
+            if(!compute) return null;
+
+            // crear compute shader
+            auto result = renderer::Shader::CreateCompute(compute->c_str());
+            if(!result) return null;
+
+            auto [inserted, ok] = m_shaders.emplace(name, std::move(*result));
+            EF_ASSERT(ok, "ResourceManager::GetComputeShader: emplace no insertó tras un miss");
+
+            return &inserted->second;
+        }
     }
 }
 }

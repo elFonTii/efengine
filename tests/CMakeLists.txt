@@ -11,6 +11,8 @@ add_executable(efengine_tests
     renderer/VertexLayout.test.cpp
     renderer/Vertex.test.cpp
     renderer/PostChain.test.cpp
+    renderer/Cubemap.test.cpp
+    renderer/ShadowMath.test.cpp
     resources/FileIO.test.cpp
     resources/ResourceManager.test.cpp
     scene/Camera.test.cpp

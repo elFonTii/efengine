@@ -13,12 +13,14 @@ namespace resources {
             renderer::Model* GetModel(const char* path);
             renderer::Texture* GetTexture(const char* path, renderer::ColorSpace space = renderer::ColorSpace::Linear);
             renderer::Shader* GetShader(const char* name, const char* vertPath, const char* fragPath);
+            renderer::Shader* GetComputeShader(const char* name, const char* computePath);
+
         private:
             struct TextureSlot { renderer::Texture texture; renderer::ColorSpace space; };
 
             std::unordered_map<std::string, renderer::Model> m_models;
             std::unordered_map<std::string, TextureSlot> m_textures;
-            std::unordered_map<std::string, renderer::Shader> m_shaders;
+            std::unordered_map<std::string, renderer::Shader> m_shaders; // compartido entre vertex/fragment y compute
 
     };
 }

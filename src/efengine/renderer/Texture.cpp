@@ -79,7 +79,40 @@ namespace renderer {
 
         return Texture(id, (u32)width, (u32)height);
     }
+    std::optional<Texture> Texture::CreateHDR(const char* path) {
+        EF_ASSERT(path != null, "Texture::CreateHDR: Path no puede ser null");
 
+        // algo de que la proyección define la orientación
+        stbi_set_flip_vertically_on_load(false);
+
+        i32 width = 0, height = 0, channels = 0;
+        float* data = stbi_loadf(path, &width, &height, &channels, 4);
+
+        stbi_set_flip_vertically_on_load(true);
+
+        if (data == null) {
+            EF_LOG_ERROR("Texture::CreateHDR: fallo al cargar '%s': %s", path, stbi_failure_reason());
+            return std::nullopt;
+        }
+
+        u32 id = 0;
+        glGenTextures(1, &id);
+        EF_ASSERT(id != 0, "Texture::CreateHDR: No hay contexto GL");
+
+        glBindTexture(GL_TEXTURE_2D, id);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, data);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        stbi_image_free(data);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        return Texture(id, (u32)width, (u32)height);
+    }
+    
     // Textura vacía para usar como color attachment de un framebuffer
     Texture Texture::CreateColorAttachment(u32 width, u32 height) {
     u32 id = 0;
@@ -100,6 +133,29 @@ namespace renderer {
 
     return Texture(id, width, height);
 }
+
+    Texture Texture::CreateDepthAttachment(u32 width, u32 height) {
+        u32 id = 0;
+        glGenTextures(1, &id);
+        EF_ASSERT(id != 0, "Texture::CreateDepthAttachment: No hay contexto GL");
+
+        glBindTexture(GL_TEXTURE_2D, id);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F,
+                     (GLsizei)width, (GLsizei)height, 0,
+                     GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+
+        // PCF manual → NEAREST (el filtrado 3×3 lo hace el fragment, no el sampler).
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        // Fuera del frustum → profundidad de borde 1.0 → iluminado (no en sombra).
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+        const float border[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, border);
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+        return Texture(id, width, height);
+    }
 
     Texture::Texture(u32 id, u32 width, u32 height) {
         m_id = id;

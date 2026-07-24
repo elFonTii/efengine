@@ -1,0 +1,63 @@
+#version 450 core
+// Convoluciona el env cubemap en un mapa de irradiancia difusa.
+// Para cada dirección de cara N, integra la radiancia entrante sobre el
+// hemisferio ponderada por el coseno (método de LearnOpenGL). Un invocation
+// por texel de cara; gl_GlobalInvocationID.z = índice de cara (0..5).
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(binding = 0) uniform samplerCube uEnv;                        // entorno (radiancia)
+layout(rgba16f, binding = 0) uniform writeonly imageCube uIrradiance; // destino
+
+const float PI = 3.14159265359;
+
+// Misma tabla que equirect_to_cube.comp: uv de texel [-1,1] -> dirección mundo.
+// Invierte el major-axis del spec GL para evitar costuras entre caras.
+vec3 dirForFace(uint face, vec2 uv) {
+    vec3 d;
+    if      (face == 0u) d = vec3( 1.0, -uv.y, -uv.x); // +X
+    else if (face == 1u) d = vec3(-1.0, -uv.y,  uv.x); // -X
+    else if (face == 2u) d = vec3( uv.x,  1.0,  uv.y); // +Y
+    else if (face == 3u) d = vec3( uv.x, -1.0, -uv.y); // -Y
+    else if (face == 4u) d = vec3( uv.x, -uv.y,  1.0); // +Z
+    else                 d = vec3(-uv.x, -uv.y, -1.0); // -Z
+    return normalize(d);
+}
+
+void main() {
+    ivec3 texel = ivec3(gl_GlobalInvocationID);   // (x, y, face)
+    ivec2 size  = imageSize(uIrradiance);
+    if (texel.x >= size.x || texel.y >= size.y) return;  // sobrante del dispatch
+
+    vec2 uv = (vec2(texel.xy) + 0.5) / vec2(size) * 2.0 - 1.0; // centro de texel -> [-1,1]
+    vec3 N  = dirForFace(uint(texel.z), uv);
+
+    // Base tangente ortonormal alrededor de N. Se elige un 'up' alternativo
+    // cuando N es casi vertical para no degenerar el producto cruz.
+    vec3 up    = abs(N.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    vec3 right = normalize(cross(up, N));
+    up         = normalize(cross(N, right));
+
+    vec3  irradiance = vec3(0.0);
+    float nrSamples  = 0.0;
+    const float sampleDelta = 0.025;   // ~9k muestras/texel
+
+    for (float phi = 0.0; phi < 2.0 * PI; phi += sampleDelta) {
+        for (float theta = 0.0; theta < 0.5 * PI; theta += sampleDelta) {
+            // dirección de muestreo en tangente -> mundo
+            vec3 tangentSample = vec3(sin(theta) * cos(phi),
+                                      sin(theta) * sin(phi),
+                                      cos(theta));
+            vec3 sampleDir = tangentSample.x * right
+                           + tangentSample.y * up
+                           + tangentSample.z * N;
+
+            // Pondera por cos(theta) (proyección) y sin(theta) (área del anillo).
+            irradiance += texture(uEnv, sampleDir).rgb * cos(theta) * sin(theta);
+            nrSamples  += 1.0;
+        }
+    }
+    // Normalización que devuelve el color del entorno si la radiancia es uniforme.
+    irradiance = PI * irradiance / nrSamples;
+
+    imageStore(uIrradiance, texel, vec4(irradiance, 1.0));
+}

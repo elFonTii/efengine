@@ -133,3 +133,21 @@ TEST_CASE("Scene::ambientFactor default es 0.08") {
 
     CHECK(s.ambientFactor == doctest::Approx(0.08f));
 }
+
+TEST_CASE("Scene::sun arranca con una direccion no-nula") {
+    scene::Scene s;
+    CHECK(glm::length(s.sun().direction) > 0.0f);
+}
+
+TEST_CASE("Scene::SetSun / sun round-trip") {
+    scene::Scene s;
+    s.SetSun({ glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(2.0f, 2.0f, 2.0f) });
+    CHECK(s.sun().direction.y == doctest::Approx(-1.0f));
+    CHECK(s.sun().color.r     == doctest::Approx(2.0f));
+}
+
+TEST_CASE("Scene::sun da acceso mutable: editar se ve reflejado") {
+    scene::Scene s;
+    s.sun().color = glm::vec3(5.0f);
+    CHECK(s.sun().color.g == doctest::Approx(5.0f));
+}

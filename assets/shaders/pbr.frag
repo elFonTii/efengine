@@ -12,7 +12,17 @@ uniform vec3  uLightPositions[MAX_LIGHTS];
 uniform vec3  uLightColors[MAX_LIGHTS];
 uniform int   uLightCount;
 uniform vec3  uViewPos;
-uniform float uAmbientFactor;   // factor de luz ambiente (p. ej. 0.03)
+
+// --- Luz direccional (sol) ---
+uniform vec3 uLightDir;       // dirección en la que viaja la luz
+uniform vec3 uDirLightColor;  // color * intensidad (sin atenuación por distancia)
+
+// --- Sombra direccional (shadow map + PCF) ---
+uniform mat4      uLightSpaceMatrix;
+uniform sampler2D uShadowMap;
+uniform int       uShadowEnabled;
+uniform float     uShadowBiasMin;
+uniform float     uShadowBiasMax;
 
 // --- Albedo ---
 uniform sampler2D uAlbedoMap;
@@ -37,6 +47,9 @@ uniform int       uHasNormalMap;
 uniform sampler2D uAOMap;
 uniform int       uHasAOMap;
 uniform float     uAOStrength;   // 0 = sin AO, 1 = AO pleno
+
+// --- IBL difuso (mapa de irradiancia precomputado) ---
+uniform samplerCube uIrradianceMap;
 
 // --- Height / Displacement (Parallax Occlusion Mapping) ---
 uniform sampler2D uHeightMap;
@@ -84,6 +97,51 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
 // Fresnel-Schlick: cuánta luz se refleja según el ángulo de visión (más en rasante).
 vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+// Fresnel-Schlick con corrección por rugosidad, para la reflexión ambiente:
+// en superficies rugosas la reflectancia en rasante no debe dispararse a 1.
+vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0)
+              * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+// Cook-Torrance para una luz: devuelve (kD*albedo/PI + specular) * NdotL.
+// La radiancia (color/atenuación) se multiplica fuera.
+vec3 CookTorranceBRDF(vec3 N, vec3 V, vec3 L, vec3 F0, vec3 albedo, float metallic, float roughness) {
+    vec3  H = normalize(V + L);
+    float D = DistributionGGX(N, H, roughness);
+    float G = GeometrySmith(N, V, L, roughness);
+    vec3  F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+
+    vec3  numerator   = D * G * F;
+    float NdotL       = max(dot(N, L), 0.0);
+    float denominator = 4.0 * max(dot(N, V), 0.0) * NdotL + 0.0001;
+    vec3  specular    = numerator / denominator;
+
+    // kS = F (especular); kD = resto para difuso. Los metales no tienen difuso.
+    vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+    return (kD * albedo / PI + specular) * NdotL;
+}
+
+// Factor de sombra [0=iluminado, 1=en sombra] con PCF 3×3. N,L en espacio mundo.
+float ShadowFactor(vec3 N, vec3 L) {
+    vec4 lp   = uLightSpaceMatrix * vec4(vFragPos, 1.0);
+    vec3 proj = lp.xyz / lp.w;          // divide perspectiva (ortho: w=1)
+    proj      = proj * 0.5 + 0.5;       // [-1,1] → [0,1]
+    if (proj.z > 1.0) return 0.0;       // más allá del far plane → sin sombra
+
+    // Bias slope-scaled: más grande en rasante para matar el acné.
+    float bias   = max(uShadowBiasMax * (1.0 - dot(N, L)), uShadowBiasMin);
+    float shadow = 0.0;
+    vec2  texel  = 1.0 / vec2(textureSize(uShadowMap, 0));
+    for (int x = -1; x <= 1; ++x) {
+        for (int y = -1; y <= 1; ++y) {
+            float closest = texture(uShadowMap, proj.xy + vec2(x, y) * texel).r;
+            shadow += (proj.z - bias > closest) ? 1.0 : 0.0;
+        }
+    }
+    return shadow / 9.0;
 }
 
 // Parallax Occlusion Mapping: desplaza la UV según el ángulo de visión para
@@ -158,38 +216,37 @@ void main() {
     // los metales reflejan con su propio color (albedo).
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-    // --- Luz directa: sumatoria Cook-Torrance sobre cada luz puntual ---
+    // --- Luz directa: puntuales (Cook-Torrance vía helper) ---
     vec3 Lo = vec3(0.0);
     for (int i = 0; i < uLightCount; ++i) {
-        vec3  L = normalize(uLightPositions[i] - vFragPos);
-        vec3  H = normalize(V + L);
+        vec3  L           = normalize(uLightPositions[i] - vFragPos);
         float dist        = length(uLightPositions[i] - vFragPos);
         float attenuation = 1.0 / (dist * dist);     // caída física por distancia²
         vec3  radiance    = uLightColors[i] * attenuation;
 
-        // BRDF
-        float D = DistributionGGX(N, H, roughness);
-        float G = GeometrySmith(N, V, L, roughness);
-        vec3  F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+        Lo += CookTorranceBRDF(N, V, L, F0, albedo, metallic, roughness) * radiance;
+    }
 
-        vec3  numerator   = D * G * F;
-        float NdotL       = max(dot(N, L), 0.0);
-        float denominator = 4.0 * max(dot(N, V), 0.0) * NdotL + 0.0001;
-        vec3  specular    = numerator / denominator;
-
-        // kS = F (energía especular reflejada); kD = energía restante para difuso.
-        // Los metales no tienen difuso → se anula con (1 - metallic).
-        vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
-
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+    // --- Luz direccional (sol): sin atenuación, con sombra PCF ---
+    {
+        vec3  Ld     = normalize(-uLightDir);
+        float shadow = (uShadowEnabled == 1) ? ShadowFactor(N, Ld) : 0.0;
+        Lo += (1.0 - shadow) * CookTorranceBRDF(N, V, Ld, F0, albedo, metallic, roughness) * uDirLightColor;
     }
 
     // --- Ambiente + composición ---
     // El AO solo modula la luz indirecta (ambiente), no la directa.
     // uAOStrength interpola entre "sin oclusión" (1.0) y el valor del mapa.
-    float ao = (uHasAOMap == 1) ? mix(1.0, texture(uAOMap, uv).r, uAOStrength) : 1.0;
-    vec3 ambient = uAmbientFactor * albedo * ao;
-    vec3 color   = ambient + Lo;
+    // --- Ambiente por IBL difuso ---
+    // El irradiance map da la luz difusa entrante para la normal N. kD descuenta
+    // la fracción especular (Fresnel) para no duplicar energía; los metales no
+    // tienen difuso. El AO solo modula esta luz indirecta.
+    float ao  = (uHasAOMap == 1) ? mix(1.0, texture(uAOMap, uv).r, uAOStrength) : 1.0;
+    vec3  F   = FresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+    vec3  kD  = (vec3(1.0) - F) * (1.0 - metallic);
+    vec3  irr = texture(uIrradianceMap, N).rgb;
+    vec3  ambient = kD * irr * albedo * ao;
+    vec3  color   = ambient + Lo;
 
     // Radiancia lineal HDR sin tonemapear: el tone mapping + gamma ahora ocurren
     // una sola vez en el present pass (assets/shaders/tonemap.frag), Ciclo 1 HDR.

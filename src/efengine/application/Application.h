@@ -12,6 +12,10 @@
 #include <efengine/resources/ResourceManager.h>
 #include <efengine/core/Time.h>
 #include <efengine/platform/InputCodes.h>
+#include <efengine/renderer/Environment.h>
+#include <efengine/renderer/SkyboxPass.h>
+#include <efengine/renderer/ShadowPass.h>
+#include <optional>
 
 namespace efengine {
 namespace scene { class Scene; class Camera; }
@@ -31,6 +35,7 @@ namespace application {
             application::DebugUI& GetDebugUI() { return m_debugUI; }
             renderer::BloomPass& GetBloomPass() { return m_bloomPass; }
             renderer::FxaaPass& GetFxaaPass() { return m_fxaaPass; }
+            renderer::ShadowPass& GetShadowPass() { return m_shadowPass; }
 
             // FRAME API
             bool Running() const { return !m_window.ShouldClose(); }
@@ -67,6 +72,9 @@ namespace application {
             renderer::FxaaPass m_fxaaPass;
             renderer::PostChain m_postChain;
             core::Time m_time;
+            std::optional<renderer::Environment> m_environment;
+            renderer::SkyboxPass m_skyboxPass;
+            renderer::ShadowPass m_shadowPass;
 
     };
 
