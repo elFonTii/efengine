@@ -84,6 +84,8 @@ namespace application {
         m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
         m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.lights(), scene.ambientFactor);
 
+            m_skyboxPass.Draw(m_environment->env(), camera.ViewMatrix(), camera.ProjectionMatrix());
+
         for(const scene::SceneObject& obj : scene.objects()) {
             if(!obj.model) { EF_LOG_WARNING("Se intenta renderizar un objeto sin modelo"); continue; }
             m_renderer.Submit(*obj.model, obj.materials, obj.transform.Matrix());
