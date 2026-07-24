@@ -18,6 +18,8 @@
 namespace efengine {
 namespace renderer {
 
+    class Cubemap;
+
     class Renderer {
         public:
             static constexpr u32 kMaxLights = 4; // DEBE COINCIDIR CON MAX_LIGHTS DEL SHADER PRINCIPAL
@@ -27,7 +29,7 @@ namespace renderer {
             void Draw(const Model& va, const Shader& shader) const;
             void Draw(const Model& model, const MaterialMap& materials) const;
             void Draw(const VertexArray& va, const Shader& shader) const;
-            void BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, f32 ambientFactor, const DirectionalLight& sun, const ShadowContext& shadow);
+            void BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, f32 ambientFactor, const DirectionalLight& sun, const ShadowContext& shadow, const Cubemap* irradiance);
             void Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix);
 
         private:
@@ -40,6 +42,7 @@ namespace renderer {
             std::vector<PointLight> m_lights;
             DirectionalLight m_sun { glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };
             ShadowContext m_shadow {};
+            const Cubemap* m_irradiance = nullptr;
             std::unordered_set<const Shader*> m_frameShaders;
     };
 

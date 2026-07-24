@@ -5,6 +5,7 @@
 #include <efengine/core/Assert.h>
 #include <efengine/core/Log.h>
 #include <efengine/renderer/Texture.h>
+#include <efengine/renderer/Cubemap.h>
 
 
 namespace efengine {
@@ -52,7 +53,7 @@ namespace renderer {
         glUseProgram(0);
     }
 
-    void Renderer::BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, f32 ambientFactor, const DirectionalLight& sun, const ShadowContext& shadow) {
+    void Renderer::BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, f32 ambientFactor, const DirectionalLight& sun, const ShadowContext& shadow, const Cubemap* irradiance) {
         // inicializacion simplemente
         m_view = view;
         m_projection = projection;
@@ -61,6 +62,7 @@ namespace renderer {
         m_lights.assign(lights.begin(), lights.end());
         m_sun = sun;
         m_shadow = shadow;
+        m_irradiance = irradiance;
 
         // si la cantidad de luces es mayor a las soportadas por el shader recortar
         if(m_lights.size() > kMaxLights) {
@@ -80,7 +82,6 @@ namespace renderer {
         shader.SetMat4("uView", m_view);
         shader.SetMat4("uProjection", m_projection);
         shader.SetVec3("uViewPos", m_viewPos);
-        shader.SetFloat("uAmbientFactor", m_ambient);
         shader.SetInt("uLightCount", static_cast<i32>(m_lights.size()));
         
         // recorrer luces, construir nombre y agregar
@@ -105,6 +106,12 @@ namespace renderer {
         if (m_shadow.map != null) {
             m_shadow.map->Bind(7);
             shader.SetInt("uShadowMap", 7);
+        }
+
+        // IBL difuso (irradiance cubemap en unit 8)
+        if (m_irradiance != null) {
+            m_irradiance->Bind(8);
+            shader.SetInt("uIrradianceMap", 8);
         }
     };
 
