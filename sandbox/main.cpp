@@ -2,6 +2,7 @@
 #include <efengine/renderer/Model.h>
 #include <efengine/renderer/Mesh.h>
 #include <efengine/renderer/Vertex.h>
+#include <efengine/renderer/Primitives.h>
 #include <efengine/renderer/Material.h>
 #include <efengine/renderer/Texture.h>
 #include <efengine/renderer/Shader.h>
@@ -56,21 +57,6 @@ namespace {
         if (height) mat.SetHeightMap(height);
         return mat;
     }
-
-    renderer::Model makePlane(const std::string& materialName, f32 halfSize, f32 tiles) {
-        const std::vector<renderer::Vertex> vertices = {
-            // position                            normal         uv                tangent
-            { {-halfSize, 0.0f, -halfSize}, {0.0f, 1.0f, 0.0f}, {0.0f,  0.0f},  {1.0f, 0.0f, 0.0f} },
-            { { halfSize, 0.0f, -halfSize}, {0.0f, 1.0f, 0.0f}, {tiles, 0.0f},  {1.0f, 0.0f, 0.0f} },
-            { { halfSize, 0.0f,  halfSize}, {0.0f, 1.0f, 0.0f}, {tiles, tiles}, {1.0f, 0.0f, 0.0f} },
-            { {-halfSize, 0.0f,  halfSize}, {0.0f, 1.0f, 0.0f}, {0.0f,  tiles}, {1.0f, 0.0f, 0.0f} },
-        };
-        const std::vector<u32> indices = { 0, 1, 2, 2, 3, 0 };
-
-        std::vector<renderer::Mesh> meshes;
-        meshes.emplace_back(vertices, indices, materialName);
-        return renderer::Model(std::move(meshes));
-    }
 }
 
 int main() {
@@ -114,10 +100,19 @@ int main() {
         lampMats[mesh.materialName()] = &lampMat;
     }
 
-    renderer::Model groundModel = makePlane("ground", 300.0f, 24.0f);
+    renderer::Model groundModel = renderer::primitives::Plane("ground", 300.0f, 24.0f);
     renderer::MaterialMap groundMats = {
         { "ground", &groundMat },
     };
+
+    // Primitivas geométricas: comparten el material del suelo (brown_mud) para
+    // verlas sombreadas por PBR. Cada una usa el materialName "shape".
+    renderer::Model cubeModel     = renderer::primitives::Cube("shape", 5.0f);
+    renderer::Model sphereModel   = renderer::primitives::Sphere("shape", 5.0f);
+    renderer::Model cylinderModel = renderer::primitives::Cylinder("shape", 5.0f, 12.0f);
+    renderer::Model capsuleModel  = renderer::primitives::Capsule("shape", 5.0f, 12.0f);
+    renderer::Model planeModel    = renderer::primitives::Plane("shape", 6.0f, 1.0f);
+    renderer::MaterialMap shapeMats = { { "shape", &groundMat } };
 
     scene::Scene scene;
     scene.ambientFactor = 0.08f;
@@ -132,6 +127,18 @@ int main() {
     lampTransform.position = glm::vec3(30.0f, 0.0f, 0.0f);
     lampTransform.scale    = glm::vec3(1.0f);
     scene.Add({ lamp, lampMats, lampTransform });
+
+    // Fila de primitivas geométricas separadas en X, elevadas sobre el suelo.
+    auto placeShape = [&](const renderer::Model* model, f32 x, f32 y) {
+        math::Transform t;
+        t.position = glm::vec3(x, y, -40.0f);
+        scene.Add({ model, shapeMats, t });
+    };
+    placeShape(&cubeModel,     -40.0f, 5.0f);
+    placeShape(&sphereModel,   -20.0f, 5.0f);
+    placeShape(&cylinderModel,   0.0f, 6.0f);
+    placeShape(&capsuleModel,   20.0f, 6.0f);
+    placeShape(&planeModel,     40.0f, 5.0f);
 
     const u32 sun = scene.AddLight({ glm::vec3( 50.0f, 80.0f, 0.0f), glm::vec3(5000.0f) });
     scene.AddLight({ glm::vec3(-50.0f, 80.0f, 0.0f), glm::vec3(5000.0f) });
