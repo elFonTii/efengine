@@ -10,6 +10,7 @@ namespace renderer {
     class Texture {
         public:
             static std::optional<Texture> Create(const char* path, ColorSpace color_space = ColorSpace::Linear);
+            static std::optional<Texture> CreateHDR(const char* path);
             static Texture CreateColorAttachment(u32 width, u32 height);
             ~Texture();
 
