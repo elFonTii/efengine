@@ -29,8 +29,6 @@
 namespace {
     using namespace efengine;
 
-    // Arma un material PBR pidiendo al manager las texturas por convención de
-    // nombre: <base>{diff,nor_gl,rough,ao,disp}_<res><ext>. albedo va en sRGB,
     std::optional<renderer::Material> makePbrMaterial(
             resources::ResourceManager& rm, const renderer::Shader* shader,
             const std::string& base, const std::string& res, const std::string& ext,
@@ -66,7 +64,7 @@ namespace {
             { { halfSize, 0.0f,  halfSize}, {0.0f, 1.0f, 0.0f}, {tiles, tiles}, {1.0f, 0.0f, 0.0f} },
             { {-halfSize, 0.0f,  halfSize}, {0.0f, 1.0f, 0.0f}, {0.0f,  tiles}, {1.0f, 0.0f, 0.0f} },
         };
-        const std::vector<u32> indices = { 0, 1, 2, 2, 3, 0 };
+        const std::vector<u32> indices = { 0, 3, 2, 2, 1, 0 }; // CCW visto desde +Y: winding concuerda con la normal (0,1,0)
 
         std::vector<renderer::Mesh> meshes;
         meshes.emplace_back(vertices, indices, materialName);
@@ -190,7 +188,7 @@ int main() {
 
         if (ImGui::CollapsingHeader("Luces", ImGuiTreeNodeFlags_DefaultOpen)) {
             for (u32 i = 0; i < scene.lights().size(); ++i) {
-                ImGui::PushID(1000 + (int)i);          // rango de ids separado de los objetos
+                ImGui::PushID(1000 + (int)i);
                 char label[32];
                 std::snprintf(label, sizeof(label), "Luz %u", i);
                 if (ImGui::TreeNode(label)) {
