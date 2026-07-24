@@ -53,11 +53,14 @@ namespace application {
 
         renderer::Shader* eqCS = m_resources.GetComputeShader("equirect_to_cube",
                                      "assets/shaders/ibl/equirect_to_cube.comp");
-        if (eqCS) {
-            m_environment = renderer::Environment::Create("assets/hdr/citrus_orchard_puresky_4k.hdr", *eqCS); // TODO: serializar paths, no pueden seguir creciendo...
+        renderer::Shader* irrCS = m_resources.GetComputeShader("irradiance_convolve",
+                                     "assets/shaders/ibl/irradiance_convolve.comp");
+        if (eqCS && irrCS) {
+            m_environment = renderer::Environment::Create(
+                "assets/hdr/citrus_orchard_puresky_4k.hdr", *eqCS, *irrCS); // TODO: serializar paths, no pueden seguir creciendo...
             if (!m_environment) EF_LOG_ERROR("Application: no se pudo crear el Environment IBL");
         } else {
-            EF_LOG_ERROR("Application: no se pudo cargar el compute equirect_to_cube");
+            EF_LOG_ERROR("Application: no se pudo cargar algún compute de IBL (equirect/irradiance)");
         }
 
         EF_LOG_INFO("Application inicializada");
@@ -95,7 +98,8 @@ namespace application {
         // Al Framebuffer de escena
         m_sceneFB.Bind();
         m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
-        m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.lights(), scene.ambientFactor, scene.sun(), shadowCtx);
+        m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.lights(), scene.ambientFactor, scene.sun(), shadowCtx,
+                              m_environment ? &m_environment->irradiance() : nullptr);
 
          if (m_environment) {
             m_skyboxPass.Draw(m_environment->env(), camera.ViewMatrix(), camera.ProjectionMatrix());
