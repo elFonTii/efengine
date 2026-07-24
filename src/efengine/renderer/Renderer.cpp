@@ -4,6 +4,7 @@
 
 #include <efengine/core/Assert.h>
 #include <efengine/core/Log.h>
+#include <efengine/renderer/Texture.h>
 
 
 namespace efengine {
@@ -51,13 +52,15 @@ namespace renderer {
         glUseProgram(0);
     }
 
-    void Renderer::BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, f32 ambientFactor) {
+    void Renderer::BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, f32 ambientFactor, const DirectionalLight& sun, const ShadowContext& shadow) {
         // inicializacion simplemente
         m_view = view;
         m_projection = projection;
         m_ambient = ambientFactor;
         m_viewPos = viewPos;
         m_lights.assign(lights.begin(), lights.end());
+        m_sun = sun;
+        m_shadow = shadow;
 
         // si la cantidad de luces es mayor a las soportadas por el shader recortar
         if(m_lights.size() > kMaxLights) {
@@ -87,7 +90,21 @@ namespace renderer {
 
             shader.SetVec3(lightName.c_str(), m_lights[i].position);
             shader.SetVec3(lightColor.c_str(), m_lights[i].color);
-            
+
+        }
+
+        // Luz direccional (sol)
+        shader.SetVec3("uLightDir", m_sun.direction);
+        shader.SetVec3("uDirLightColor", m_sun.color);
+
+        // Sombra direccional (shadow map en unit 7)
+        shader.SetMat4("uLightSpaceMatrix", m_shadow.lightSpaceMatrix);
+        shader.SetInt("uShadowEnabled", m_shadow.enabled ? 1 : 0);
+        shader.SetFloat("uShadowBiasMin", m_shadow.biasMin);
+        shader.SetFloat("uShadowBiasMax", m_shadow.biasMax);
+        if (m_shadow.map != null) {
+            m_shadow.map->Bind(7);
+            shader.SetInt("uShadowMap", 7);
         }
     };
 

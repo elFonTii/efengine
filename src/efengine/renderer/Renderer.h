@@ -6,6 +6,8 @@
 #include <efengine/renderer/Material.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/PointLight.h>
+#include <efengine/renderer/DirectionalLight.h>
+#include <efengine/renderer/ShadowContext.h>
 
 #include <glm/glm.hpp>
 #include <string>
@@ -25,7 +27,7 @@ namespace renderer {
             void Draw(const Model& va, const Shader& shader) const;
             void Draw(const Model& model, const MaterialMap& materials) const;
             void Draw(const VertexArray& va, const Shader& shader) const;
-            void BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, f32 ambientFactor);
+            void BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, f32 ambientFactor, const DirectionalLight& sun, const ShadowContext& shadow);
             void Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix);
 
         private:
@@ -36,6 +38,8 @@ namespace renderer {
             glm::vec3 m_viewPos { 0.0f };
             f32 m_ambient = 0.0f;
             std::vector<PointLight> m_lights;
+            DirectionalLight m_sun { glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };
+            ShadowContext m_shadow {};
             std::unordered_set<const Shader*> m_frameShaders;
     };
 
