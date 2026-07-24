@@ -13,7 +13,9 @@ namespace renderer {
 
     std::optional<Environment> Environment::Create(const char* hdrPath,
                                                    const Shader& equirectToCube,
-                                                   u32 faceSize) {
+                                                   const Shader& irradianceConvolve,
+                                                   u32 faceSize,
+                                                   u32 irradianceSize) {
         auto hdr = Texture::CreateHDR(hdrPath);
         if (!hdr) {
             EF_LOG_ERROR("Environment::Create: no se pudo cargar el HDR '%s'", hdrPath);
@@ -33,12 +35,25 @@ namespace renderer {
 
         env.GenerateMips();
 
-        EF_LOG_INFO("Environment: IBL precomputado desde '%s' (%ux%u/cara)", hdrPath, faceSize, faceSize);
+        // --- Segunda pasada: convolución difusa del entorno a irradiancia ---
+        Cubemap irradiance = Cubemap::Create(irradianceSize, GL_RGBA16F, 1);
 
-        return Environment(std::move(env));
+        irradianceConvolve.Bind();
+        env.Bind(0);                                    // entorno como samplerCube (unit 0)
+        irradiance.BindImage(0, 0, GL_WRITE_ONLY, GL_RGBA16F);
+
+        const u32 iGroups = (irradianceSize + 7u) / 8u;
+        glDispatchCompute(iGroups, iGroups, 6);
+        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+
+        EF_LOG_INFO("Environment: IBL precomputado desde '%s' (env %ux%u, irradiancia %ux%u)",
+                    hdrPath, faceSize, faceSize, irradianceSize, irradianceSize);
+
+        return Environment(std::move(env), std::move(irradiance));
     }
 
-    Environment::Environment(Cubemap env) : m_env(std::move(env)) {}
+    Environment::Environment(Cubemap env, Cubemap irradiance)
+        : m_env(std::move(env)), m_irradiance(std::move(irradiance)) {}
 
 }
 }
