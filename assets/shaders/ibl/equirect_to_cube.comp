@@ -1,0 +1,40 @@
+#version 450 core
+// Proyecta una textura equirectangular (lat/long) a las 6 caras de un cubemap.
+// Un invocation por texel de cara; gl_GlobalInvocationID.z = índice de cara (0..5).
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(binding = 0) uniform sampler2D uEquirect;                 // fuente HDR (lat/long)
+layout(rgba16f, binding = 0) uniform writeonly imageCube uCube;  // destino (RGBA16F)
+
+const vec2 invAtan = vec2(0.1591549, 0.3183098); // (1/2π, 1/π)
+
+// Dirección de mundo para el texel (uv en [-1,1]) de la cara 'face'.
+// Inversa de la tabla de major-axis del spec GL (evita costuras entre caras).
+vec3 dirForFace(uint face, vec2 uv) {
+    vec3 d;
+    if      (face == 0u) d = vec3( 1.0, -uv.y, -uv.x); // +X
+    else if (face == 1u) d = vec3(-1.0, -uv.y,  uv.x); // -X
+    else if (face == 2u) d = vec3( uv.x,  1.0,  uv.y); // +Y
+    else if (face == 3u) d = vec3( uv.x, -1.0, -uv.y); // -Y
+    else if (face == 4u) d = vec3( uv.x, -uv.y,  1.0); // +Z
+    else                 d = vec3(-uv.x, -uv.y, -1.0); // -Z
+    return normalize(d);
+}
+
+// Dirección → UV equirectangular en [0,1].
+vec2 sampleSphericalMap(vec3 dir) {
+    vec2 uv = vec2(atan(dir.z, dir.x), asin(clamp(dir.y, -1.0, 1.0)));
+    return vec2(uv.x, -uv.y) * invAtan + 0.5;  // -uv.y: origen de textura arriba (sin flip del .hdr)
+}
+
+void main() {
+    ivec3 texel = ivec3(gl_GlobalInvocationID);   // (x, y, face)
+    ivec2 size  = imageSize(uCube);
+    if (texel.x >= size.x || texel.y >= size.y) return;  // sobrante del dispatch
+
+    vec2 uv  = (vec2(texel.xy) + 0.5) / vec2(size) * 2.0 - 1.0; // centro de texel → [-1,1]
+    vec3 dir = dirForFace(uint(texel.z), uv);
+    vec3 col = texture(uEquirect, sampleSphericalMap(dir)).rgb;
+
+    imageStore(uCube, texel, vec4(col, 1.0));
+}
