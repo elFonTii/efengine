@@ -12,6 +12,9 @@
 #include <efengine/resources/ResourceManager.h>
 #include <efengine/core/Time.h>
 #include <efengine/platform/InputCodes.h>
+#include <efengine/renderer/Environment.h>
+#include <efengine/renderer/SkyboxPass.h>
+#include <optional>
 
 namespace efengine {
 namespace scene { class Scene; class Camera; }
@@ -67,6 +70,8 @@ namespace application {
             renderer::FxaaPass m_fxaaPass;
             renderer::PostChain m_postChain;
             core::Time m_time;
+            std::optional<renderer::Environment> m_environment;
+            renderer::SkyboxPass m_skyboxPass;
 
     };
 

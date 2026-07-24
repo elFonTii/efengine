@@ -24,7 +24,9 @@ namespace application {
         , m_fxaaPass( m_renderer, m_fullscreenQuad,
                 m_resources.GetShader("fxaa", "assets/shaders/screen.vert", "assets/shaders/fxaa.frag")
          )
-        , m_postChain( m_window.GetWidth(), m_window.GetHeight()){
+        , m_postChain( m_window.GetWidth(), m_window.GetHeight())
+        , m_skyboxPass( m_renderer, m_fullscreenQuad,
+                m_resources.GetShader("skybox", "assets/shaders/skybox.vert", "assets/shaders/skybox.frag") ){
         
         const f32 quadVertices[] = {
         // pos      uv
@@ -46,6 +48,15 @@ namespace application {
         layout.Push(renderer::ShaderDataType::Float2); 
         m_fullscreenQuad.AddVertexBuffer(std::move(vbo), layout);
         m_fullscreenQuad.SetIndexBuffer(std::move(ebo));
+
+        renderer::Shader* eqCS = m_resources.GetComputeShader("equirect_to_cube",
+                                     "assets/shaders/ibl/equirect_to_cube.comp");
+        if (eqCS) {
+            m_environment = renderer::Environment::Create("assets/hdr/citrus_orchard_puresky_4k.hdr", *eqCS); // TODO: serializar paths, no pueden seguir creciendo...
+            if (!m_environment) EF_LOG_ERROR("Application: no se pudo crear el Environment IBL");
+        } else {
+            EF_LOG_ERROR("Application: no se pudo cargar el compute equirect_to_cube");
+        }
 
         EF_LOG_INFO("Application inicializada");
     }
