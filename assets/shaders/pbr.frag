@@ -12,7 +12,6 @@ uniform vec3  uLightPositions[MAX_LIGHTS];
 uniform vec3  uLightColors[MAX_LIGHTS];
 uniform int   uLightCount;
 uniform vec3  uViewPos;
-uniform float uAmbientFactor;   // factor de luz ambiente (p. ej. 0.03)
 
 // --- Luz direccional (sol) ---
 uniform vec3 uLightDir;       // dirección en la que viaja la luz
@@ -48,6 +47,9 @@ uniform int       uHasNormalMap;
 uniform sampler2D uAOMap;
 uniform int       uHasAOMap;
 uniform float     uAOStrength;   // 0 = sin AO, 1 = AO pleno
+
+// --- IBL difuso (mapa de irradiancia precomputado) ---
+uniform samplerCube uIrradianceMap;
 
 // --- Height / Displacement (Parallax Occlusion Mapping) ---
 uniform sampler2D uHeightMap;
@@ -95,6 +97,13 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
 // Fresnel-Schlick: cuánta luz se refleja según el ángulo de visión (más en rasante).
 vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+// Fresnel-Schlick con corrección por rugosidad, para la reflexión ambiente:
+// en superficies rugosas la reflectancia en rasante no debe dispararse a 1.
+vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0)
+              * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
 // Cook-Torrance para una luz: devuelve (kD*albedo/PI + specular) * NdotL.
@@ -228,9 +237,16 @@ void main() {
     // --- Ambiente + composición ---
     // El AO solo modula la luz indirecta (ambiente), no la directa.
     // uAOStrength interpola entre "sin oclusión" (1.0) y el valor del mapa.
-    float ao = (uHasAOMap == 1) ? mix(1.0, texture(uAOMap, uv).r, uAOStrength) : 1.0;
-    vec3 ambient = uAmbientFactor * albedo * ao;
-    vec3 color   = ambient + Lo;
+    // --- Ambiente por IBL difuso ---
+    // El irradiance map da la luz difusa entrante para la normal N. kD descuenta
+    // la fracción especular (Fresnel) para no duplicar energía; los metales no
+    // tienen difuso. El AO solo modula esta luz indirecta.
+    float ao  = (uHasAOMap == 1) ? mix(1.0, texture(uAOMap, uv).r, uAOStrength) : 1.0;
+    vec3  F   = FresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+    vec3  kD  = (vec3(1.0) - F) * (1.0 - metallic);
+    vec3  irr = texture(uIrradianceMap, N).rgb;
+    vec3  ambient = kD * irr * albedo * ao;
+    vec3  color   = ambient + Lo;
 
     // Radiancia lineal HDR sin tonemapear: el tone mapping + gamma ahora ocurren
     // una sola vez en el present pass (assets/shaders/tonemap.frag), Ciclo 1 HDR.
