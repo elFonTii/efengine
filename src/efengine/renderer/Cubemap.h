@@ -1,6 +1,5 @@
 #pragma once
 #include <efengine/core/Types.h>
-#include <optional>
 
 // https://learnopengl.com/Advanced-OpenGL/Cubemaps
 // una textura con mipmaps tiene que guardar la imagen a resolucion completa
