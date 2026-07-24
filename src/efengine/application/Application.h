@@ -14,6 +14,7 @@
 #include <efengine/platform/InputCodes.h>
 #include <efengine/renderer/Environment.h>
 #include <efengine/renderer/SkyboxPass.h>
+#include <efengine/renderer/ShadowPass.h>
 #include <optional>
 
 namespace efengine {
@@ -34,6 +35,7 @@ namespace application {
             application::DebugUI& GetDebugUI() { return m_debugUI; }
             renderer::BloomPass& GetBloomPass() { return m_bloomPass; }
             renderer::FxaaPass& GetFxaaPass() { return m_fxaaPass; }
+            renderer::ShadowPass& GetShadowPass() { return m_shadowPass; }
 
             // FRAME API
             bool Running() const { return !m_window.ShouldClose(); }
@@ -72,6 +74,7 @@ namespace application {
             core::Time m_time;
             std::optional<renderer::Environment> m_environment;
             renderer::SkyboxPass m_skyboxPass;
+            renderer::ShadowPass m_shadowPass;
 
     };
 

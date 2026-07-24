@@ -26,7 +26,9 @@ namespace application {
          )
         , m_postChain( m_window.GetWidth(), m_window.GetHeight())
         , m_skyboxPass( m_renderer, m_fullscreenQuad,
-                m_resources.GetShader("skybox", "assets/shaders/skybox.vert", "assets/shaders/skybox.frag") ){
+                m_resources.GetShader("skybox", "assets/shaders/skybox.vert", "assets/shaders/skybox.frag") )
+        , m_shadowPass( m_renderer,
+                m_resources.GetShader("shadow_depth", "assets/shaders/shadow_depth.vert", "assets/shaders/shadow_depth.frag") ){
         
         const f32 quadVertices[] = {
         // pos      uv
@@ -79,10 +81,21 @@ namespace application {
 
         // 2 cargas:  al FBO de la escena y Backbuffer de Window
         
-        // Al Framebuffer
+        // --- Pre-pase de sombra: profundidad de la escena desde el sol ---
+        renderer::ShadowContext shadowCtx;
+        if (m_shadowPass.settings().enabled) {
+            m_shadowPass.Render(scene, scene.sun());
+            shadowCtx.map              = &m_shadowPass.DepthTexture();
+            shadowCtx.lightSpaceMatrix = m_shadowPass.lightSpaceMatrix();
+            shadowCtx.enabled          = true;
+            shadowCtx.biasMin          = m_shadowPass.settings().biasMin;
+            shadowCtx.biasMax          = m_shadowPass.settings().biasMax;
+        }
+
+        // Al Framebuffer de escena
         m_sceneFB.Bind();
         m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
-        m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.lights(), scene.ambientFactor);
+        m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.lights(), scene.ambientFactor, scene.sun(), shadowCtx);
 
          if (m_environment) {
             m_skyboxPass.Draw(m_environment->env(), camera.ViewMatrix(), camera.ProjectionMatrix());
