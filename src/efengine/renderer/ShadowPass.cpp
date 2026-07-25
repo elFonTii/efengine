@@ -7,8 +7,7 @@
 #include <efengine/renderer/ShadowMath.h>
 #include <efengine/renderer/Model.h>
 #include <efengine/renderer/Mesh.h>
-#include <efengine/scene/Scene.h>
-#include <efengine/scene/SceneObject.h>
+#include <efengine/scene/SceneGraph.h>
 #include <efengine/core/Assert.h>
 
 namespace efengine {
