@@ -41,31 +41,6 @@
 namespace {
     using namespace efengine;
 
-    // Solo compone paths: no toca el ResourceManager, asi que no puede fallar.
-    // El def es lo que se guarda en el .efe; BuildMaterial lo convierte en runtime.
-    renderer::MaterialDef makePbrMaterialDef(
-            const std::string& name, const std::string& base,
-            const std::string& res, const std::string& ext, bool withHeight) {
-        renderer::MaterialDef def;
-        def.name       = name;
-        def.shaderName = "pbr";
-        def.vertPath   = "assets/shaders/pbr.vert";
-        def.fragPath   = "assets/shaders/pbr.frag";
-
-        auto add = [&](renderer::TextureSlot slot, const char* map, renderer::ColorSpace space) {
-            def.textures.push_back(renderer::TextureDef{
-                slot, base + map + "_" + res + ext, space });
-        };
-
-        add(renderer::TextureSlot::Albedo,    "diff",   renderer::ColorSpace::sRGB);
-        add(renderer::TextureSlot::Normal,    "nor_gl", renderer::ColorSpace::Linear);
-        add(renderer::TextureSlot::Roughness, "rough",  renderer::ColorSpace::Linear);
-        add(renderer::TextureSlot::AO,        "ao",     renderer::ColorSpace::Linear);
-        if (withHeight) add(renderer::TextureSlot::Height, "disp", renderer::ColorSpace::Linear);
-
-        return def;
-    }
-
     // Params del generador de plano. Es lo que viaja en el .efe como genPayload.
     struct PlaneParams {
         f32 halfSize = 300.0f;
@@ -78,8 +53,6 @@ namespace {
         }
     };
 
-    // El submesh se llama siempre "ground": ese nombre es la clave del binding de
-    // material en el archivo, asi que no puede variar.
     renderer::Model makePlane(f32 halfSize, f32 tiles) {
         const std::vector<renderer::Vertex> vertices = {
             // position                            normal         uv                tangent
@@ -104,8 +77,6 @@ namespace {
     }
 
     // BEHAVIORS
-    // Los tres necesitan constructor por defecto (lo exige el registry) y un Serialize
-    // miembro que describa sus campos una sola vez, para ambas direcciones.
     class RotarY : public scene::Behavior {
         public:
             RotarY() = default;
@@ -195,108 +166,30 @@ int main() {
     // Dueno de los materiales y de las mallas generadas de la escena.
     resources::SceneAssets assets;
 
-    renderer::Model* rat  = rm.GetModel("assets/models/street_rat_4k.fbx");
-    renderer::Model* lamp = rm.GetModel("assets/models/industrial_pipe_lamp_2k.fbx");
-
-    renderer::MaterialDef ratDef    = makePbrMaterialDef(
-        "street_rat", "assets/textures/street_rat/street_rat_", "4k", ".jpg", false);
-    renderer::MaterialDef groundDef = makePbrMaterialDef(
-        "ground", "assets/textures/brown_mud/brown_mud_03_", "2k", ".jpg", true);
-    renderer::MaterialDef lampDef   = makePbrMaterialDef(
-        "industrial_lamp", "assets/textures/industrial_lamp/industrial_pipe_lamp_", "2k", ".jpg", true);
-
-    // Los tweaks que antes se hacian sobre el Material ahora van en el def: son lo que
-    // se guarda en el archivo.
-    groundDef.heightScale = 0.0f;
-    lampDef.heightScale   = 0.0f;
-    lampDef.metallic      = 0.8f;
-    lampDef.roughness     = 1.0f;
-
-    auto adoptar = [&](const renderer::MaterialDef& def) -> u32 {
-        std::optional<renderer::Material> m = resources::BuildMaterial(def, rm);
-        if (!m) return resources::SceneAssets::kInvalidIndex;
-        return assets.AddMaterial(def, std::move(*m));
-    };
-
-    const u32 iRat    = adoptar(ratDef);
-    const u32 iGround = adoptar(groundDef);
-    const u32 iLamp   = adoptar(lampDef);
-
-    if (!rat || !lamp
-        || iRat    == resources::SceneAssets::kInvalidIndex
-        || iGround == resources::SceneAssets::kInvalidIndex
-        || iLamp   == resources::SceneAssets::kInvalidIndex) {
-        EF_LOG_ERROR("No se pudieron cargar los recursos");
-        return 1;
-    }
-
-    // El plano se crea por el generador, para que quede registrado con su nombre y
-    // payload y el .efe lo pueda recrear.
-    std::vector<u8> planoPayload;
-    std::unique_ptr<renderer::Model> planoModel =
-        serialization::CreateGenerated(registry.meshes, "sandbox.plane", PlaneParams{}, planoPayload);
-    if (!planoModel) {
-        EF_LOG_ERROR("No se pudo generar el plano");
-        return 1;
-    }
-    const u32 iPlano = assets.AddGenerated("sandbox.plane", planoPayload, std::move(planoModel));
-
-    renderer::MaterialMap ratMats = {
-        { "street_rat",      assets.MaterialAt(iRat) },
-        { "street_rat_hair", assets.MaterialAt(iRat) },
-    };
-
-    renderer::MaterialMap lampMats;
-    for (const renderer::Mesh& mesh : lamp->meshes()) {
-        lampMats[mesh.materialName()] = assets.MaterialAt(iLamp);
-    }
-
-    renderer::MaterialMap groundMats = {
-        { "ground", assets.MaterialAt(iGround) },
-    };
-
+    // La escena YA NO se construye en C++: vive en el archivo. Lo unico que el sandbox
+    // aporta son las definiciones de sus tipos (registry) para que Resolve las recree.
     scene::SceneGraph scene;
-    scene.ambientFactor = 0.08f;
 
-    math::Transform ratTransform;
-    ratTransform.scale = glm::vec3(10.0f);
-    const scene::NodeHandle ratHandle = scene.CreateNode("model_rata");
-    scene.AttachMesh(ratHandle, { rat, ratMats });
-    scene.SetLocalTransform(ratHandle, ratTransform);
+    if (!serialization::SceneSerializer::Load("assets/scenes/sandbox.efe",
+                                              scene, assets, rm, registry)) {
+        EF_LOG_ERROR("No se pudo cargar assets/scenes/sandbox.efe");
+        return 1;
+    }
 
-    const scene::NodeHandle groundNode = scene.CreateNode("plano");
-    scene.AttachMesh(groundNode, { assets.GeneratedAt(iPlano), groundMats });
+    // Los handles ahora se resuelven por nombre una vez.
+    scene::NodeHandle ratHandle  = scene.FindByName("model_rata");
+    scene::NodeHandle orbitLight = scene.FindByName("luz_animada");
+    scene::NodeHandle sunNode    = scene.FindByName("directional_light");
 
-    math::Transform lampTransform;
-    lampTransform.position = glm::vec3(30.0f, 0.0f, 0.0f);
-    const scene::NodeHandle lampNode = scene.CreateNode("model_lampara");
-    scene.AttachMesh(lampNode, { lamp, lampMats });
-    scene.SetLocalTransform(lampNode, lampTransform);
-
-    auto makePointLight = [&](const char* name, glm::vec3 pos, glm::vec3 color) {
-        scene::NodeHandle n = scene.CreateNode(name);
-        math::Transform t; t.position = pos;
-        scene.SetLocalTransform(n, t);
-        scene.AttachLight(n, { scene::LightKind::Point, color });
-        return n;
+    auto algunBehaviorActivo = [&](scene::NodeHandle h) {
+        if (!scene.IsValid(h)) return false;
+        for (const std::unique_ptr<scene::Behavior>& b : scene.Get(h).behaviors) {
+            if (b && b->enabled) return true;
+        }
+        return false;
     };
-    const scene::NodeHandle orbitLight = makePointLight("luz_animada", glm::vec3(50.0f, 80.0f, 0.0f), glm::vec3(5000.0f));
-    makePointLight("luz_2", glm::vec3(-50.0f, 80.0f, 0.0f), glm::vec3(5000.0f));
-    makePointLight("luz_3", glm::vec3(  0.0f, 90.0f, 0.0f), glm::vec3(5000.0f));
-
-
-    const scene::NodeHandle sunNode = scene.CreateNode("directional_light");
-    math::Transform sunT; sunT.rotation = glm::vec3(-70.15f, 56.3f, 0.0f);
-    scene.SetLocalTransform(sunNode, sunT);
-    scene.AttachLight(sunNode, { scene::LightKind::Directional, glm::vec3(3.0f) });
-    scene.SetPrimarySun(sunNode);
-
-    bool animate = true;
-    bool animateSun = false;
-
-    scene.AttachBehavior(ratHandle,  std::make_unique<RotarY>(20.0f))->enabled = animate;
-    scene.AttachBehavior(orbitLight, std::make_unique<OrbitarXZ>(glm::vec3(0.0f, 80.0f, 0.0f), 50.0f, 1.0f))->enabled = animate;
-    scene.AttachBehavior(sunNode,    std::make_unique<RotarSolY>(30.0f))->enabled = animateSun;
+    bool animate    = algunBehaviorActivo(ratHandle);
+    bool animateSun = algunBehaviorActivo(sunNode);
 
     // Prende/apaga todos los behaviors de node
     auto setEnabled = [&](scene::NodeHandle h, bool on) {
@@ -326,6 +219,19 @@ int main() {
         if (ImGui::Button("Guardar escena")) {
             serialization::SceneSerializer::Save("assets/scenes/sandbox.efe",
                                                  scene, assets, rm, registry);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cargar escena")) {
+            // Load ya hace Clear() de grafo y assets: no hay que limpiar a mano.
+            if (serialization::SceneSerializer::Load("assets/scenes/sandbox.efe",
+                                                     scene, assets, rm, registry)) {
+                selected   = scene::NodeHandle{};   // el handle viejo quedo invalido
+                ratHandle  = scene.FindByName("model_rata");
+                orbitLight = scene.FindByName("luz_animada");
+                sunNode    = scene.FindByName("directional_light");
+                animate    = algunBehaviorActivo(ratHandle);
+                animateSun = algunBehaviorActivo(sunNode);
+            }
         }
         ImGui::Separator();
         if (ImGui::Checkbox("Animate", &animate)) {
