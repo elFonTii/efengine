@@ -8,8 +8,8 @@
 #include <efengine/renderer/DirectionalLight.h>
 #include <efengine/scene/Camera.h>
 #include <efengine/scene/CameraController.h>
-#include <efengine/scene/Scene.h>
-#include <efengine/scene/SceneObject.h>
+#include <efengine/scene/SceneGraph.h>
+#include <efengine/scene/Node.h>
 #include <efengine/math/Transform.h>
 #include <efengine/core/Types.h>
 #include <efengine/core/Log.h>
@@ -118,25 +118,41 @@ int main() {
         { "ground", &groundMat },
     };
 
-    scene::Scene scene;
+    scene::SceneGraph scene;
     scene.ambientFactor = 0.08f;
 
     math::Transform ratTransform;
     ratTransform.scale = glm::vec3(10.0f);
-    const u32 ratHandle = scene.Add({ rat, ratMats, ratTransform });
+    const scene::NodeHandle ratHandle = scene.CreateNode("model_rata");
+    scene.AttachMesh(ratHandle, { rat, ratMats });
+    scene.SetLocalTransform(ratHandle, ratTransform);
 
-    scene.Add({ &groundModel, groundMats });
+    const scene::NodeHandle groundNode = scene.CreateNode("plano");
+    scene.AttachMesh(groundNode, { &groundModel, groundMats });
 
     math::Transform lampTransform;
     lampTransform.position = glm::vec3(30.0f, 0.0f, 0.0f);
-    lampTransform.scale    = glm::vec3(1.0f);
-    scene.Add({ lamp, lampMats, lampTransform });
+    const scene::NodeHandle lampNode = scene.CreateNode("model_lampara");
+    scene.AttachMesh(lampNode, { lamp, lampMats });
+    scene.SetLocalTransform(lampNode, lampTransform);
 
-    const u32 sun = scene.AddLight({ glm::vec3( 50.0f, 80.0f, 0.0f), glm::vec3(5000.0f) });
-    scene.AddLight({ glm::vec3(-50.0f, 80.0f, 0.0f), glm::vec3(5000.0f) });
-    scene.AddLight({ glm::vec3(  0.0f, 90.0f, 0.0f), glm::vec3(5000.0f) });
+    auto makePointLight = [&](const char* name, glm::vec3 pos, glm::vec3 color) {
+        scene::NodeHandle n = scene.CreateNode(name);
+        math::Transform t; t.position = pos;
+        scene.SetLocalTransform(n, t);
+        scene.AttachLight(n, { scene::LightKind::Point, color });
+        return n;
+    };
+    const scene::NodeHandle orbitLight = makePointLight("luz_animada", glm::vec3(50.0f, 80.0f, 0.0f), glm::vec3(5000.0f));
+    makePointLight("luz_2", glm::vec3(-50.0f, 80.0f, 0.0f), glm::vec3(5000.0f));
+    makePointLight("luz_3", glm::vec3(  0.0f, 90.0f, 0.0f), glm::vec3(5000.0f));
 
-    scene.SetSun({ glm::normalize(glm::vec3(-0.3f, -1.0f, -0.2f)), glm::vec3(3.0f) });
+
+    const scene::NodeHandle sunNode = scene.CreateNode("directional_light");
+    math::Transform sunT; sunT.rotation = glm::vec3(-70.15f, 56.3f, 0.0f);
+    scene.SetLocalTransform(sunNode, sunT);
+    scene.AttachLight(sunNode, { scene::LightKind::Directional, glm::vec3(3.0f) });
+    scene.SetPrimarySun(sunNode);
 
     scene::Camera cam;
     cam.SetAspect(app.GetWindow().GetAspectRatio());
@@ -170,16 +186,21 @@ int main() {
             ImGui::Checkbox("Enabled", &fx.enabled);
         }
 
+        // Copia de los handles: editar un transform muta el grafo mientras iteramos.
+        const std::vector<scene::NodeHandle> kids = scene.Get(scene.Root()).children;
+
         if (ImGui::CollapsingHeader("Objetos", ImGuiTreeNodeFlags_DefaultOpen)) {
-            for (u32 i = 0; i < scene.objects().size(); ++i) {
-                ImGui::PushID((int)i);                 // ids únicos por objeto
-                char label[32];
-                std::snprintf(label, sizeof(label), "Objeto %u", i);
-                if (ImGui::TreeNode(label)) {
-                    math::Transform& t = scene.Get(i).transform;
-                    ImGui::DragFloat3("Posicion", glm::value_ptr(t.position), 0.1f);
-                    ImGui::DragFloat3("Rotacion", glm::value_ptr(t.rotation), 0.5f);   // grados
-                    ImGui::DragFloat3("Escala",   glm::value_ptr(t.scale),    0.05f);
+            for (u32 i = 0; i < kids.size(); ++i) {
+                scene::Node& node = scene.Get(kids[i]);
+                if (!node.mesh) continue;
+                ImGui::PushID((int)i);                 // ids únicos por nodo
+                if (ImGui::TreeNode(node.name.c_str())) {
+                    math::Transform t = node.local;
+                    bool changed = false;
+                    changed |= ImGui::DragFloat3("Posicion", glm::value_ptr(t.position), 0.1f);
+                    changed |= ImGui::DragFloat3("Rotacion", glm::value_ptr(t.rotation), 0.5f);   // grados
+                    changed |= ImGui::DragFloat3("Escala",   glm::value_ptr(t.scale),    0.05f);
+                    if (changed) scene.SetLocalTransform(kids[i], t);   // marca el subarbol dirty
                     ImGui::TreePop();
                 }
                 ImGui::PopID();
@@ -187,14 +208,15 @@ int main() {
         }
 
         if (ImGui::CollapsingHeader("Luces", ImGuiTreeNodeFlags_DefaultOpen)) {
-            for (u32 i = 0; i < scene.lights().size(); ++i) {
+            for (u32 i = 0; i < kids.size(); ++i) {
+                scene::Node& node = scene.Get(kids[i]);
+                if (!node.light || node.light->kind != scene::LightKind::Point) continue;
                 ImGui::PushID(1000 + (int)i);
-                char label[32];
-                std::snprintf(label, sizeof(label), "Luz %u", i);
-                if (ImGui::TreeNode(label)) {
-                    renderer::PointLight& l = scene.GetLight(i);
-                    ImGui::DragFloat3("Posicion",  glm::value_ptr(l.position), 0.5f);
-                    ImGui::DragFloat3("Color/Int", glm::value_ptr(l.color),   10.0f, 0.0f, 20000.0f);
+                if (ImGui::TreeNode(node.name.c_str())) {
+                    math::Transform t = node.local;
+                    if (ImGui::DragFloat3("Posicion", glm::value_ptr(t.position), 0.5f))
+                        scene.SetLocalTransform(kids[i], t);
+                    ImGui::DragFloat3("Color/Int", glm::value_ptr(node.light->color), 10.0f, 0.0f, 20000.0f);
                     ImGui::TreePop();
                 }
                 ImGui::PopID();
@@ -202,9 +224,13 @@ int main() {
         }
 
         if (ImGui::CollapsingHeader("Sol / Sombras", ImGuiTreeNodeFlags_DefaultOpen)) {
-            renderer::DirectionalLight& sunLight = scene.sun();
-            ImGui::DragFloat3("Direccion Sol", glm::value_ptr(sunLight.direction), 0.01f, -1.0f, 1.0f);
-            ImGui::DragFloat3("Color/Int Sol", glm::value_ptr(sunLight.color),     0.05f,  0.0f, 20.0f);
+            // El sol se orienta rotando su nodo; la direccion se deriva en el gather.
+            scene::Node& sunNodeRef = scene.Get(sunNode);
+            math::Transform st = sunNodeRef.local;
+            if (ImGui::DragFloat3("Rotacion Sol", glm::value_ptr(st.rotation), 0.5f))
+                scene.SetLocalTransform(sunNode, st);
+            if (sunNodeRef.light)
+                ImGui::DragFloat3("Color/Int Sol", glm::value_ptr(sunNodeRef.light->color), 0.05f, 0.0f, 20.0f);
 
             renderer::ShadowSettings& sh = app.GetShadowPass().settings();
             ImGui::Checkbox   ("Sombras",        &sh.enabled);
@@ -221,13 +247,20 @@ int main() {
 
         if (animate) {
             const f32 elapsed = static_cast<f32>(app.Elapsed());
-            scene.GetLight(sun).position = glm::vec3(50.0f * std::cos(elapsed), 80.0f, 50.0f * std::sin(elapsed));
-            scene.Get(ratHandle).transform.rotation.y += app.DeltaTime() * 20.0f; // 20 grados/seg
+            math::Transform lt = scene.Get(orbitLight).local;
+            lt.position = glm::vec3(50.0f * std::cos(elapsed), 80.0f, 50.0f * std::sin(elapsed));
+            scene.SetLocalTransform(orbitLight, lt);
+
+            math::Transform rt = scene.Get(ratHandle).local;
+            rt.rotation.y += app.DeltaTime() * 20.0f; // 20 grados/seg
+            scene.SetLocalTransform(ratHandle, rt);
         }
 
         if (animateSun) {
             const f32 t = static_cast<f32>(app.Elapsed());
-            scene.sun().direction = glm::normalize(glm::vec3(std::cos(t) * 0.5f, -1.0f, std::sin(t) * 0.5f));
+            math::Transform st = scene.Get(sunNode).local;
+            st.rotation.y = t * 30.0f;   // gira el sol en Y
+            scene.SetLocalTransform(sunNode, st);
         }
 
         app.RenderScene(scene, cam);
