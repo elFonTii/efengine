@@ -6,6 +6,12 @@
 #include <efengine/renderer/Texture.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/DirectionalLight.h>
+#include <efengine/renderer/MaterialDef.h>
+#include <efengine/resources/MaterialBuilder.h>
+#include <efengine/resources/SceneAssets.h>
+#include <efengine/serialization/SceneSerializer.h>
+#include <efengine/serialization/SceneRegistry.h>
+#include <efengine/serialization/BinaryReader.h>
 #include <efengine/scene/Camera.h>
 #include <efengine/scene/CameraController.h>
 #include <efengine/scene/SceneGraph.h>
@@ -35,34 +41,46 @@
 namespace {
     using namespace efengine;
 
-    std::optional<renderer::Material> makePbrMaterial(
-            resources::ResourceManager& rm, const renderer::Shader* shader,
-            const std::string& base, const std::string& res, const std::string& ext,
-            bool withHeight) {
-        auto tex = [&](const char* map, renderer::ColorSpace space) {
-            return rm.GetTexture((base + map + "_" + res + ext).c_str(), space);
+    // Solo compone paths: no toca el ResourceManager, asi que no puede fallar.
+    // El def es lo que se guarda en el .efe; BuildMaterial lo convierte en runtime.
+    renderer::MaterialDef makePbrMaterialDef(
+            const std::string& name, const std::string& base,
+            const std::string& res, const std::string& ext, bool withHeight) {
+        renderer::MaterialDef def;
+        def.name       = name;
+        def.shaderName = "pbr";
+        def.vertPath   = "assets/shaders/pbr.vert";
+        def.fragPath   = "assets/shaders/pbr.frag";
+
+        auto add = [&](renderer::TextureSlot slot, const char* map, renderer::ColorSpace space) {
+            def.textures.push_back(renderer::TextureDef{
+                slot, base + map + "_" + res + ext, space });
         };
 
-        renderer::Texture* albedo = tex("diff",   renderer::ColorSpace::sRGB);
-        renderer::Texture* normal = tex("nor_gl", renderer::ColorSpace::Linear);
-        renderer::Texture* rough  = tex("rough",  renderer::ColorSpace::Linear);
-        renderer::Texture* ao     = tex("ao",     renderer::ColorSpace::Linear);
-        renderer::Texture* height = withHeight ? tex("disp", renderer::ColorSpace::Linear) : null;
+        add(renderer::TextureSlot::Albedo,    "diff",   renderer::ColorSpace::sRGB);
+        add(renderer::TextureSlot::Normal,    "nor_gl", renderer::ColorSpace::Linear);
+        add(renderer::TextureSlot::Roughness, "rough",  renderer::ColorSpace::Linear);
+        add(renderer::TextureSlot::AO,        "ao",     renderer::ColorSpace::Linear);
+        if (withHeight) add(renderer::TextureSlot::Height, "disp", renderer::ColorSpace::Linear);
 
-        if (!albedo || !normal || !rough || !ao || (withHeight && !height)) {
-            return std::nullopt;
-        }
-
-        renderer::Material mat(shader);
-        mat.SetAlbedoMap(albedo);
-        mat.SetNormalMap(normal);
-        mat.SetRoughnessMap(rough);
-        mat.SetAOMap(ao);
-        if (height) mat.SetHeightMap(height);
-        return mat;
+        return def;
     }
 
-    renderer::Model makePlane(const std::string& materialName, f32 halfSize, f32 tiles) {
+    // Params del generador de plano. Es lo que viaja en el .efe como genPayload.
+    struct PlaneParams {
+        f32 halfSize = 300.0f;
+        f32 tiles    = 24.0f;
+
+        template <class Ar>
+        void Serialize(Ar& ar) {
+            ar.Field(halfSize);
+            ar.Field(tiles);
+        }
+    };
+
+    // El submesh se llama siempre "ground": ese nombre es la clave del binding de
+    // material en el archivo, asi que no puede variar.
+    renderer::Model makePlane(f32 halfSize, f32 tiles) {
         const std::vector<renderer::Vertex> vertices = {
             // position                            normal         uv                tangent
             { {-halfSize, 0.0f, -halfSize}, {0.0f, 1.0f, 0.0f}, {0.0f,  0.0f},  {1.0f, 0.0f, 0.0f} },
@@ -73,52 +91,88 @@ namespace {
         const std::vector<u32> indices = { 0, 3, 2, 2, 1, 0 }; // CCW visto desde +Y: winding concuerda con la normal (0,1,0)
 
         std::vector<renderer::Mesh> meshes;
-        meshes.emplace_back(vertices, indices, materialName);
+        meshes.emplace_back(vertices, indices, "ground");
         return renderer::Model(std::move(meshes));
     }
 
-    // BEHAVIORS 
+    // Generador registrable: lee sus params del payload y devuelve el modelo.
+    std::unique_ptr<renderer::Model> generarPlano(serialization::BinaryReader& r) {
+        PlaneParams p;
+        p.Serialize(r);
+        if (!r.Ok()) return nullptr;
+        return std::make_unique<renderer::Model>(makePlane(p.halfSize, p.tiles));
+    }
+
+    // BEHAVIORS
+    // Los tres necesitan constructor por defecto (lo exige el registry) y un Serialize
+    // miembro que describa sus campos una sola vez, para ambas direcciones.
     class RotarY : public scene::Behavior {
         public:
+            RotarY() = default;
             explicit RotarY(f32 degPerSec) : m_degPerSec(degPerSec) {}
+
             void OnUpdate(scene::UpdateContext& ctx) override {
                 math::Transform t = ctx.node.local;
                 t.rotation.y += ctx.dt * m_degPerSec;
                 ctx.SetLocal(t);
             }
+
+            template <class Ar>
+            void Serialize(Ar& ar) { ar.Field(m_degPerSec); }
+
         private:
-            f32 m_degPerSec;
+            f32 m_degPerSec = 0.0f;
     };
 
     class OrbitarXZ : public scene::Behavior {
         public:
+            OrbitarXZ() = default;
             OrbitarXZ(glm::vec3 center, f32 radius, f32 speed)
                 : m_center(center), m_radius(radius), m_speed(speed) {}
+
             void OnUpdate(scene::UpdateContext& ctx) override {
                 m_angle += ctx.dt * m_speed;
                 math::Transform t = ctx.node.local;
                 t.position = m_center + m_radius * glm::vec3(std::cos(m_angle), 0.0f, std::sin(m_angle));
                 ctx.SetLocal(t);
             }
+
+            template <class Ar>
+            void Serialize(Ar& ar) {
+                ar.Field(m_center);
+                ar.Field(m_radius);
+                ar.Field(m_speed);
+                ar.Field(m_angle);   // se guarda: la orbita reanuda donde estaba
+            }
+
         private:
-            glm::vec3 m_center;
-            f32 m_radius;
-            f32 m_speed;
-            f32 m_angle = 0.0f;
+            glm::vec3 m_center { 0.0f };
+            f32 m_radius = 0.0f;
+            f32 m_speed  = 0.0f;
+            f32 m_angle  = 0.0f;
     };
 
     class RotarSolY : public scene::Behavior {
         public:
+            RotarSolY() = default;
             explicit RotarSolY(f32 degPerSec) : m_degPerSec(degPerSec) {}
+
             void OnUpdate(scene::UpdateContext& ctx) override {
                 m_angle += ctx.dt * m_degPerSec;
                 math::Transform t = ctx.node.local;
                 t.rotation.y = m_angle;
                 ctx.SetLocal(t);
             }
+
+            template <class Ar>
+            void Serialize(Ar& ar) {
+                ar.Field(m_degPerSec);
+                ar.Field(m_angle);
+            }
+
         private:
-            f32 m_degPerSec;
-            f32 m_angle = 0.0f;
+            f32 m_degPerSec = 0.0f;
+            f32 m_angle     = 0.0f;
     };
 }
 
@@ -131,41 +185,74 @@ int main() {
     app.SetClearColor(0.18f, 0.18f, 0.18f);
     resources::ResourceManager& rm = app.GetResources();
 
-    renderer::Shader* pbr  = rm.GetShader("pbr", "assets/shaders/pbr.vert", "assets/shaders/pbr.frag");
-    renderer::Model*  rat  = rm.GetModel("assets/models/street_rat_4k.fbx");
-    renderer::Model*  lamp = rm.GetModel("assets/models/industrial_pipe_lamp_2k.fbx");
+    // Lo que el serializador tiene que saber de los tipos del sandbox.
+    serialization::SceneRegistry registry;
+    registry.behaviors.Register<RotarY>("RotarY");
+    registry.behaviors.Register<OrbitarXZ>("OrbitarXZ");
+    registry.behaviors.Register<RotarSolY>("RotarSolY");
+    registry.meshes.Register("sandbox.plane", &generarPlano);
 
-    auto streetRatMatOpt = makePbrMaterial(rm, pbr, "assets/textures/street_rat/street_rat_", "4k", ".jpg", false);
-    auto groundMatOpt    = makePbrMaterial(rm, pbr, "assets/textures/brown_mud/brown_mud_03_", "2k", ".jpg", true);
-    auto lampMatOpt      = makePbrMaterial(rm, pbr, "assets/textures/industrial_lamp/industrial_pipe_lamp_", "2k", ".jpg", true);
+    // Dueno de los materiales y de las mallas generadas de la escena.
+    resources::SceneAssets assets;
 
-    if (!pbr || !rat || !lamp || !streetRatMatOpt || !groundMatOpt || !lampMatOpt) {
+    renderer::Model* rat  = rm.GetModel("assets/models/street_rat_4k.fbx");
+    renderer::Model* lamp = rm.GetModel("assets/models/industrial_pipe_lamp_2k.fbx");
+
+    renderer::MaterialDef ratDef    = makePbrMaterialDef(
+        "street_rat", "assets/textures/street_rat/street_rat_", "4k", ".jpg", false);
+    renderer::MaterialDef groundDef = makePbrMaterialDef(
+        "ground", "assets/textures/brown_mud/brown_mud_03_", "2k", ".jpg", true);
+    renderer::MaterialDef lampDef   = makePbrMaterialDef(
+        "industrial_lamp", "assets/textures/industrial_lamp/industrial_pipe_lamp_", "2k", ".jpg", true);
+
+    // Los tweaks que antes se hacian sobre el Material ahora van en el def: son lo que
+    // se guarda en el archivo.
+    groundDef.heightScale = 0.0f;
+    lampDef.heightScale   = 0.0f;
+    lampDef.metallic      = 0.8f;
+    lampDef.roughness     = 1.0f;
+
+    auto adoptar = [&](const renderer::MaterialDef& def) -> u32 {
+        std::optional<renderer::Material> m = resources::BuildMaterial(def, rm);
+        if (!m) return resources::SceneAssets::kInvalidIndex;
+        return assets.AddMaterial(def, std::move(*m));
+    };
+
+    const u32 iRat    = adoptar(ratDef);
+    const u32 iGround = adoptar(groundDef);
+    const u32 iLamp   = adoptar(lampDef);
+
+    if (!rat || !lamp
+        || iRat    == resources::SceneAssets::kInvalidIndex
+        || iGround == resources::SceneAssets::kInvalidIndex
+        || iLamp   == resources::SceneAssets::kInvalidIndex) {
         EF_LOG_ERROR("No se pudieron cargar los recursos");
         return 1;
     }
 
-    renderer::Material streetRatMat = std::move(*streetRatMatOpt);
-    renderer::Material groundMat    = std::move(*groundMatOpt);
-    renderer::Material lampMat      = std::move(*lampMatOpt);
-    groundMat.heightScale = 0.0f;
-
-    lampMat.heightScale   = 0.0f;
-    lampMat.metallic   = 0.8f;
-    lampMat.roughness = 1.0f;
+    // El plano se crea por el generador, para que quede registrado con su nombre y
+    // payload y el .efe lo pueda recrear.
+    std::vector<u8> planoPayload;
+    std::unique_ptr<renderer::Model> planoModel =
+        serialization::CreateGenerated(registry.meshes, "sandbox.plane", PlaneParams{}, planoPayload);
+    if (!planoModel) {
+        EF_LOG_ERROR("No se pudo generar el plano");
+        return 1;
+    }
+    const u32 iPlano = assets.AddGenerated("sandbox.plane", planoPayload, std::move(planoModel));
 
     renderer::MaterialMap ratMats = {
-        { "street_rat",      &streetRatMat },
-        { "street_rat_hair", &streetRatMat },
+        { "street_rat",      assets.MaterialAt(iRat) },
+        { "street_rat_hair", assets.MaterialAt(iRat) },
     };
 
     renderer::MaterialMap lampMats;
     for (const renderer::Mesh& mesh : lamp->meshes()) {
-        lampMats[mesh.materialName()] = &lampMat;
+        lampMats[mesh.materialName()] = assets.MaterialAt(iLamp);
     }
 
-    renderer::Model groundModel = makePlane("ground", 300.0f, 24.0f);
     renderer::MaterialMap groundMats = {
-        { "ground", &groundMat },
+        { "ground", assets.MaterialAt(iGround) },
     };
 
     scene::SceneGraph scene;
@@ -178,7 +265,7 @@ int main() {
     scene.SetLocalTransform(ratHandle, ratTransform);
 
     const scene::NodeHandle groundNode = scene.CreateNode("plano");
-    scene.AttachMesh(groundNode, { &groundModel, groundMats });
+    scene.AttachMesh(groundNode, { assets.GeneratedAt(iPlano), groundMats });
 
     math::Transform lampTransform;
     lampTransform.position = glm::vec3(30.0f, 0.0f, 0.0f);
@@ -236,6 +323,11 @@ int main() {
         ImGui::Begin("Escena");
         // Atajos globales: solo empujan al cambiar (no cada frame), asi el toggle
         // individual de cada behavior en el inspector no se pierde.
+        if (ImGui::Button("Guardar escena")) {
+            serialization::SceneSerializer::Save("assets/scenes/sandbox.efe",
+                                                 scene, assets, rm, registry);
+        }
+        ImGui::Separator();
         if (ImGui::Checkbox("Animate", &animate)) {
             setEnabled(ratHandle,  animate);
             setEnabled(orbitLight, animate);
