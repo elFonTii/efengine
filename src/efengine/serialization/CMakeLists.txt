@@ -1,5 +1,5 @@
 add_library(efengine_serialization OBJECT)
-target_sources(efengine_serialization PRIVATE BinaryWriter.cpp BinaryReader.cpp StringTable.cpp EfeFile.cpp SceneDocument.cpp BehaviorRegistry.cpp MeshGeneratorRegistry.cpp)
+target_sources(efengine_serialization PRIVATE BinaryWriter.cpp BinaryReader.cpp StringTable.cpp EfeFile.cpp SceneDocument.cpp BehaviorRegistry.cpp MeshGeneratorRegistry.cpp SceneSerializer.cpp)
 target_include_directories(efengine_serialization PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(efengine_serialization PUBLIC
     efengine_core
