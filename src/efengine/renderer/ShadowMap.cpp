@@ -1,6 +1,6 @@
 #include "efengine/renderer/ShadowMap.h"
 
-#include <glad/gl.h>
+#include <efecom/RHI.h>
 #include <utility>
 
 #include <efengine/core/Assert.h>
@@ -11,22 +11,19 @@ namespace renderer {
     ShadowMap::ShadowMap(u32 resolution)
         : m_depth(Texture::CreateDepthAttachment(resolution, resolution))
         , m_resolution(resolution) {
-        glGenFramebuffers(1, &m_id);
+        m_id = efecom::CreateFramebuffer();
         EF_ASSERT(m_id != 0, "ShadowMap::ShadowMap: No hay contexto GL");
 
-        glBindFramebuffer(GL_FRAMEBUFFER, m_id);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_depth.id(), 0);
+        efecom::FramebufferDepthTexture(m_id, m_depth.id());
         // Sin color attachment: no dibujamos ni leemos color.
-        glDrawBuffer(GL_NONE);
-        glReadBuffer(GL_NONE);
+        efecom::FramebufferDisableColor(m_id);
 
-        EF_ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE,
+        EF_ASSERT(efecom::FramebufferComplete(m_id),
                   "ShadowMap: framebuffer incompleto");
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
     ShadowMap::~ShadowMap() {
-        if (m_id != 0) glDeleteFramebuffers(1, &m_id);
+        if (m_id != 0) efecom::DestroyFramebuffer(m_id);
     }
 
     ShadowMap::ShadowMap(ShadowMap&& other) noexcept
@@ -36,7 +33,7 @@ namespace renderer {
 
     ShadowMap& ShadowMap::operator=(ShadowMap&& other) noexcept {
         if (this != &other) {
-            if (m_id != 0) glDeleteFramebuffers(1, &m_id);
+            if (m_id != 0) efecom::DestroyFramebuffer(m_id);
             m_id         = std::exchange(other.m_id, 0);
             m_depth      = std::move(other.m_depth);
             m_resolution = std::exchange(other.m_resolution, 0);
@@ -45,12 +42,12 @@ namespace renderer {
     }
 
     void ShadowMap::Bind() const {
-        glBindFramebuffer(GL_FRAMEBUFFER, m_id);
-        glViewport(0, 0, (GLsizei)m_resolution, (GLsizei)m_resolution);
+        efecom::BindFramebuffer(m_id);
+        efecom::SetViewport(0, 0, m_resolution, m_resolution);
     }
 
     void ShadowMap::Unbind() const {
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        efecom::BindFramebuffer(0);
     }
 
 }

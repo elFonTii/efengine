@@ -7,7 +7,7 @@ namespace renderer {
 
     // Posee un EBO de OpenGL. Handle-owner RO5:
     // adquiere el EBO en el ctor, lo libera en el dtor; no-copiable, movible.
-    // Los índices son u32 (GL_UNSIGNED_INT).
+    // Los índices son u32.
     class IndexBuffer {
         public:
             IndexBuffer(const u32* indices, u32 count);  // crea el EBO y sube los datos

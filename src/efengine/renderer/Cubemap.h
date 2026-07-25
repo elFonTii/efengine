@@ -1,5 +1,6 @@
 #pragma once
 #include <efengine/core/Types.h>
+#include <efecom/RHI.h>
 
 // https://learnopengl.com/Advanced-OpenGL/Cubemaps
 // una textura con mipmaps tiene que guardar la imagen a resolucion completa
@@ -12,7 +13,7 @@ namespace renderer {
 
     inline u32 mipLevels(u32 size) {
         if(size <= 1) return 1;
-        
+
         u32 count = 1;
         while (size > 1) { size >>= 1; ++count; }
         return count;
@@ -20,7 +21,7 @@ namespace renderer {
 
     class Cubemap {
         public:
-            static Cubemap Create(u32 size, u32 internalFormat, u32 mipCount);
+            static Cubemap Create(u32 size, efecom::TextureFormat format, u32 mipCount);
             ~Cubemap();
 
             Cubemap(const Cubemap&)             = delete;
@@ -29,10 +30,10 @@ namespace renderer {
             Cubemap& operator=(Cubemap&& other) noexcept;
 
             void Bind(u32 unit = 0) const;
-            void BindImage(u32 unit, u32 level, u32 access, u32 format) const;
+            void BindImage(u32 unit, u32 level, efecom::ImageAccess access, efecom::TextureFormat format) const;
             void GenerateMips() const;
 
-        
+
             u32 id() const { return m_id; }
             u32 size() const { return m_size; }
 

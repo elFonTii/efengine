@@ -2,34 +2,29 @@
 #include <efengine/core/Assert.h>
 #include <efengine/core/Types.h>
 
-#include <glad/gl.h>
+#include <efecom/RHI.h>
 #include <utility>
 
 namespace efengine {
 namespace renderer {
 
     Framebuffer::Framebuffer(u32 width, u32 height) : m_color(Texture::CreateColorAttachment(width, height)), m_width(width), m_height(height) {
-        // secuencia de fbo:  -1 pedir id -2 activarlo -3 enganchar color 4- enganchar depthbuffer -5 desactivar
-        
-        glGenFramebuffers(1, &m_id); // -1
+        // secuencia de fbo:  -1 pedir id -2 enganchar color -3 enganchar depthbuffer -4 verificar completo
+
+        m_id = efecom::CreateFramebuffer(); // -1
         EF_ASSERT(m_id != 0, "Framebuffer::Framebuffer: No hay contexto GL");
 
-        glBindFramebuffer(GL_FRAMEBUFFER, m_id); // -2
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_color.id(), 0); // -3
+        efecom::FramebufferColorTexture(m_id, m_color.id()); // -2
 
-        glGenRenderbuffers(1, &m_depthRbo);
-        glBindRenderbuffer(GL_RENDERBUFFER, m_depthRbo);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, (GLsizei)width, (GLsizei)height); // reserva buffer 24bits
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_depthRbo);  // -4
+        m_depthRbo = efecom::CreateDepthRenderbuffer(width, height); // reserva buffer 24bits
+        efecom::FramebufferDepthRenderbuffer(m_id, m_depthRbo); // -3
 
-        EF_ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE, "Framebuffer incompleto");
-
-        glBindFramebuffer(GL_FRAMEBUFFER, 0); // -5
+        EF_ASSERT(efecom::FramebufferComplete(m_id), "Framebuffer incompleto"); // -4
     }
 
     Framebuffer::~Framebuffer() {
-        if (m_depthRbo != 0) glDeleteRenderbuffers(1, &m_depthRbo);
-        if (m_id != 0)       glDeleteFramebuffers(1, &m_id);
+        if (m_depthRbo != 0) efecom::DestroyRenderbuffer(m_depthRbo);
+        if (m_id != 0)       efecom::DestroyFramebuffer(m_id);
     }
 
     Framebuffer::Framebuffer(Framebuffer&& other) noexcept
@@ -41,8 +36,8 @@ namespace renderer {
 
     Framebuffer& Framebuffer::operator=(Framebuffer&& other) noexcept {
         if(this != &other) {
-            if (m_depthRbo != 0) glDeleteRenderbuffers(1, &m_depthRbo);
-            if (m_id != 0)       glDeleteFramebuffers(1, &m_id);
+            if (m_depthRbo != 0) efecom::DestroyRenderbuffer(m_depthRbo);
+            if (m_id != 0)       efecom::DestroyFramebuffer(m_id);
 
             m_id = std::exchange(other.m_id, 0);
             m_depthRbo = std::exchange(other.m_depthRbo, 0);
@@ -54,12 +49,12 @@ namespace renderer {
     }
 
     void Framebuffer::Bind() const {
-        glBindFramebuffer(GL_FRAMEBUFFER,  m_id);
-        glViewport(0, 0, (GLsizei)m_width, (GLsizei)m_height);
+        efecom::BindFramebuffer(m_id);
+        efecom::SetViewport(0, 0, m_width, m_height);
     }
 
     void Framebuffer::Unbind() const {
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        efecom::BindFramebuffer(0);
     }
 
     const Texture& Framebuffer::ColorTexture() const {

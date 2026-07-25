@@ -2,7 +2,6 @@
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-#include <glad/gl.h>
 #include <utility>
 
 #include <efengine/core/Assert.h>
@@ -141,7 +140,8 @@ namespace platform {
 
         self -> m_width = (u32)width;
         self -> m_height= (u32)height;
-        glViewport(0,0, (GLsizei)width, (GLsizei)height); 
+        // El viewport lo re-setea el renderer en cada pase (via el RHI):
+        // platform no habla con la API gráfica.
 
         if (self->m_listener) self->m_listener->OnWindowResize(self->m_width, self->m_height);
     }

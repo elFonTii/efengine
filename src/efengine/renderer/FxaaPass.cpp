@@ -5,7 +5,7 @@
 #include <efengine/renderer/Framebuffer.h>
 #include <efengine/core/Assert.h>
 
-#include <glad/gl.h>
+#include <efecom/RHI.h>
 
 namespace efengine {
 namespace renderer {
@@ -22,7 +22,7 @@ namespace renderer {
         if (target != null) {
             target->Bind();
         } else {
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            efecom::BindFramebuffer(0);
             m_renderer.SetViewport(input.width(), input.height());
         }
 
