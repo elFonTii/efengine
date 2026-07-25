@@ -6,6 +6,12 @@
 #include <efengine/renderer/Texture.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/DirectionalLight.h>
+#include <efengine/renderer/MaterialDef.h>
+#include <efengine/resources/MaterialBuilder.h>
+#include <efengine/resources/SceneAssets.h>
+#include <efengine/serialization/SceneSerializer.h>
+#include <efengine/serialization/SceneRegistry.h>
+#include <efengine/serialization/BinaryReader.h>
 #include <efengine/scene/Camera.h>
 #include <efengine/scene/CameraController.h>
 #include <efengine/scene/SceneGraph.h>
@@ -35,34 +41,19 @@
 namespace {
     using namespace efengine;
 
-    std::optional<renderer::Material> makePbrMaterial(
-            resources::ResourceManager& rm, const renderer::Shader* shader,
-            const std::string& base, const std::string& res, const std::string& ext,
-            bool withHeight) {
-        auto tex = [&](const char* map, renderer::ColorSpace space) {
-            return rm.GetTexture((base + map + "_" + res + ext).c_str(), space);
-        };
+    // Params del generador de plano. Es lo que viaja en el .efe como genPayload.
+    struct PlaneParams {
+        f32 halfSize = 300.0f;
+        f32 tiles    = 24.0f;
 
-        renderer::Texture* albedo = tex("diff",   renderer::ColorSpace::sRGB);
-        renderer::Texture* normal = tex("nor_gl", renderer::ColorSpace::Linear);
-        renderer::Texture* rough  = tex("rough",  renderer::ColorSpace::Linear);
-        renderer::Texture* ao     = tex("ao",     renderer::ColorSpace::Linear);
-        renderer::Texture* height = withHeight ? tex("disp", renderer::ColorSpace::Linear) : null;
-
-        if (!albedo || !normal || !rough || !ao || (withHeight && !height)) {
-            return std::nullopt;
+        template <class Ar>
+        void Serialize(Ar& ar) {
+            ar.Field(halfSize);
+            ar.Field(tiles);
         }
+    };
 
-        renderer::Material mat(shader);
-        mat.SetAlbedoMap(albedo);
-        mat.SetNormalMap(normal);
-        mat.SetRoughnessMap(rough);
-        mat.SetAOMap(ao);
-        if (height) mat.SetHeightMap(height);
-        return mat;
-    }
-
-    renderer::Model makePlane(const std::string& materialName, f32 halfSize, f32 tiles) {
+    renderer::Model makePlane(f32 halfSize, f32 tiles) {
         const std::vector<renderer::Vertex> vertices = {
             // position                            normal         uv                tangent
             { {-halfSize, 0.0f, -halfSize}, {0.0f, 1.0f, 0.0f}, {0.0f,  0.0f},  {1.0f, 0.0f, 0.0f} },
@@ -73,52 +64,86 @@ namespace {
         const std::vector<u32> indices = { 0, 3, 2, 2, 1, 0 }; // CCW visto desde +Y: winding concuerda con la normal (0,1,0)
 
         std::vector<renderer::Mesh> meshes;
-        meshes.emplace_back(vertices, indices, materialName);
+        meshes.emplace_back(vertices, indices, "ground");
         return renderer::Model(std::move(meshes));
     }
 
-    // BEHAVIORS 
+    // Generador registrable: lee sus params del payload y devuelve el modelo.
+    std::unique_ptr<renderer::Model> generarPlano(serialization::BinaryReader& r) {
+        PlaneParams p;
+        p.Serialize(r);
+        if (!r.Ok()) return nullptr;
+        return std::make_unique<renderer::Model>(makePlane(p.halfSize, p.tiles));
+    }
+
+    // BEHAVIORS
     class RotarY : public scene::Behavior {
         public:
+            RotarY() = default;
             explicit RotarY(f32 degPerSec) : m_degPerSec(degPerSec) {}
+
             void OnUpdate(scene::UpdateContext& ctx) override {
                 math::Transform t = ctx.node.local;
                 t.rotation.y += ctx.dt * m_degPerSec;
                 ctx.SetLocal(t);
             }
+
+            template <class Ar>
+            void Serialize(Ar& ar) { ar.Field(m_degPerSec); }
+
         private:
-            f32 m_degPerSec;
+            f32 m_degPerSec = 0.0f;
     };
 
     class OrbitarXZ : public scene::Behavior {
         public:
+            OrbitarXZ() = default;
             OrbitarXZ(glm::vec3 center, f32 radius, f32 speed)
                 : m_center(center), m_radius(radius), m_speed(speed) {}
+
             void OnUpdate(scene::UpdateContext& ctx) override {
                 m_angle += ctx.dt * m_speed;
                 math::Transform t = ctx.node.local;
                 t.position = m_center + m_radius * glm::vec3(std::cos(m_angle), 0.0f, std::sin(m_angle));
                 ctx.SetLocal(t);
             }
+
+            template <class Ar>
+            void Serialize(Ar& ar) {
+                ar.Field(m_center);
+                ar.Field(m_radius);
+                ar.Field(m_speed);
+                ar.Field(m_angle);   // se guarda: la orbita reanuda donde estaba
+            }
+
         private:
-            glm::vec3 m_center;
-            f32 m_radius;
-            f32 m_speed;
-            f32 m_angle = 0.0f;
+            glm::vec3 m_center { 0.0f };
+            f32 m_radius = 0.0f;
+            f32 m_speed  = 0.0f;
+            f32 m_angle  = 0.0f;
     };
 
     class RotarSolY : public scene::Behavior {
         public:
+            RotarSolY() = default;
             explicit RotarSolY(f32 degPerSec) : m_degPerSec(degPerSec) {}
+
             void OnUpdate(scene::UpdateContext& ctx) override {
                 m_angle += ctx.dt * m_degPerSec;
                 math::Transform t = ctx.node.local;
                 t.rotation.y = m_angle;
                 ctx.SetLocal(t);
             }
+
+            template <class Ar>
+            void Serialize(Ar& ar) {
+                ar.Field(m_degPerSec);
+                ar.Field(m_angle);
+            }
+
         private:
-            f32 m_degPerSec;
-            f32 m_angle = 0.0f;
+            f32 m_degPerSec = 0.0f;
+            f32 m_angle     = 0.0f;
     };
 }
 
@@ -131,85 +156,40 @@ int main() {
     app.SetClearColor(0.18f, 0.18f, 0.18f);
     resources::ResourceManager& rm = app.GetResources();
 
-    renderer::Shader* pbr  = rm.GetShader("pbr", "assets/shaders/pbr.vert", "assets/shaders/pbr.frag");
-    renderer::Model*  rat  = rm.GetModel("assets/models/street_rat_4k.fbx");
-    renderer::Model*  lamp = rm.GetModel("assets/models/industrial_pipe_lamp_2k.fbx");
+    // Lo que el serializador tiene que saber de los tipos del sandbox.
+    serialization::SceneRegistry registry;
+    registry.behaviors.Register<RotarY>("RotarY");
+    registry.behaviors.Register<OrbitarXZ>("OrbitarXZ");
+    registry.behaviors.Register<RotarSolY>("RotarSolY");
+    registry.meshes.Register("sandbox.plane", &generarPlano);
 
-    auto streetRatMatOpt = makePbrMaterial(rm, pbr, "assets/textures/street_rat/street_rat_", "4k", ".jpg", false);
-    auto groundMatOpt    = makePbrMaterial(rm, pbr, "assets/textures/brown_mud/brown_mud_03_", "2k", ".jpg", true);
-    auto lampMatOpt      = makePbrMaterial(rm, pbr, "assets/textures/industrial_lamp/industrial_pipe_lamp_", "2k", ".jpg", true);
+    // Dueno de los materiales y de las mallas generadas de la escena.
+    resources::SceneAssets assets;
 
-    if (!pbr || !rat || !lamp || !streetRatMatOpt || !groundMatOpt || !lampMatOpt) {
-        EF_LOG_ERROR("No se pudieron cargar los recursos");
+    // La escena YA NO se construye en C++: vive en el archivo. Lo unico que el sandbox
+    // aporta son las definiciones de sus tipos (registry) para que Resolve las recree.
+    scene::SceneGraph scene;
+
+    if (!serialization::SceneSerializer::Load("assets/scenes/sandbox.efe",
+                                              scene, assets, rm, registry)) {
+        EF_LOG_ERROR("No se pudo cargar assets/scenes/sandbox.efe");
         return 1;
     }
 
-    renderer::Material streetRatMat = std::move(*streetRatMatOpt);
-    renderer::Material groundMat    = std::move(*groundMatOpt);
-    renderer::Material lampMat      = std::move(*lampMatOpt);
-    groundMat.heightScale = 0.0f;
+    // Los handles ahora se resuelven por nombre una vez.
+    scene::NodeHandle ratHandle  = scene.FindByName("model_rata");
+    scene::NodeHandle orbitLight = scene.FindByName("luz_animada");
+    scene::NodeHandle sunNode    = scene.FindByName("directional_light");
 
-    lampMat.heightScale   = 0.0f;
-    lampMat.metallic   = 0.8f;
-    lampMat.roughness = 1.0f;
-
-    renderer::MaterialMap ratMats = {
-        { "street_rat",      &streetRatMat },
-        { "street_rat_hair", &streetRatMat },
+    auto algunBehaviorActivo = [&](scene::NodeHandle h) {
+        if (!scene.IsValid(h)) return false;
+        for (const std::unique_ptr<scene::Behavior>& b : scene.Get(h).behaviors) {
+            if (b && b->enabled) return true;
+        }
+        return false;
     };
-
-    renderer::MaterialMap lampMats;
-    for (const renderer::Mesh& mesh : lamp->meshes()) {
-        lampMats[mesh.materialName()] = &lampMat;
-    }
-
-    renderer::Model groundModel = makePlane("ground", 300.0f, 24.0f);
-    renderer::MaterialMap groundMats = {
-        { "ground", &groundMat },
-    };
-
-    scene::SceneGraph scene;
-    scene.ambientFactor = 0.08f;
-
-    math::Transform ratTransform;
-    ratTransform.scale = glm::vec3(10.0f);
-    const scene::NodeHandle ratHandle = scene.CreateNode("model_rata");
-    scene.AttachMesh(ratHandle, { rat, ratMats });
-    scene.SetLocalTransform(ratHandle, ratTransform);
-
-    const scene::NodeHandle groundNode = scene.CreateNode("plano");
-    scene.AttachMesh(groundNode, { &groundModel, groundMats });
-
-    math::Transform lampTransform;
-    lampTransform.position = glm::vec3(30.0f, 0.0f, 0.0f);
-    const scene::NodeHandle lampNode = scene.CreateNode("model_lampara");
-    scene.AttachMesh(lampNode, { lamp, lampMats });
-    scene.SetLocalTransform(lampNode, lampTransform);
-
-    auto makePointLight = [&](const char* name, glm::vec3 pos, glm::vec3 color) {
-        scene::NodeHandle n = scene.CreateNode(name);
-        math::Transform t; t.position = pos;
-        scene.SetLocalTransform(n, t);
-        scene.AttachLight(n, { scene::LightKind::Point, color });
-        return n;
-    };
-    const scene::NodeHandle orbitLight = makePointLight("luz_animada", glm::vec3(50.0f, 80.0f, 0.0f), glm::vec3(5000.0f));
-    makePointLight("luz_2", glm::vec3(-50.0f, 80.0f, 0.0f), glm::vec3(5000.0f));
-    makePointLight("luz_3", glm::vec3(  0.0f, 90.0f, 0.0f), glm::vec3(5000.0f));
-
-
-    const scene::NodeHandle sunNode = scene.CreateNode("directional_light");
-    math::Transform sunT; sunT.rotation = glm::vec3(-70.15f, 56.3f, 0.0f);
-    scene.SetLocalTransform(sunNode, sunT);
-    scene.AttachLight(sunNode, { scene::LightKind::Directional, glm::vec3(3.0f) });
-    scene.SetPrimarySun(sunNode);
-
-    bool animate = true;
-    bool animateSun = false;
-
-    scene.AttachBehavior(ratHandle,  std::make_unique<RotarY>(20.0f))->enabled = animate;
-    scene.AttachBehavior(orbitLight, std::make_unique<OrbitarXZ>(glm::vec3(0.0f, 80.0f, 0.0f), 50.0f, 1.0f))->enabled = animate;
-    scene.AttachBehavior(sunNode,    std::make_unique<RotarSolY>(30.0f))->enabled = animateSun;
+    bool animate    = algunBehaviorActivo(ratHandle);
+    bool animateSun = algunBehaviorActivo(sunNode);
 
     // Prende/apaga todos los behaviors de node
     auto setEnabled = [&](scene::NodeHandle h, bool on) {
@@ -236,6 +216,24 @@ int main() {
         ImGui::Begin("Escena");
         // Atajos globales: solo empujan al cambiar (no cada frame), asi el toggle
         // individual de cada behavior en el inspector no se pierde.
+        if (ImGui::Button("Guardar escena")) {
+            serialization::SceneSerializer::Save("assets/scenes/sandbox.efe",
+                                                 scene, assets, rm, registry);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cargar escena")) {
+            // Load ya hace Clear() de grafo y assets: no hay que limpiar a mano.
+            if (serialization::SceneSerializer::Load("assets/scenes/sandbox.efe",
+                                                     scene, assets, rm, registry)) {
+                selected   = scene::NodeHandle{};   // el handle viejo quedo invalido
+                ratHandle  = scene.FindByName("model_rata");
+                orbitLight = scene.FindByName("luz_animada");
+                sunNode    = scene.FindByName("directional_light");
+                animate    = algunBehaviorActivo(ratHandle);
+                animateSun = algunBehaviorActivo(sunNode);
+            }
+        }
+        ImGui::Separator();
         if (ImGui::Checkbox("Animate", &animate)) {
             setEnabled(ratHandle,  animate);
             setEnabled(orbitLight, animate);

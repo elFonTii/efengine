@@ -20,6 +20,14 @@ add_executable(efengine_tests
     scene/Camera.test.cpp
     scene/CameraController.test.cpp
     scene/Behavior.test.cpp
+    scene/SceneGraphClear.test.cpp
+    serialization/BinaryIO.test.cpp
+    serialization/StringTable.test.cpp
+    serialization/EfeFile.test.cpp
+    serialization/SceneDocument.test.cpp
+    serialization/BehaviorRegistry.test.cpp
+    serialization/Truncation.test.cpp
+    serialization/SceneSerializer.test.cpp
 )
 
 # Include path raíz: los tests consumen el motor como <efengine/...>.

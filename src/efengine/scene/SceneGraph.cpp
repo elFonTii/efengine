@@ -188,6 +188,31 @@ namespace scene {
         destroySubtree(handle);
     }
 
+    void SceneGraph::Clear() {
+
+        for (Slot& slot : m_slots) {
+            if (slot.alive) {
+                slot.alive = false;
+                slot.generation++;   // invalida el generation viejo
+            }
+            slot.node = Node{};     // libera los behaviors
+        }
+
+        // Se hace pop_back, asi se comienza desde el indice 0 (root node)
+        m_freeList.clear();
+        for (usize i = m_slots.size(); i > 0u; --i) {
+            m_freeList.push_back(static_cast<u32>(i - 1u));
+        }
+
+        m_primarySun = NodeHandle{};
+        m_renderables.clear();
+        m_pointLights.clear();
+        m_sun = renderer::DirectionalLight{ glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };
+
+        m_root = allocate("root", NodeHandle{});
+    }
+    
+
     void SceneGraph::destroySubtree(NodeHandle handle) {
         if(!IsValid(handle)) return;
 
@@ -216,6 +241,15 @@ namespace scene {
 
     Node& SceneGraph::Get(NodeHandle handle) {
         EF_ASSERT(IsValid(handle), "SceneGraph::Get: Se intenta obtener un slot invalido");
+        return m_slots[handle.index].node;
+    }
+
+    const Node* SceneGraph::TryGet(NodeHandle handle) const {
+        return IsValid(handle) ? &m_slots[handle.index].node : nullptr;
+    }
+
+    const Node& SceneGraph::Get(NodeHandle handle) const {
+        EF_ASSERT(IsValid(handle), "SceneGraph::Get(const): Se intenta obtener un slot invalido");
         return m_slots[handle.index].node;
     }
 

@@ -14,6 +14,7 @@ namespace resources {
             renderer::Texture* GetTexture(const char* path, renderer::ColorSpace space = renderer::ColorSpace::Linear);
             renderer::Shader* GetShader(const char* name, const char* vertPath, const char* fragPath);
             renderer::Shader* GetComputeShader(const char* name, const char* computePath);
+            const std::string* PathOf(const renderer::Model* model) const; // obtiene el path del modelo para serializar
 
         private:
             struct TextureSlot { renderer::Texture texture; renderer::ColorSpace space; };
