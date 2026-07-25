@@ -219,6 +219,15 @@ namespace scene {
         return m_slots[handle.index].node;
     }
 
+    const Node* SceneGraph::TryGet(NodeHandle handle) const {
+        return IsValid(handle) ? &m_slots[handle.index].node : nullptr;
+    }
+
+    const Node& SceneGraph::Get(NodeHandle handle) const {
+        EF_ASSERT(IsValid(handle), "SceneGraph::Get(const): Se intenta obtener un slot invalido");
+        return m_slots[handle.index].node;
+    }
+
     NodeHandle SceneGraph::FindByName(const std::string& name) const {
         for (const Slot& slot : m_slots) {
             if (slot.alive && slot.node.name == name) return slot.node.self;

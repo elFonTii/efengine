@@ -29,10 +29,12 @@ namespace scene {
             NodeHandle CreateNode(const std::string& name = "");
             void       Destroy(NodeHandle handle);
 
-            // Getters
+            // Getters (const vs no const ->)
             bool    IsValid(NodeHandle handle) const;
             Node*   TryGet(NodeHandle handle);
             Node&   Get(NodeHandle handle);
+            const Node*  TryGet(NodeHandle handle) const;
+            const Node&  Get(NodeHandle handle) const;
 
             NodeHandle FindByName(const std::string& name) const;
 
