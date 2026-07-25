@@ -8,6 +8,7 @@ add_subdirectory(platform)
 add_subdirectory(renderer)
 add_subdirectory(resources)
 add_subdirectory(scene)
+add_subdirectory(serialization)
 add_subdirectory(application)
 
 # Crear librería estática efengine
@@ -25,5 +26,6 @@ target_link_libraries(efengine PUBLIC
     efengine_renderer
     efengine_resources
     efengine_scene
+    efengine_serialization
     efengine_application
 )
