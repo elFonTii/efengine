@@ -6,7 +6,7 @@
 
 #include <optional>
 #include <string>
-#include <vector>
+
 
 namespace efengine {
 namespace resources {
@@ -14,7 +14,6 @@ namespace resources {
        public:
         static std::optional<std::string> ReadText(const char* path);
         static std::optional<std::vector<u8>> ReadBytes(const char* path);
-
     };
 }
 }
