@@ -40,6 +40,9 @@ namespace scene {
             NodeHandle CreateChild(NodeHandle parent, const std::string& name = "");
             void SetLocalTransform(NodeHandle handle, const math::Transform& transform);
 
+            // Transforms
+            void UpdateWorldTransforms();
+
         private:
             struct Slot {
                 Node node;

@@ -32,9 +32,46 @@ namespace scene {
     }
 
     NodeHandle SceneGraph::CreateNode(const std::string& name) {
-        NodeHandle handle = allocate(name, m_root);
-        m_slots[m_root.index].node.children.push_back(handle);
+        return CreateChild(m_root, name);
+    }
+
+    NodeHandle SceneGraph::CreateChild(NodeHandle parent, const std::string& name) {
+        EF_ASSERT(IsValid(parent), "SceneGraph::CreateChild: padre invalido");
+        NodeHandle handle = allocate(name, parent);
+        m_slots[parent.index].node.children.push_back(handle);
         return handle;
+    }
+
+    void SceneGraph::SetLocalTransform(NodeHandle handle, const math::Transform& transform) {
+        EF_ASSERT(IsValid(handle), "SceneGraph::SetLocalTransform: handle invalido");
+        m_slots[handle.index].node.local = transform;
+        markSubtreeDirty(handle);
+    }
+
+    // El world de un hijo depende del de su padre: si cambia el local de un nodo,
+    // todo lo de abajo también queda dirty
+    void SceneGraph::markSubtreeDirty(NodeHandle handle) {
+        Node& node = m_slots[handle.index].node;
+        node.worldDirty = true;
+        for (NodeHandle child : node.children) {
+            if (IsValid(child)) markSubtreeDirty(child);
+        }
+    }
+
+    void SceneGraph::UpdateWorldTransforms() {
+        updateNode(m_root, glm::mat4(1.0f), false);
+    }
+
+    void SceneGraph::updateNode(NodeHandle handle, const glm::mat4& parentWorld, bool parentChanged) {
+        Node& node = m_slots[handle.index].node;
+        bool recompute = node.worldDirty || parentChanged;
+        if (recompute) {
+            node.worldMatrix = parentWorld * node.local.Matrix();
+            node.worldDirty = false;
+        }
+        for (NodeHandle child : node.children) {
+            if (IsValid(child)) updateNode(child, node.worldMatrix, recompute);
+        }
     }
 
     void SceneGraph::Destroy(NodeHandle handle) {
@@ -46,7 +83,7 @@ namespace scene {
         if(IsValid(self.parent)) {
             std::vector<NodeHandle>& sibs = m_slots[self.parent.index].node.children;
             for(usize i = 0; i < sibs.size(); ++i) {
-                if(sibs[i] == handle) { sibs.erase(sibs.begin() + 1); break; }
+                if(sibs[i] == handle) { sibs.erase(sibs.begin() + i); break; }
             }
         }
 
