@@ -8,8 +8,11 @@
 #include <efengine/renderer/PointLight.h>
 #include <efengine/renderer/DirectionalLight.h>
 #include <efengine/renderer/ShadowContext.h>
+#include <efengine/renderer/FrameData.h>
+#include <efengine/renderer/UniformBuffer.h>
 
 #include <glm/glm.hpp>
+#include <optional>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -22,7 +25,8 @@ namespace renderer {
 
     class Renderer {
         public:
-            static constexpr u32 kMaxLights = 4; // DEBE COINCIDIR CON MAX_LIGHTS DEL SHADER PRINCIPAL
+            static constexpr u32 kMaxLights = kFrameMaxLights; // el contrato vive en FrameData.h
+            static constexpr u32 kFrameDataBinding = 0; // binding del UBO FrameData en los shaders
 
             void Clear(f32 r, f32 g, f32 b, f32 a) const;
             void SetViewport(u32 width, u32 height) const; // por el momento para evitar que Application llame gl crudo
@@ -35,12 +39,9 @@ namespace renderer {
         private:
             void applyFrameUniforms(const Shader& shader);
 
-            glm::mat4 m_view = { 1.0f };
-            glm::mat4 m_projection = { 1.0f };
-            glm::vec3 m_viewPos { 0.0f };
-            f32 m_ambient = 0.0f;
-            std::vector<PointLight> m_lights;
-            DirectionalLight m_sun { glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };
+            // UBO con los datos per-frame (binding 0). Lazy: se crea en el
+            // primer BeginScene, cuando ya hay contexto GL seguro.
+            std::optional<UniformBuffer> m_frameUbo;
             ShadowContext m_shadow {};
             const Cubemap* m_irradiance = nullptr;
             std::unordered_set<const Shader*> m_frameShaders;

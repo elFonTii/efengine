@@ -6,23 +6,25 @@ in mat3 vTBN;       // base tangente→mundo (columna 2 = normal)
 
 out vec4 FragColor;
 
-// --- Luces puntuales (arreglo fijo) ---
+// Datos per-frame en un solo UBO std140 (espejo de renderer/FrameData.h).
+// El bloque debe declararse idéntico en todos los stages que lo usan.
 #define MAX_LIGHTS 4
-uniform vec3  uLightPositions[MAX_LIGHTS];
-uniform vec3  uLightColors[MAX_LIGHTS];
-uniform int   uLightCount;
-uniform vec3  uViewPos;
-
-// --- Luz direccional (sol) ---
-uniform vec3 uLightDir;       // dirección en la que viaja la luz
-uniform vec3 uDirLightColor;  // color * intensidad (sin atenuación por distancia)
+layout(std140, binding = 0) uniform FrameData {
+    mat4 uView;
+    mat4 uProjection;
+    mat4 uViewProj;
+    mat4 uLightSpaceMatrix;
+    vec4 uCamPos;          // xyz = posición de cámara
+    vec4 uSunDirection;    // xyz = dirección del sol, w = sombra on (0/1)
+    vec4 uSunColor;        // xyz = color*intensidad, w = ambientFactor
+    vec4 uShadowParams;    // x = biasMin, y = biasMax
+    vec4 uPointPositions[MAX_LIGHTS];
+    vec4 uPointColors[MAX_LIGHTS];
+    ivec4 uCounts;         // x = cantidad de point lights
+};
 
 // --- Sombra direccional (shadow map + PCF) ---
-uniform mat4      uLightSpaceMatrix;
 uniform sampler2D uShadowMap;
-uniform int       uShadowEnabled;
-uniform float     uShadowBiasMin;
-uniform float     uShadowBiasMax;
 
 // --- Albedo ---
 uniform sampler2D uAlbedoMap;
@@ -132,7 +134,7 @@ float ShadowFactor(vec3 N, vec3 L) {
     if (proj.z > 1.0) return 0.0;       // más allá del far plane → sin sombra
 
     // Bias slope-scaled: más grande en rasante para matar el acné.
-    float bias   = max(uShadowBiasMax * (1.0 - dot(N, L)), uShadowBiasMin);
+    float bias   = max(uShadowParams.y * (1.0 - dot(N, L)), uShadowParams.x);
     float shadow = 0.0;
     vec2  texel  = 1.0 / vec2(textureSize(uShadowMap, 0));
     for (int x = -1; x <= 1; ++x) {
@@ -182,7 +184,7 @@ void main() {
     // --- Parallax Occlusion Mapping: desplaza las UV antes de muestrear nada ---
     // viewDirT: dirección hacia la cámara en espacio tangente (mundo→tangente
     // vía transpose(TBN), que es la inversa para una base ortonormal).
-    vec3 viewDirT = normalize(transpose(vTBN) * (uViewPos - vFragPos));
+    vec3 viewDirT = normalize(transpose(vTBN) * (uCamPos.xyz - vFragPos));
     vec2 uv = (uHasHeightMap == 1) ? ParallaxOcclusionMapping(vUV, viewDirT) : vUV;
 
     // No se recorta la UV desplazada: el POM solo se usa sobre superficies con
@@ -210,7 +212,7 @@ void main() {
         N = normalize(vTBN[2]);
     }
     if (!gl_FrontFacing) N = -N;
-    vec3 V = normalize(uViewPos - vFragPos);   // del fragmento hacia la cámara
+    vec3 V = normalize(uCamPos.xyz - vFragPos);   // del fragmento hacia la cámara
 
     // F0: reflectancia base con incidencia normal. Dieléctricos ≈ 0.04;
     // los metales reflejan con su propio color (albedo).
@@ -218,20 +220,20 @@ void main() {
 
     // --- Luz directa: puntuales (Cook-Torrance vía helper) ---
     vec3 Lo = vec3(0.0);
-    for (int i = 0; i < uLightCount; ++i) {
-        vec3  L           = normalize(uLightPositions[i] - vFragPos);
-        float dist        = length(uLightPositions[i] - vFragPos);
+    for (int i = 0; i < uCounts.x; ++i) {
+        vec3  L           = normalize(uPointPositions[i].xyz - vFragPos);
+        float dist        = length(uPointPositions[i].xyz - vFragPos);
         float attenuation = 1.0 / (dist * dist);     // caída física por distancia²
-        vec3  radiance    = uLightColors[i] * attenuation;
+        vec3  radiance    = uPointColors[i].xyz * attenuation;
 
         Lo += CookTorranceBRDF(N, V, L, F0, albedo, metallic, roughness) * radiance;
     }
 
     // --- Luz direccional (sol): sin atenuación, con sombra PCF ---
     {
-        vec3  Ld     = normalize(-uLightDir);
-        float shadow = (uShadowEnabled == 1) ? ShadowFactor(N, Ld) : 0.0;
-        Lo += (1.0 - shadow) * CookTorranceBRDF(N, V, Ld, F0, albedo, metallic, roughness) * uDirLightColor;
+        vec3  Ld     = normalize(-uSunDirection.xyz);
+        float shadow = (uSunDirection.w > 0.5) ? ShadowFactor(N, Ld) : 0.0;
+        Lo += (1.0 - shadow) * CookTorranceBRDF(N, V, Ld, F0, albedo, metallic, roughness) * uSunColor.rgb;
     }
 
     // --- Ambiente + composición ---
@@ -245,7 +247,8 @@ void main() {
     vec3  F   = FresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
     vec3  kD  = (vec3(1.0) - F) * (1.0 - metallic);
     vec3  irr = texture(uIrradianceMap, N).rgb;
-    vec3  ambient = kD * irr * albedo * ao;
+    // uSunColor.w = ambientFactor: dial de intensidad de la indirecta (1 = física).
+    vec3  ambient = kD * irr * albedo * ao * uSunColor.w;
     vec3  color   = ambient + Lo;
 
     // Radiancia lineal HDR sin tonemapear: el tone mapping + gamma ahora ocurren

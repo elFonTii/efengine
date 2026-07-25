@@ -119,7 +119,8 @@ int main() {
     };
 
     scene::Scene scene;
-    scene.ambientFactor = 0.08f;
+    // 1.0 = IBL a intensidad física; el slider "Ambient" ahora escala la indirecta.
+    scene.ambientFactor = 1.0f;
 
     math::Transform ratTransform;
     ratTransform.scale = glm::vec3(10.0f);

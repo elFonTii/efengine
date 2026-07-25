@@ -54,55 +54,51 @@ namespace renderer {
     }
 
     void Renderer::BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, f32 ambientFactor, const DirectionalLight& sun, const ShadowContext& shadow, const Cubemap* irradiance) {
-        // inicializacion simplemente
-        m_view = view;
-        m_projection = projection;
-        m_ambient = ambientFactor;
-        m_viewPos = viewPos;
-        m_lights.assign(lights.begin(), lights.end());
-        m_sun = sun;
         m_shadow = shadow;
         m_irradiance = irradiance;
 
+        // Todos los datos per-frame viajan en un solo UBO std140 (binding 0):
+        // una subida por frame en lugar de glUniform* por nombre y por shader.
+        FrameData frame {};
+        frame.view             = view;
+        frame.proj             = projection;
+        frame.viewProj         = projection * view;
+        frame.lightSpaceMatrix = shadow.lightSpaceMatrix;
+        frame.camPos           = glm::vec4(viewPos, 0.0f);
+        frame.sunDirection     = glm::vec4(sun.direction, shadow.enabled ? 1.0f : 0.0f);
+        frame.sunColor         = glm::vec4(sun.color, ambientFactor);
+        frame.shadowParams     = glm::vec4(shadow.biasMin, shadow.biasMax, 0.0f, 0.0f);
+
         // si la cantidad de luces es mayor a las soportadas por el shader recortar
-        if(m_lights.size() > kMaxLights) {
-            m_lights.resize(kMaxLights);
+        u32 lightCount = static_cast<u32>(lights.size());
+        if (lightCount > kMaxLights) {
+            lightCount = kMaxLights;
             EF_LOG_WARNING("Se intentan agregar más luces de las que el shader soporta.");
         }
+        for (u32 i = 0; i < lightCount; ++i) {
+            frame.pointPositions[i] = glm::vec4(lights[i].position, 0.0f);
+            frame.pointColors[i]    = glm::vec4(lights[i].color, 0.0f);
+        }
+        frame.counts = glm::ivec4(static_cast<i32>(lightCount), 0, 0, 0);
+
+        if (!m_frameUbo) {
+            m_frameUbo = UniformBuffer::Create(sizeof(FrameData));
+            EF_ASSERT(m_frameUbo.has_value(), "Renderer::BeginScene: no se pudo crear el UBO FrameData");
+        }
+        m_frameUbo->Update(&frame, sizeof(FrameData));
+        m_frameUbo->BindBase(kFrameDataBinding);
 
         // Se limpia antes de registrar en cada frame
         m_frameShaders.clear();
     }
 
-    // por frame
+    // por frame: lo que queda fuera del UBO son los samplers (estado de programa).
     void Renderer::applyFrameUniforms(const Shader& shader) {
         if (!m_frameShaders.insert(&shader).second) return; // para evitar duplicados, si no es nuevo sale.
 
         shader.Bind();
-        shader.SetMat4("uView", m_view);
-        shader.SetMat4("uProjection", m_projection);
-        shader.SetVec3("uViewPos", m_viewPos);
-        shader.SetInt("uLightCount", static_cast<i32>(m_lights.size()));
-        
-        // recorrer luces, construir nombre y agregar
-        for (u32 i = 0; i < m_lights.size(); ++i) {
-            const std::string lightName = "uLightPositions[" + std::to_string(i) + "]";
-            const std::string lightColor= "uLightColors[" + std::to_string(i) + "]";
-
-            shader.SetVec3(lightName.c_str(), m_lights[i].position);
-            shader.SetVec3(lightColor.c_str(), m_lights[i].color);
-
-        }
-
-        // Luz direccional (sol)
-        shader.SetVec3("uLightDir", m_sun.direction);
-        shader.SetVec3("uDirLightColor", m_sun.color);
 
         // Sombra direccional (shadow map en unit 7)
-        shader.SetMat4("uLightSpaceMatrix", m_shadow.lightSpaceMatrix);
-        shader.SetInt("uShadowEnabled", m_shadow.enabled ? 1 : 0);
-        shader.SetFloat("uShadowBiasMin", m_shadow.biasMin);
-        shader.SetFloat("uShadowBiasMax", m_shadow.biasMax);
         if (m_shadow.map != null) {
             m_shadow.map->Bind(7);
             shader.SetInt("uShadowMap", 7);

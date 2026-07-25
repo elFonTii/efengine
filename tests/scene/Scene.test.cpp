@@ -128,10 +128,10 @@ TEST_CASE("Scene::GetLight da acceso mutable: mover la luz se ve en lights()") {
     CHECK(s.lights()[handle].position.x == doctest::Approx(50.0f));
 }
 
-TEST_CASE("Scene::ambientFactor default es 0.08") {
+TEST_CASE("Scene::ambientFactor default es 1.0 (IBL a intensidad fisica)") {
     scene::Scene s;
 
-    CHECK(s.ambientFactor == doctest::Approx(0.08f));
+    CHECK(s.ambientFactor == doctest::Approx(1.0f));
 }
 
 TEST_CASE("Scene::sun arranca con una direccion no-nula") {

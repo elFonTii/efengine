@@ -14,9 +14,24 @@ out vec3 vFragPos;
 out vec2 vUV;
 out mat3 vTBN;
 
+// Datos per-frame en un solo UBO std140 (espejo de renderer/FrameData.h).
+// El bloque debe declararse idéntico en todos los stages que lo usan.
+#define MAX_LIGHTS 4
+layout(std140, binding = 0) uniform FrameData {
+    mat4 uView;
+    mat4 uProjection;
+    mat4 uViewProj;
+    mat4 uLightSpaceMatrix;
+    vec4 uCamPos;          // xyz = posición de cámara
+    vec4 uSunDirection;    // xyz = dirección del sol, w = sombra on (0/1)
+    vec4 uSunColor;        // xyz = color*intensidad, w = ambientFactor
+    vec4 uShadowParams;    // x = biasMin, y = biasMax
+    vec4 uPointPositions[MAX_LIGHTS];
+    vec4 uPointColors[MAX_LIGHTS];
+    ivec4 uCounts;         // x = cantidad de point lights
+};
+
 uniform mat4 uModel;
-uniform mat4 uView;
-uniform mat4 uProjection;
 
 void main() {
     vFragPos = vec3(uModel * vec4(aPos, 1.0)); // de vec4 a vec3
