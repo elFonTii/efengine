@@ -5,7 +5,7 @@
 #include <glm/glm.hpp>
 
 namespace efengine {
-namespace scene { class Scene; }
+namespace scene { class SceneGraph; }
 namespace renderer {
 
     class Renderer;
@@ -29,7 +29,7 @@ namespace renderer {
 
             // Calcula la matriz light-space desde el sol + settings, renderiza la
             // profundidad y devuelve la matriz usada.
-            const glm::mat4& Render(const scene::Scene& scene, const DirectionalLight& sun);
+            const glm::mat4& Render(const scene::SceneGraph& scene, const DirectionalLight& sun);
 
             const glm::mat4& lightSpaceMatrix() const { return m_lightSpaceMatrix; }
             const Texture&   DepthTexture()     const { return m_shadowMap.DepthTexture(); }
