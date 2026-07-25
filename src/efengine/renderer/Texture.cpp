@@ -1,6 +1,6 @@
 #include "Texture.h"
 
-#include <glad/gl.h>
+#include <efecom/RHI.h>
 #include <utility>
 #include <stb_image.h>
 
@@ -18,37 +18,30 @@ namespace renderer {
         i32 height = 0;
         i32 channels = 0; // stbi_load lo setea por referencia
         u8* pixels = stbi_load(path, &width, &height, &channels, 0);
-        GLenum format = 0; // en que formato está la textura
-        GLenum internalFormat = 0; // en que formato la gpu interpreta la textura
 
         if(pixels == null) {
             EF_LOG_ERROR("Texture::Create: fallo al cargar '%s': %s", path, stbi_failure_reason());
             return std::nullopt; // Fallo recuperable
         }
 
-        switch(color_space) {
-            case ColorSpace::sRGB:
-                internalFormat = (channels == 4) ? GL_SRGB8_ALPHA8 : GL_SRGB8;
-                break;
-            case ColorSpace::Linear:
-                internalFormat = (channels == 4) ? GL_RGBA8 : GL_RGB8;
-                break;
-            default:
-                break;
-        }
-
+        // El formato del RHI determina a la vez cómo la guarda la GPU y el
+        // layout de canales del origen (1-2 canales siempre lineales: sRGB
+        // solo existe para RGB/RGBA).
+        efecom::TextureFormat format;
         switch(channels) {
             case 4:
-                format = GL_RGBA;
+                format = (color_space == ColorSpace::sRGB) ? efecom::TextureFormat::SRGB8_A8
+                                                           : efecom::TextureFormat::RGBA8;
                 break;
             case 3:
-                format = GL_RGB;
+                format = (color_space == ColorSpace::sRGB) ? efecom::TextureFormat::SRGB8
+                                                           : efecom::TextureFormat::RGB8;
                 break;
             case 2:
-                format = GL_RG;
+                format = efecom::TextureFormat::RG8;
                 break;
             case 1:
-                format = GL_RED;
+                format = efecom::TextureFormat::R8;
                 break;
             default:
                 EF_LOG_ERROR("Texture::Create: fallo al determinar cantidad de canales.");
@@ -56,26 +49,21 @@ namespace renderer {
                 return std::nullopt;
         }
 
+        efecom::Texture2DDesc desc;
+        desc.width  = (u32)width;
+        desc.height = (u32)height;
+        desc.format = format;
+        desc.minFilter = efecom::TextureFilter::LinearMipmapLinear;
+        desc.magFilter = efecom::TextureFilter::Linear;
+        desc.wrapS = efecom::TextureWrap::Repeat;
+        desc.wrapT = efecom::TextureWrap::Repeat;
+        desc.generateMipmaps = true;
 
-        u32 id = 0;
-        glGenTextures(1, &id);
+        const u32 id = efecom::CreateTexture2D(desc, pixels);
         EF_ASSERT(id != 0, "Texture::Create: No hay contexto GL");
 
-        glBindTexture(GL_TEXTURE_2D, id);
-
-        // Parámetros de textura
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        
-        // Subir los pixeles a la GPU
-        glTexImage2D(GL_TEXTURE_2D, 0, (GLint)internalFormat, width, height, 0, format, GL_UNSIGNED_BYTE, pixels);
-        glGenerateMipmap(GL_TEXTURE_2D);
-
         // Liberamos el buffer de CPU (ya está en GPU)
-        stbi_image_free(pixels); 
-        glBindTexture(GL_TEXTURE_2D, 0);
+        stbi_image_free(pixels);
 
         return Texture(id, (u32)width, (u32)height);
     }
@@ -95,65 +83,60 @@ namespace renderer {
             return std::nullopt;
         }
 
-        u32 id = 0;
-        glGenTextures(1, &id);
+        efecom::Texture2DDesc desc;
+        desc.width  = (u32)width;
+        desc.height = (u32)height;
+        desc.format = efecom::TextureFormat::RGBA16F;
+        desc.minFilter = efecom::TextureFilter::Linear;
+        desc.magFilter = efecom::TextureFilter::Linear;
+        desc.wrapS = efecom::TextureWrap::Repeat;
+        desc.wrapT = efecom::TextureWrap::ClampToEdge;
+
+        const u32 id = efecom::CreateTexture2D(desc, data);
         EF_ASSERT(id != 0, "Texture::CreateHDR: No hay contexto GL");
 
-        glBindTexture(GL_TEXTURE_2D, id);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, data);
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
         stbi_image_free(data);
-        glBindTexture(GL_TEXTURE_2D, 0);
 
         return Texture(id, (u32)width, (u32)height);
     }
-    
+
     // Textura vacía para usar como color attachment de un framebuffer
     Texture Texture::CreateColorAttachment(u32 width, u32 height) {
-    u32 id = 0;
-    glGenTextures(1, &id);
-    EF_ASSERT(id != 0, "Texture::CreateColorAttachment: No hay contexto GL");
+        // Attachment HDR (pre-tonemapping)
+        efecom::Texture2DDesc desc;
+        desc.width  = width;
+        desc.height = height;
+        desc.format = efecom::TextureFormat::RGBA16F;
+        desc.minFilter = efecom::TextureFilter::Linear;
+        desc.magFilter = efecom::TextureFilter::Linear;
+        desc.wrapS = efecom::TextureWrap::ClampToEdge;
+        desc.wrapT = efecom::TextureWrap::ClampToEdge;
 
-    glBindTexture(GL_TEXTURE_2D, id);
-    // Attachment HDR (pre-tonemapping)
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, (GLsizei) width, (GLsizei) height, 0, GL_RGBA, GL_FLOAT, nullptr);
+        const u32 id = efecom::CreateTexture2D(desc, nullptr);
+        EF_ASSERT(id != 0, "Texture::CreateColorAttachment: No hay contexto GL");
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-
-
-    return Texture(id, width, height);
-}
+        return Texture(id, width, height);
+    }
 
     Texture Texture::CreateDepthAttachment(u32 width, u32 height) {
-        u32 id = 0;
-        glGenTextures(1, &id);
+        efecom::Texture2DDesc desc;
+        desc.width  = width;
+        desc.height = height;
+        desc.format = efecom::TextureFormat::Depth32F;
+        // PCF manual → NEAREST (el filtrado 3×3 lo hace el fragment, no el sampler).
+        desc.minFilter = efecom::TextureFilter::Nearest;
+        desc.magFilter = efecom::TextureFilter::Nearest;
+        // Fuera del frustum → profundidad de borde 1.0 → iluminado (no en sombra).
+        desc.wrapS = efecom::TextureWrap::ClampToBorder;
+        desc.wrapT = efecom::TextureWrap::ClampToBorder;
+        desc.borderColor[0] = 1.0f;
+        desc.borderColor[1] = 1.0f;
+        desc.borderColor[2] = 1.0f;
+        desc.borderColor[3] = 1.0f;
+
+        const u32 id = efecom::CreateTexture2D(desc, nullptr);
         EF_ASSERT(id != 0, "Texture::CreateDepthAttachment: No hay contexto GL");
 
-        glBindTexture(GL_TEXTURE_2D, id);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F,
-                     (GLsizei)width, (GLsizei)height, 0,
-                     GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
-
-        // PCF manual → NEAREST (el filtrado 3×3 lo hace el fragment, no el sampler).
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        // Fuera del frustum → profundidad de borde 1.0 → iluminado (no en sombra).
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-        const float border[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-        glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, border);
-
-        glBindTexture(GL_TEXTURE_2D, 0);
         return Texture(id, width, height);
     }
 
@@ -165,9 +148,9 @@ namespace renderer {
 
     Texture::~Texture() {
         if(m_id != 0) {
-            glDeleteTextures(1, &m_id);
+            efecom::DestroyTexture(m_id);
         }
-    } 
+    }
 
     Texture::Texture(Texture&& other) noexcept
         : m_id(std::exchange(other.m_id, 0))
@@ -177,7 +160,7 @@ namespace renderer {
     Texture& Texture::operator=(Texture&& other) noexcept {
         if(this != &other) {
             if(m_id != 0) {
-                glDeleteTextures(1, &m_id);
+                efecom::DestroyTexture(m_id);
             }
             m_id = std::exchange(other.m_id, 0);
             m_width = std::exchange(other.m_width, 0);
@@ -188,8 +171,7 @@ namespace renderer {
 
     void Texture::Bind(u32 unit) const {
         EF_ASSERT(m_id != 0, "Texture::Bind: Textura no válida");
-        glActiveTexture(GL_TEXTURE0 + unit);
-        glBindTexture(GL_TEXTURE_2D, m_id);
+        efecom::BindTexture2D(m_id, unit);
     }
 }
 }

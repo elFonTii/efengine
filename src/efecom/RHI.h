@@ -1,0 +1,163 @@
+// RHI.h
+//  Render Hardware Interface de efecom: la única superficie por la que el
+//  motor habla con la GPU. Hoy la implementa un backend OpenGL 4.5
+//  (RHIOpenGL.cpp); mañana un backend Vulkan puede implementar estas mismas
+//  funciones sin tocar el módulo renderer.
+//
+//  Reglas:
+//   - Ningún tipo/enum/handle de una API gráfica concreta se asoma por acá.
+//   - Los handles son u32 opacos (0 = handle inválido / "ninguno").
+//   - efecom no depende de efengine: usa sus propios aliases (efecom/Types.h).
+#pragma once
+
+#include <efecom/Types.h>
+
+namespace efecom {
+
+    // ── Inicialización / contexto ───────────────────────────────────────────
+    // El windowing (GLFW, SDL, ...) es responsabilidad del motor; el RHI solo
+    // recibe el loader de funciones de la API una vez que el contexto está
+    // current. Firma compatible con glfwGetProcAddress.
+    using ProcFn            = void (*)();
+    using ProcAddressLoader = ProcFn (*)(const char* name);
+
+    // Carga la API gráfica. Devuelve false si falla (recuperable en el caller).
+    bool Initialize(ProcAddressLoader loader);
+
+    // Strings informativos del dispositivo/driver (válidos mientras viva el contexto).
+    struct DeviceInfo {
+        const char* apiVersion;
+        const char* renderer;
+        const char* vendor;
+        const char* shadingLanguageVersion;
+    };
+    DeviceInfo GetDeviceInfo();
+
+    // ── Estado global del pipeline ──────────────────────────────────────────
+    void SetViewport(u32 x, u32 y, u32 width, u32 height);
+    void SetClearColor(f32 r, f32 g, f32 b, f32 a);
+
+    enum class ClearMask : u32 {
+        Color      = 1u << 0,
+        Depth      = 1u << 1,
+        ColorDepth = Color | Depth,
+    };
+    void Clear(ClearMask mask);
+
+    void SetDepthTest(bool enabled);
+
+    // ── Buffers (VBO / EBO) ────────────────────────────────────────────────
+    // Buffer estático: crea y sube los datos de una vez. Sirve tanto para
+    // vértices como para índices (el uso lo decide el vertex array).
+    u32  CreateBuffer(const void* data, usize size);
+    void DestroyBuffer(u32 buffer);
+
+    // ── Vertex arrays ──────────────────────────────────────────────────────
+    // Modelo de binding points (estilo DSA): el buffer se engancha a un
+    // bindingIndex del VA y cada atributo (siempre floats) se asocia a él.
+    u32  CreateVertexArray();
+    void DestroyVertexArray(u32 va);
+    void VertexArraySetVertexBuffer(u32 va, u32 bindingIndex, u32 buffer, u32 strideBytes);
+    void VertexArraySetAttribute(u32 va, u32 location, u32 componentCount, u32 offsetBytes, u32 bindingIndex);
+    void VertexArraySetIndexBuffer(u32 va, u32 indexBuffer);
+    void BindVertexArray(u32 va);   // 0 = desbindear
+
+    // ── Shaders / programas ────────────────────────────────────────────────
+    enum class ShaderStage { Vertex, Fragment, Compute };
+
+    // Compila un stage. Devuelve 0 si falla y deja el infolog en outLog
+    // (truncado a logSize). outLog puede ser null si no interesa el log.
+    u32  CompileShader(ShaderStage stage, const char* source, char* outLog, usize logSize);
+    void DestroyShader(u32 shader);
+
+    // Linkea un programa con 1 o 2 stages (stageB = 0 si no hay, p. ej.
+    // compute). Devuelve 0 si falla y deja el infolog en outLog. Los stages
+    // siguen siendo del caller: destruirlos después de linkear.
+    u32  LinkProgram(u32 stageA, u32 stageB, char* outLog, usize logSize);
+    void DestroyProgram(u32 program);
+    void BindProgram(u32 program);  // 0 = desbindear
+
+    // Uniforms: operan sobre el programa actualmente bindeado.
+    // GetUniformLocation devuelve -1 si el uniform no existe (fue optimizado).
+    i32  GetUniformLocation(u32 program, const char* name);
+    void SetUniformInt(i32 location, i32 value);
+    void SetUniformFloat(i32 location, f32 value);
+    void SetUniformVec3(i32 location, const f32* values3);   // 3 floats
+    void SetUniformMat4(i32 location, const f32* values16);  // 16 floats, column-major
+
+    // ── Texturas 2D ────────────────────────────────────────────────────────
+    // El formato interno determina también el layout de los pixeles de origen:
+    // los formatos de 8 bits suben bytes, los flotantes/depth suben floats.
+    enum class TextureFormat {
+        R8, RG8, RGB8, RGBA8,   // lineales, 8 bits por canal
+        SRGB8, SRGB8_A8,        // sRGB, 8 bits por canal
+        RGBA16F,                // HDR half-float
+        Depth24, Depth32F,      // solo profundidad (attachments)
+    };
+    enum class TextureFilter { Nearest, Linear, LinearMipmapLinear };
+    enum class TextureWrap   { Repeat, ClampToEdge, ClampToBorder };
+
+    struct Texture2DDesc {
+        u32           width     = 0;
+        u32           height    = 0;
+        TextureFormat format    = TextureFormat::RGBA8;
+        TextureFilter minFilter = TextureFilter::Linear;
+        TextureFilter magFilter = TextureFilter::Linear;
+        TextureWrap   wrapS     = TextureWrap::Repeat;
+        TextureWrap   wrapT     = TextureWrap::Repeat;
+        bool          generateMipmaps = false;
+        f32           borderColor[4]  = { 1.0f, 1.0f, 1.0f, 1.0f }; // para ClampToBorder
+    };
+
+    // pixels puede ser null (texturas vacías para attachments).
+    u32  CreateTexture2D(const Texture2DDesc& desc, const void* pixels);
+    void DestroyTexture(u32 texture);            // también libera cubemaps
+    void BindTexture2D(u32 texture, u32 unit);   // unidad de textura para samplers
+
+    // ── Cubemaps ───────────────────────────────────────────────────────────
+    // Storage inmutable de 6 caras cuadradas con mipCount niveles.
+    // Filtro trilinear + clamp en las 3 dimensiones (lo que pide IBL).
+    u32  CreateCubemap(u32 size, TextureFormat format, u32 mipCount);
+    void BindTextureUnit(u32 texture, u32 unit); // bind directo (cualquier tipo de textura)
+    void GenerateTextureMipmaps(u32 texture);
+
+    // Imagen de shader (imageStore en compute): bindea todas las capas del nivel.
+    enum class ImageAccess { ReadOnly, WriteOnly, ReadWrite };
+    void BindImageLayered(u32 unit, u32 texture, u32 level, ImageAccess access, TextureFormat format);
+
+    // ── Compute ────────────────────────────────────────────────────────────
+    void DispatchCompute(u32 groupsX, u32 groupsY, u32 groupsZ);
+
+    enum class Barrier : u32 {
+        ShaderImageAccess = 1u << 0, // escrituras vía imageStore
+        TextureFetch      = 1u << 1, // lecturas vía sampler
+    };
+    void IssueMemoryBarrier(Barrier bits);
+
+    // ── Framebuffers ───────────────────────────────────────────────────────
+    u32  CreateFramebuffer();
+    void DestroyFramebuffer(u32 framebuffer);
+    void BindFramebuffer(u32 framebuffer);       // 0 = backbuffer
+    void FramebufferColorTexture(u32 framebuffer, u32 texture);
+    void FramebufferDepthTexture(u32 framebuffer, u32 texture);
+    void FramebufferDisableColor(u32 framebuffer); // FBO solo-profundidad (shadow maps)
+    bool FramebufferComplete(u32 framebuffer);
+
+    // Renderbuffer de profundidad (24 bits) para FBOs que no muestrean depth.
+    u32  CreateDepthRenderbuffer(u32 width, u32 height);
+    void DestroyRenderbuffer(u32 renderbuffer);
+    void FramebufferDepthRenderbuffer(u32 framebuffer, u32 renderbuffer);
+
+    // ── Draw (triángulos; índices u32) ─────────────────────────────────────
+    void DrawIndexed(u32 indexCount);
+    void DrawArrays(u32 vertexCount);
+
+    // ── Operadores de bits para las máscaras ───────────────────────────────
+    inline constexpr ClearMask operator|(ClearMask a, ClearMask b) {
+        return static_cast<ClearMask>(static_cast<u32>(a) | static_cast<u32>(b));
+    }
+    inline constexpr Barrier operator|(Barrier a, Barrier b) {
+        return static_cast<Barrier>(static_cast<u32>(a) | static_cast<u32>(b));
+    }
+
+}

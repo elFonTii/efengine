@@ -1,6 +1,6 @@
 #include "efengine/renderer/PostChain.h"
 #include <efengine/core/Assert.h>
-#include <glad/gl.h>
+#include <efecom/RHI.h>
 
 namespace efengine {
 namespace renderer {
@@ -20,7 +20,7 @@ namespace renderer {
     }
 
     void PostChain::Run(const Texture& sceneHDR) {
-        glDisable(GL_DEPTH_TEST);
+        efecom::SetDepthTest(false);
         const u32 count = static_cast<u32>(m_passes.size());
         const Texture* input = &sceneHDR;
 
@@ -37,7 +37,7 @@ namespace renderer {
                 input = &target->ColorTexture();
         }
         
-        glEnable(GL_DEPTH_TEST);
+        efecom::SetDepthTest(true);
     }
 }
 }

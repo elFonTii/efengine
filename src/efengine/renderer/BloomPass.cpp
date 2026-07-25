@@ -3,7 +3,7 @@
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/Texture.h>
-#include <glad/gl.h>
+#include <efecom/RHI.h>
 #include <utility>
 
 #include <algorithm>
@@ -46,7 +46,7 @@ void BloomPass::Apply(const Texture& input, const Framebuffer* target) {
         m_blur->Bind();
         src->ColorTexture().Bind(0);
         m_blur->SetInt("uImage", 0);
-        m_blur->SetInt("uHorizontal", horizontal ? 1 : 0);   // uniform bool -glUniform1i
+        m_blur->SetInt("uHorizontal", horizontal ? 1 : 0);   // uniform bool como int
         m_renderer.Draw(m_quad, *m_blur);
 
         std::swap(src, dst);
@@ -57,7 +57,7 @@ void BloomPass::Apply(const Texture& input, const Framebuffer* target) {
     if (target != null) {
         target->Bind();
     } else {
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        efecom::BindFramebuffer(0);
         m_renderer.SetViewport(input.width(), input.height());
     }
     m_composite->Bind();

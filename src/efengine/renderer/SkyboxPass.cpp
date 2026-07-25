@@ -1,6 +1,6 @@
 #include "efengine/renderer/SkyboxPass.h"
 
-#include <glad/gl.h>
+#include <efecom/RHI.h>
 #include <glm/gtc/matrix_inverse.hpp>
 
 #include <efengine/renderer/Renderer.h>
@@ -21,14 +21,14 @@ namespace renderer {
 
         const glm::mat4 invVPRot = glm::inverse(projection * glm::mat4(glm::mat3(view)));
 
-        glDisable(GL_DEPTH_TEST);
+        efecom::SetDepthTest(false);
 
         m_shader->Bind();
         m_shader->SetMat4("uInvViewProjRot", invVPRot);
         env.Bind(0);
         m_renderer.Draw(m_quad, *m_shader);
 
-        glEnable(GL_DEPTH_TEST);
+        efecom::SetDepthTest(true);
     }
 
 }

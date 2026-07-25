@@ -3,7 +3,7 @@
 #include <efengine/core/Log.h>
 #include <efengine/core/Assert.h>
 
-#include <glad/gl.h>
+#include <efecom/RHI.h>
 #include <utility>
 
 
@@ -22,29 +22,29 @@ namespace renderer {
             return std::nullopt;
         }
 
-        Cubemap env = Cubemap::Create(faceSize, GL_RGBA16F, mipLevels(faceSize));
+        Cubemap env = Cubemap::Create(faceSize, efecom::TextureFormat::RGBA16F, mipLevels(faceSize));
 
         equirectToCube.Bind();
         hdr->Bind(0);
-        env.BindImage(0, 0, GL_WRITE_ONLY, GL_RGBA16F);
+        env.BindImage(0, 0, efecom::ImageAccess::WriteOnly, efecom::TextureFormat::RGBA16F);
 
         const u32 groups = (faceSize + 7u) / 8u;
-        glDispatchCompute(groups, groups, 6);
+        efecom::DispatchCompute(groups, groups, 6);
 
-        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+        efecom::IssueMemoryBarrier(efecom::Barrier::ShaderImageAccess | efecom::Barrier::TextureFetch);
 
         env.GenerateMips();
 
         // --- Segunda pasada: convolución difusa del entorno a irradiancia ---
-        Cubemap irradiance = Cubemap::Create(irradianceSize, GL_RGBA16F, 1);
+        Cubemap irradiance = Cubemap::Create(irradianceSize, efecom::TextureFormat::RGBA16F, 1);
 
         irradianceConvolve.Bind();
         env.Bind(0);                                    // entorno como samplerCube (unit 0)
-        irradiance.BindImage(0, 0, GL_WRITE_ONLY, GL_RGBA16F);
+        irradiance.BindImage(0, 0, efecom::ImageAccess::WriteOnly, efecom::TextureFormat::RGBA16F);
 
         const u32 iGroups = (irradianceSize + 7u) / 8u;
-        glDispatchCompute(iGroups, iGroups, 6);
-        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+        efecom::DispatchCompute(iGroups, iGroups, 6);
+        efecom::IssueMemoryBarrier(efecom::Barrier::ShaderImageAccess | efecom::Barrier::TextureFetch);
 
         EF_LOG_INFO("Environment: IBL precomputado desde '%s' (env %ux%u, irradiancia %ux%u)",
                     hdrPath, faceSize, faceSize, irradianceSize, irradianceSize);
