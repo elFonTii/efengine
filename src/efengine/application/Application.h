@@ -18,7 +18,7 @@
 #include <optional>
 
 namespace efengine {
-namespace scene { class Scene; class Camera; }
+namespace scene { class SceneGraph; class Camera; }
 namespace application {
 
     // Bundle RAII de los subsistemas del motor. Expone accessors; el loop
@@ -41,7 +41,7 @@ namespace application {
             bool Running() const { return !m_window.ShouldClose(); }
             void BeginFrame();
             void EndFrame();
-            void RenderScene(const scene::Scene& scene, const scene::Camera& camera);
+            void RenderScene(scene::SceneGraph& scene, const scene::Camera& camera);
             f32  DeltaTime() const;
             f64  Elapsed() const;
             bool IsKeyPressed(platform::Key key) const;
