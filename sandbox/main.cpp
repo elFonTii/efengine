@@ -25,6 +25,8 @@
 #include <string>
 #include <cmath>
 #include <unordered_map>
+#include <functional>
+#include <vector>
 
 namespace {
     using namespace efengine;
@@ -161,7 +163,10 @@ int main() {
 
     bool animate = true;
     bool animateSun = false;
-    
+
+    scene::NodeHandle selected;
+    u32 spawnCounter = 0;
+
 
     while (app.Running()) {
         app.BeginFrame();
@@ -172,6 +177,8 @@ int main() {
         // --- Panel de edición de escena en runtime ---
         ImGui::Begin("Escena");
         ImGui::Checkbox("Animate", &animate);
+        ImGui::SameLine();
+        ImGui::Checkbox("Animar Sol", &animateSun);
         ImGui::SliderFloat("Ambient", &scene.ambientFactor, 0.0f, 1.0f);
         if(ImGui::SliderFloat("Exposure", &exposure, 0.0f, 5.0f) == true) { cam.SetExposure(exposure); }
         renderer::BloomSettings& s = app.GetBloomPass().settings(); 
@@ -186,77 +193,109 @@ int main() {
             ImGui::Checkbox("Enabled", &fx.enabled);
         }
 
-        // Copia de los handles: editar un transform muta el grafo mientras iteramos.
-        const std::vector<scene::NodeHandle> kids = scene.Get(scene.Root()).children;
-
-        if (ImGui::CollapsingHeader("Objetos", ImGuiTreeNodeFlags_DefaultOpen)) {
-            for (u32 i = 0; i < kids.size(); ++i) {
-                scene::Node& node = scene.Get(kids[i]);
-                if (!node.mesh) continue;
-                ImGui::PushID((int)i);                 // ids únicos por nodo
-                if (ImGui::TreeNode(node.name.c_str())) {
-                    math::Transform t = node.local;
-                    bool changed = false;
-                    changed |= ImGui::DragFloat3("Posicion", glm::value_ptr(t.position), 0.1f);
-                    changed |= ImGui::DragFloat3("Rotacion", glm::value_ptr(t.rotation), 0.5f);   // grados
-                    changed |= ImGui::DragFloat3("Escala",   glm::value_ptr(t.scale),    0.05f);
-                    if (changed) scene.SetLocalTransform(kids[i], t);   // marca el subarbol dirty
-                    ImGui::TreePop();
-                }
-                ImGui::PopID();
-            }
-        }
-
-        if (ImGui::CollapsingHeader("Luces", ImGuiTreeNodeFlags_DefaultOpen)) {
-            for (u32 i = 0; i < kids.size(); ++i) {
-                scene::Node& node = scene.Get(kids[i]);
-                if (!node.light || node.light->kind != scene::LightKind::Point) continue;
-                ImGui::PushID(1000 + (int)i);
-                if (ImGui::TreeNode(node.name.c_str())) {
-                    math::Transform t = node.local;
-                    if (ImGui::DragFloat3("Posicion", glm::value_ptr(t.position), 0.5f))
-                        scene.SetLocalTransform(kids[i], t);
-                    ImGui::DragFloat3("Color/Int", glm::value_ptr(node.light->color), 10.0f, 0.0f, 20000.0f);
-                    ImGui::TreePop();
-                }
-                ImGui::PopID();
-            }
-        }
-
-        if (ImGui::CollapsingHeader("Sol / Sombras", ImGuiTreeNodeFlags_DefaultOpen)) {
-            // El sol se orienta rotando su nodo; la direccion se deriva en el gather.
-            scene::Node& sunNodeRef = scene.Get(sunNode);
-            math::Transform st = sunNodeRef.local;
-            if (ImGui::DragFloat3("Rotacion Sol", glm::value_ptr(st.rotation), 0.5f))
-                scene.SetLocalTransform(sunNode, st);
-            if (sunNodeRef.light)
-                ImGui::DragFloat3("Color/Int Sol", glm::value_ptr(sunNodeRef.light->color), 0.05f, 0.0f, 20.0f);
-
+        if (ImGui::CollapsingHeader("Sombras", ImGuiTreeNodeFlags_DefaultOpen)) {
             renderer::ShadowSettings& sh = app.GetShadowPass().settings();
-            ImGui::Checkbox   ("Sombras",        &sh.enabled);
+            ImGui::Checkbox   ("Habilitadas",    &sh.enabled);
             ImGui::SliderFloat("Ortho HalfSize", &sh.orthoHalfSize, 5.0f,  200.0f);
             ImGui::SliderFloat("Distancia Luz",  &sh.distance,      10.0f, 400.0f);
             ImGui::SliderFloat("Near",           &sh.nearPlane,     0.1f,  50.0f);
             ImGui::SliderFloat("Far",            &sh.farPlane,      50.0f, 600.0f);
             ImGui::SliderFloat("Bias Min",       &sh.biasMin,       0.0f,  0.01f,  "%.4f");
             ImGui::SliderFloat("Bias Max",       &sh.biasMax,       0.0f,  0.02f,  "%.4f");
-            ImGui::Checkbox("Animar Sol", &animateSun);
         }
 
         ImGui::End();
 
-        if (animate) {
-            const f32 elapsed = static_cast<f32>(app.Elapsed());
-            math::Transform lt = scene.Get(orbitLight).local;
-            lt.position = glm::vec3(50.0f * std::cos(elapsed), 80.0f, 50.0f * std::sin(elapsed));
-            scene.SetLocalTransform(orbitLight, lt);
+        // grafo con nodos de arbol
+        ImGui::Begin("Jerarquia");
 
-            math::Transform rt = scene.Get(ratHandle).local;
-            rt.rotation.y += app.DeltaTime() * 20.0f; // 20 grados/seg
-            scene.SetLocalTransform(ratHandle, rt);
+        std::function<void(scene::NodeHandle)> drawNode = [&](scene::NodeHandle h) {
+            scene::Node& node = scene.Get(h);
+
+            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow
+                                     | ImGuiTreeNodeFlags_SpanAvailWidth
+                                     | ImGuiTreeNodeFlags_DefaultOpen;
+            if (node.children.empty())
+                flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+            if (h == selected) flags |= ImGuiTreeNodeFlags_Selected;
+
+            // Marca de que adjunto tiene el nodo: malla, luz, o si es solo transform
+            const char* tag = node.mesh ? "[M]" : (node.light ? "[L]" : "[T]");
+
+            ImGui::PushID((int)h.index);
+            const bool open = ImGui::TreeNodeEx("nodo", flags, "%s %s", tag, node.name.c_str());
+            if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) selected = h;
+
+            if (open && !node.children.empty()) {
+                const std::vector<scene::NodeHandle> kids2 = node.children;
+                for (scene::NodeHandle c : kids2) {
+                    if (scene.IsValid(c)) drawNode(c);
+                }
+                ImGui::TreePop();
+            }
+            ImGui::PopID();
+        };
+        drawNode(scene.Root());
+
+        ImGui::Separator();
+
+        if (scene.IsValid(selected)) {
+            scene::Node& node = scene.Get(selected);
+            ImGui::Text("Nodo: %s", node.name.c_str());
+            ImGui::TextDisabled("handle { index=%u, gen=%u }", node.self.index, node.self.generation);
+
+            // El world es derivado: se muestra como lectura, no se edita.
+            const glm::vec3 worldPos = glm::vec3(node.worldMatrix[3]);
+            ImGui::TextDisabled("mundo: %.2f, %.2f, %.2f", worldPos.x, worldPos.y, worldPos.z);
+
+            math::Transform t = node.local;
+            bool changed = false;
+            changed |= ImGui::DragFloat3("Posicion local", glm::value_ptr(t.position), 0.1f);
+            changed |= ImGui::DragFloat3("Rotacion local", glm::value_ptr(t.rotation), 0.5f);
+            changed |= ImGui::DragFloat3("Escala local",   glm::value_ptr(t.scale),    0.05f);
+            if (changed) scene.SetLocalTransform(selected, t);
+
+            if (node.light) {
+                const char* kindName = node.light->kind == scene::LightKind::Point ? "Point" : "Directional";
+                ImGui::TextDisabled("luz: %s", kindName);
+                const f32 maxInt = node.light->kind == scene::LightKind::Point ? 20000.0f : 20.0f;
+                const f32 speed  = node.light->kind == scene::LightKind::Point ? 10.0f : 0.05f;
+                ImGui::DragFloat3("Color/Int", glm::value_ptr(node.light->color), speed, 0.0f, maxInt);
+            }
+
+            if (ImGui::Button("Crear hijo")) {
+                char name[32];
+                std::snprintf(name, sizeof(name), "nodo_%u", spawnCounter++);
+                scene.CreateChild(selected, name);
+            }
+            ImGui::SameLine();
+            if (selected != scene.Root()) {
+                if (ImGui::Button("Destruir")) {
+                    scene.Destroy(selected);
+                    selected = scene::NodeHandle{};
+                }
+            }
+        } else {
+            ImGui::TextDisabled("Ningun nodo seleccionado");
         }
 
-        if (animateSun) {
+        ImGui::End();
+        
+        if (animate) {
+            const f32 elapsed = static_cast<f32>(app.Elapsed());
+            if (scene.IsValid(orbitLight)) {
+                math::Transform lt = scene.Get(orbitLight).local;
+                lt.position = glm::vec3(50.0f * std::cos(elapsed), 80.0f, 50.0f * std::sin(elapsed));
+                scene.SetLocalTransform(orbitLight, lt);
+            }
+            if (scene.IsValid(ratHandle)) {
+                math::Transform rt = scene.Get(ratHandle).local;
+                rt.rotation.y += app.DeltaTime() * 20.0f; // 20 grados/seg
+                scene.SetLocalTransform(ratHandle, rt);
+            }
+        }
+
+        if (animateSun && scene.IsValid(sunNode)) {
             const f32 t = static_cast<f32>(app.Elapsed());
             math::Transform st = scene.Get(sunNode).local;
             st.rotation.y = t * 30.0f;   // gira el sol en Y
