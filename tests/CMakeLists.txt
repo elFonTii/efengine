@@ -24,6 +24,7 @@ add_executable(efengine_tests
     serialization/StringTable.test.cpp
     serialization/EfeFile.test.cpp
     serialization/SceneDocument.test.cpp
+    serialization/BehaviorRegistry.test.cpp
 )
 
 # Include path raíz: los tests consumen el motor como <efengine/...>.
