@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <string>
+#include <memory>
 
 namespace efengine {
 namespace scene {
@@ -47,6 +48,11 @@ namespace scene {
             // Adjuntos
             void AttachMesh(NodeHandle handle, MeshAttachment mesh);
             void AttachLight(NodeHandle handle, LightAttachment light);
+
+            // Comportamientos (Fase 2)
+            Behavior* AttachBehavior(NodeHandle handle, std::unique_ptr<Behavior> behavior);
+            void      Update(f32 dt);
+
             void       SetPrimarySun(NodeHandle handle);
             NodeHandle PrimarySun() const { return m_primarySun; }
 

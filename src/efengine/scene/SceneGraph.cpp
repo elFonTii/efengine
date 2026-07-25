@@ -75,9 +75,6 @@ namespace scene {
         EF_ASSERT(IsValid(newParent), "SceneGraph::SetParent: newParent invalido");
         EF_ASSERT(child != m_root,    "SceneGraph::SetParent: la raiz no tiene padre");
 
-        // Guard anti-ciclo: newParent no puede ser child ni un descendiente suyo.
-        // Un ciclo haria recursion infinita en updateNode/markSubtreeDirty/destroySubtree.
-        // Se rechaza con log + return: EF_ASSERT aborta el proceso.
         if (isAncestorOrSelf(child, newParent)) {
             EF_LOG_WARNING("SceneGraph::SetParent: reparent rechazado (crearia un ciclo)");
             return;
@@ -107,6 +104,13 @@ namespace scene {
     void SceneGraph::AttachLight(NodeHandle handle, LightAttachment light) {
         EF_ASSERT(IsValid(handle), "SceneGraph::AttachLight: handle invalido");
         m_slots[handle.index].node.light = light;
+    }
+
+    Behavior* SceneGraph::AttachBehavior(NodeHandle handle, std::unique_ptr<Behavior> behavior) {
+        EF_ASSERT(IsValid(handle), "SceneGraph::AttachBehavior: handle invalido");
+        Node& node = m_slots[handle.index].node;
+        node.behaviors.push_back(std::move(behavior));
+        return node.behaviors.back().get();
     }
 
     void SceneGraph::SetPrimarySun(NodeHandle handle) {
@@ -141,7 +145,6 @@ namespace scene {
             node.worldDirty = false;
         }
 
-        // Gather en el mismo recorrido: el world ya esta listo aca arriba.
         if (node.mesh && node.mesh->model) {
             m_renderables.push_back(RenderItem{ node.worldMatrix, node.mesh->model, &node.mesh->materials });
         }
@@ -159,8 +162,7 @@ namespace scene {
         EF_ASSERT(handle != m_root, "SceneGraph::Destroy: No se puede destruir la raiz");
         if(!IsValid(handle)) return;
 
-        // 1) lo quito del parent (una sola vez, en la cima: los descendientes se
-        //    van junto con la lista de children de su propio padre)
+        // 1   lo quito del parent (una sola vez arriba)
         Node& self = m_slots[handle.index].node;
         if(IsValid(self.parent)) {
             std::vector<NodeHandle>& sibs = m_slots[self.parent.index].node.children;
@@ -169,15 +171,13 @@ namespace scene {
             }
         }
 
-        // 2) libero el subarbol completo
+        // 2 libero el subarbol completo
         destroySubtree(handle);
     }
 
-    // Post-orden: hijos antes que el nodo, porque liberar el padre pierde su lista.
     void SceneGraph::destroySubtree(NodeHandle handle) {
         if(!IsValid(handle)) return;
 
-        // copia: liberar muta el arbol mientras iteramos
         std::vector<NodeHandle> kids = m_slots[handle.index].node.children;
         for(NodeHandle child : kids) destroySubtree(child);
 
