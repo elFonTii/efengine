@@ -112,7 +112,7 @@ namespace scene {
         node.behaviors.push_back(std::move(behavior));
         return node.behaviors.back().get();
     }
-    
+
     void SceneGraph::Update(f32 dt) {
         for (Slot& slot : m_slots) {
             if (!slot.alive) continue;
@@ -198,6 +198,7 @@ namespace scene {
         slot.alive = false;
         slot.generation++;
         m_freeList.push_back(handle.index);
+        slot.node.behaviors.clear();
     }
 
     bool SceneGraph::IsValid(NodeHandle handle) const {
