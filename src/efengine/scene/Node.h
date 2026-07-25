@@ -1,5 +1,6 @@
 #pragma once
 #include <efengine/scene/NodeHandle.h>
+#include <efengine/scene/Behavior.h>
 #include <efengine/math/Transform.h>
 #include <efengine/renderer/Model.h>
 #include <efengine/renderer/Material.h>
@@ -8,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <memory>
 
 namespace efengine {
 namespace scene {
@@ -38,6 +40,13 @@ namespace scene {
             // con esta estructura podemos expandir a X attachments (scripts, colliders, etc...)
             std::optional<MeshAttachment> mesh;
             std::optional<LightAttachment> light;
+            std::vector<std::unique_ptr<Behavior>> behaviors; // runtime scripts
+
+            Node()                       = default;
+            Node(const Node&)            = delete;
+            Node& operator=(const Node&) = delete;
+            Node(Node&&)                 = default;
+            Node& operator=(Node&&)      = default;
     };
 }
 }
