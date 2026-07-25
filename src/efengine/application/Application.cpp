@@ -1,8 +1,7 @@
 #include "Application.h"
 
 #include <efengine/core/Log.h>
-#include <efengine/scene/Scene.h>
-#include <efengine/scene/SceneObject.h>
+#include <efengine/scene/SceneGraph.h>
 #include <efengine/scene/Camera.h>
 
 namespace efengine {
@@ -77,17 +76,21 @@ namespace application {
         m_window.SwapBuffers();
     }
 
-    void Application::RenderScene(const scene::Scene& scene, const scene::Camera& camera) {
+    void Application::RenderScene(scene::SceneGraph& scene, const scene::Camera& camera) {
         const u32 w = m_window.GetWidth();
         const u32 h = m_window.GetHeight();
         if(w != 0 && h != 0) { m_sceneFB.Resize(w, h); m_postChain.Resize(w, h); }
 
+        // Recalcula world-transforms y junta las listas de render una vez por frame.
+        // Los dos pases de abajo (sombra y forward) leen el mismo resultado.
+        scene.UpdateWorldTransforms();
+
         // 2 cargas:  al FBO de la escena y Backbuffer de Window
-        
+
         // --- Pre-pase de sombra: profundidad de la escena desde el sol ---
         renderer::ShadowContext shadowCtx;
         if (m_shadowPass.settings().enabled) {
-            m_shadowPass.Render(scene, scene.sun());
+            m_shadowPass.Render(scene, scene.Sun());
             shadowCtx.map              = &m_shadowPass.DepthTexture();
             shadowCtx.lightSpaceMatrix = m_shadowPass.lightSpaceMatrix();
             shadowCtx.enabled          = true;
@@ -98,16 +101,16 @@ namespace application {
         // Al Framebuffer de escena
         m_sceneFB.Bind();
         m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
-        m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.lights(), scene.ambientFactor, scene.sun(), shadowCtx,
+        m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.PointLights(), scene.ambientFactor, scene.Sun(), shadowCtx,
                               m_environment ? &m_environment->irradiance() : nullptr);
 
          if (m_environment) {
             m_skyboxPass.Draw(m_environment->env(), camera.ViewMatrix(), camera.ProjectionMatrix());
          }
 
-        for(const scene::SceneObject& obj : scene.objects()) {
-            if(!obj.model) { EF_LOG_WARNING("Se intenta renderizar un objeto sin modelo"); continue; }
-            m_renderer.Submit(*obj.model, obj.materials, obj.transform.Matrix());
+        for(const scene::RenderItem& item : scene.Renderables()) {
+            if(!item.model) { EF_LOG_WARNING("Se intenta renderizar un item sin modelo"); continue; }
+            m_renderer.Submit(*item.model, *item.materials, item.world);
         }
 
         m_sceneFB.Unbind();
