@@ -38,6 +38,16 @@ namespace scene {
         EF_ASSERT(handle < m_lights.size(), "Scene::GetLight: Se intenta acceder a un índice fuera de rango");
 
         return m_lights[handle];
-    }   
+    }
+
+    math::Aabb Scene::ComputeBounds() const {
+        math::Aabb bounds;
+        for (const SceneObject& obj : m_objects) {
+            if (obj.model == null) continue;
+            bounds = math::MergeAabb(bounds,
+                math::TransformAabb(obj.transform.Matrix(), obj.model->localAabb()));
+        }
+        return bounds;
+    }
 }
 }

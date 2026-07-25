@@ -1,6 +1,7 @@
 #pragma once
 
 #include <efengine/core/Types.h>
+#include <efengine/math/Aabb.h>
 #include <efengine/scene/SceneObject.h>
 #include <efengine/renderer/PointLight.h>
 #include <efengine/renderer/DirectionalLight.h>
@@ -13,7 +14,8 @@ namespace scene{
 
     class Scene{
         public:
-            f32 ambientFactor = 0.08f;
+            // Intensidad de la luz indirecta (IBL difuso): 1 = física, 0 = apagada.
+            f32 ambientFactor = 1.0f;
 
             u32 Add(SceneObject object);
             u32 AddLight(Light light);
@@ -32,6 +34,11 @@ namespace scene{
             // Para iterar y dibujar
             const std::vector<SceneObject>& objects() const { return m_objects; }
             const std::vector<Light>& lights() const { return m_lights; }
+
+            // Bounds mundiales de la escena: merge de los AABB de cada objeto
+            // transformados a mundo. Vacío si no hay objetos con modelo.
+            // Los volúmenes de GI (probes, clipmaps) se dimensionan con esto.
+            math::Aabb ComputeBounds() const;
 
         private:
             std::vector<SceneObject> m_objects;

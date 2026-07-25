@@ -7,12 +7,14 @@ add_executable(efengine_tests
     core/Types.test.cpp
     core/Time.test.cpp
     math/Transform.test.cpp
+    math/Aabb.test.cpp
     platform/InputCodes.test.cpp
     renderer/VertexLayout.test.cpp
     renderer/Vertex.test.cpp
     renderer/PostChain.test.cpp
     renderer/Cubemap.test.cpp
     renderer/ShadowMath.test.cpp
+    renderer/FrameData.test.cpp
     resources/FileIO.test.cpp
     resources/ResourceManager.test.cpp
     scene/Camera.test.cpp

@@ -20,6 +20,13 @@ namespace renderer {
         auto layout = StandardVertexLayout();
         m_va.AddVertexBuffer(std::move(vbo), layout);
         m_va.SetIndexBuffer(std::move(ebo));
+
+        // GI y culling necesitan los bounds; se calculan una vez acá.
+        m_localAabb = math::Aabb { vertices[0].position, vertices[0].position };
+        for (const Vertex& v : vertices) {
+            m_localAabb.min = glm::min(m_localAabb.min, v.position);
+            m_localAabb.max = glm::max(m_localAabb.max, v.position);
+        }
     };
 
 }
