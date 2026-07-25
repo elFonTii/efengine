@@ -18,7 +18,7 @@ namespace renderer {
         EF_ASSERT(m_shader != null, "ShadowPass: shader de profundidad nulo (fallo al cargar)");
     }
 
-    const glm::mat4& ShadowPass::Render(const scene::Scene& scene, const DirectionalLight& sun) {
+    const glm::mat4& ShadowPass::Render(const scene::SceneGraph& scene, const DirectionalLight& sun) {
         m_lightSpaceMatrix = ComputeDirectionalLightMatrix(
             sun.direction, glm::vec3(0.0f),
             m_settings.orthoHalfSize, m_settings.distance,
@@ -31,12 +31,12 @@ namespace renderer {
         // Dibujar la geometría de cada objeto (solo posición). Se re-bindea el
         // shader por objeto: Renderer::Draw hace glUseProgram(0) al terminar, y
         // los valores de uniform persisten en el programa entre binds.
-        for (const scene::SceneObject& obj : scene.objects()) {
-            if (!obj.model) continue;
+        for (const scene::RenderItem& item : scene.Renderables()) {
+            if (!item.model) continue;
             m_shader->Bind();
             m_shader->SetMat4("uLightSpaceMatrix", m_lightSpaceMatrix);
-            m_shader->SetMat4("uModel", obj.transform.Matrix());
-            for (const Mesh& mesh : obj.model->meshes()) {
+            m_shader->SetMat4("uModel", item.world);
+            for (const Mesh& mesh : item.model->meshes()) {
                 m_renderer.Draw(mesh.vertexArray(), *m_shader);
             }
         }
