@@ -69,6 +69,54 @@ namespace renderer {
         return Shader(program);
     }
 
+    std::optional<Shader> Shader::Create(const char* vertexSrc, const char* geometrySrc, const char* fragmentSrc) {
+        EF_ASSERT(vertexSrc != null, "Shader::Create: vertexSrc no puede ser null");
+        EF_ASSERT(geometrySrc != null, "Shader::Create: geometrySrc no puede ser null");
+        EF_ASSERT(fragmentSrc != null, "Shader::Create: fragmentSrc no puede ser null");
+
+        const u32 vs = compilar_stage(GL_VERTEX_SHADER, vertexSrc);
+        if (vs == 0) {
+            return std::nullopt;
+        }
+
+        const u32 gs = compilar_stage(GL_GEOMETRY_SHADER, geometrySrc);
+        if (gs == 0) {
+            glDeleteShader(vs);
+            return std::nullopt;
+        }
+
+        const u32 fs = compilar_stage(GL_FRAGMENT_SHADER, fragmentSrc);
+        if (fs == 0) {
+            glDeleteShader(vs);
+            glDeleteShader(gs);
+            return std::nullopt;
+        }
+
+        const u32 program = glCreateProgram();
+        EF_ASSERT(program != 0, "Shader::Create: glCreateProgram devolvio 0 (sin contexto GL)");
+        glAttachShader(program, vs);
+        glAttachShader(program, gs);
+        glAttachShader(program, fs);
+        glLinkProgram(program);
+
+        // Los stages ya no se necesitan tras linkear.
+        glDeleteShader(vs);
+        glDeleteShader(gs);
+        glDeleteShader(fs);
+
+        GLint ok = GL_FALSE;
+        glGetProgramiv(program, GL_LINK_STATUS, &ok);
+        if (ok != GL_TRUE) {
+            char log[512] = {};
+            glGetProgramInfoLog(program, sizeof(log), null, log);
+            EF_LOG_ERROR("Shader: fallo al linkear el programa (vs+gs+fs): %s", log);
+            glDeleteProgram(program);
+            return std::nullopt;
+        }
+
+        return Shader(program);
+    }
+
      std::optional<Shader> Shader::CreateCompute(const char* computeSrc) {
         EF_ASSERT(computeSrc != null, "Shader::CreateCompute: computeSrc no puede ser null");
 
@@ -140,16 +188,28 @@ namespace renderer {
         glUniform1f(loc, value);
     }
 
+    void Shader::SetVec2(const char* name, const glm::vec2& value) const {
+        EF_ASSERT(m_program != 0, "Shader::SetVec2: programa vacio (movido no inicializado)");
+
+        i32 loc = getUniformLocation(name);
+        if (loc == -1) return;
+        glUniform2fv(loc, 1, glm::value_ptr(value));
+    }
+
     void Shader::SetVec3(const char* name, const glm::vec3& value) const {
         EF_ASSERT(m_program != 0, "Shader::SetVec3: programa vacio (movido no inicializado)");
 
-        i32 uniformLocation = glGetUniformLocation(m_program, name);
+        i32 loc = getUniformLocation(name);
+        if (loc == -1) return;
+        glUniform3fv(loc, 1, glm::value_ptr(value));
+    }
 
-        if(uniformLocation == -1) {
-            EF_LOG_WARNING("Shader::SetVec3: fallo al obtener la ubicación del uniform: %s", name);
-            return;
-        }
-        glUniform3fv(uniformLocation, 1, glm::value_ptr(value));
+    void Shader::SetVec4(const char* name, const glm::vec4& value) const {
+        EF_ASSERT(m_program != 0, "Shader::SetVec4: programa vacio (movido no inicializado)");
+
+        i32 loc = getUniformLocation(name);
+        if (loc == -1) return;
+        glUniform4fv(loc, 1, glm::value_ptr(value));
     }
 
     void Shader::SetMat4(const char* name, const glm::mat4& value) const {

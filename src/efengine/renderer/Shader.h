@@ -16,6 +16,8 @@ namespace renderer {
     class Shader {
         public:
             static std::optional<Shader> Create(const char* vertexSrc, const char* fragmentSrc);
+            // Variante con geometry shader (voxelización 3-ejes de GI).
+            static std::optional<Shader> Create(const char* vertexSrc, const char* geometrySrc, const char* fragmentSrc);
             static std::optional<Shader> CreateCompute(const char* computeSrc);
             
             ~Shader();
@@ -28,7 +30,9 @@ namespace renderer {
             void Bind() const;
             void SetInt(const char* name, i32 value) const;
             void SetFloat(const char* name, f32 value) const;
+            void SetVec2(const char* name, const glm::vec2& value) const;
             void SetVec3(const char* name, const glm::vec3& value) const;
+            void SetVec4(const char* name, const glm::vec4& value) const;
             void SetMat4(const char* name, const glm::mat4& value) const;
             u32  id() const { return m_program; }
 

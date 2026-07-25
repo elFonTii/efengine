@@ -157,6 +157,24 @@ namespace renderer {
         return Texture(id, width, height);
     }
 
+    Texture Texture::CreateEmpty(u32 width, u32 height, u32 internalFormat, u32 mipCount) {
+        EF_ASSERT(width > 0 && height > 0, "Texture::CreateEmpty: dimensiones invalidas");
+        EF_ASSERT(mipCount >= 1, "Texture::CreateEmpty: mipCount debe ser >= 1");
+
+        u32 id = 0;
+        glCreateTextures(GL_TEXTURE_2D, 1, &id);
+        EF_ASSERT(id != 0, "Texture::CreateEmpty: No hay contexto GL");
+
+        glTextureStorage2D(id, (GLsizei)mipCount, internalFormat, (GLsizei)width, (GLsizei)height);
+
+        glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, mipCount > 1 ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
+        glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        return Texture(id, width, height);
+    }
+
     Texture::Texture(u32 id, u32 width, u32 height) {
         m_id = id;
         m_width = width;
@@ -190,6 +208,11 @@ namespace renderer {
         EF_ASSERT(m_id != 0, "Texture::Bind: Textura no válida");
         glActiveTexture(GL_TEXTURE0 + unit);
         glBindTexture(GL_TEXTURE_2D, m_id);
+    }
+
+    void Texture::BindImage(u32 unit, u32 level, u32 access, u32 format) const {
+        EF_ASSERT(m_id != 0, "Texture::BindImage: Textura no válida");
+        glBindImageTexture(unit, m_id, (GLint)level, GL_FALSE, 0, access, format);
     }
 }
 }
