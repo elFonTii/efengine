@@ -6,6 +6,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 
 namespace efengine {
@@ -13,6 +14,7 @@ namespace resources {
     class FileIO {
        public:
         static std::optional<std::string> ReadText(const char* path);
+        static std::optional<std::vector<u8>> ReadBytes(const char* path);
     };
 }
 }
