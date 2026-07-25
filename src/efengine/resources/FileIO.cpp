@@ -23,7 +23,7 @@ namespace resources {
     }
 
     /* https://siliz4.github.io/guides/tutorials/2020/05/21/guide-on-binary-files-cpp.html */
-    std::optional<std::vector<u8>> ReadBytes(const char* path) {
+    std::optional<std::vector<u8>> FileIO::ReadBytes(const char* path) {
         // pasos: medir el archivo entero
         // reservar un vector del mismo tamaño
         // leer el archivo de una sola vez
