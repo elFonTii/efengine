@@ -39,9 +39,21 @@ namespace scene {
             NodeHandle Root() const { return m_root; }
             NodeHandle CreateChild(NodeHandle parent, const std::string& name = "");
             void SetLocalTransform(NodeHandle handle, const math::Transform& transform);
+            void SetParent(NodeHandle child, NodeHandle newParent);
 
-            // Transforms
+            // Transforms (y gather: ver Renderables/PointLights/Sun)
             void UpdateWorldTransforms();
+
+            // Adjuntos
+            void AttachMesh(NodeHandle handle, MeshAttachment mesh);
+            void AttachLight(NodeHandle handle, LightAttachment light);
+            void       SetPrimarySun(NodeHandle handle);
+            NodeHandle PrimarySun() const { return m_primarySun; }
+
+            // Consumo por el renderer (valido tras UpdateWorldTransforms)
+            const std::vector<RenderItem>&           Renderables() const { return m_renderables; }
+            const std::vector<renderer::PointLight>& PointLights() const { return m_pointLights; }
+            const renderer::DirectionalLight&        Sun()         const { return m_sun; }
 
         private:
             struct Slot {
@@ -51,12 +63,20 @@ namespace scene {
             };
 
             NodeHandle allocate(const std::string& name, NodeHandle parent);
+            void destroySubtree(NodeHandle handle);
+            bool isAncestorOrSelf(NodeHandle maybeAncestor, NodeHandle of) const;
             void markSubtreeDirty(NodeHandle handle);
             void updateNode(NodeHandle handle, const glm::mat4& parentWorld, bool parentChanged);
             
             std::vector<Slot> m_slots;
             std::vector<u32>  m_freeList;
             NodeHandle        m_root;
+
+            // Estado juntado por UpdateWorldTransforms
+            NodeHandle                        m_primarySun;
+            std::vector<RenderItem>           m_renderables;
+            std::vector<renderer::PointLight> m_pointLights;
+            renderer::DirectionalLight        m_sun { glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };
     };
 }
 }
