@@ -1,7 +1,10 @@
 # sandbox/CMakeLists.txt
 # Define un ejecutable de pruebas para el motor.
 
-add_executable(sandbox main.cpp)
+add_executable(sandbox
+    main.cpp
+    EditorUI.cpp
+)
 
 # Linkeamos contra el motor.
 target_link_libraries(sandbox PRIVATE efengine)
