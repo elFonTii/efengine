@@ -112,6 +112,19 @@ namespace scene {
         node.behaviors.push_back(std::move(behavior));
         return node.behaviors.back().get();
     }
+    
+    void SceneGraph::Update(f32 dt) {
+        for (Slot& slot : m_slots) {
+            if (!slot.alive) continue;
+            Node& node = slot.node;
+            if (node.behaviors.empty()) continue;
+
+            UpdateContext ctx{ *this, node.self, node, dt };
+            for (std::unique_ptr<Behavior>& b : node.behaviors) {
+                if (b && b->enabled) b->OnUpdate(ctx);
+            }
+        }
+    }
 
     void SceneGraph::SetPrimarySun(NodeHandle handle) {
         EF_ASSERT(IsValid(handle), "SceneGraph::SetPrimarySun: handle invalido");
