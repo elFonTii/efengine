@@ -10,7 +10,7 @@
 #include <vector>
 
 namespace efengine {
-namespace scene {
+namespace resources {
     // Scene assets es dueña de los assets que no se cargan en la escena
     // los materiales y las mallas que son procedurales (generación de terreno, plane por codigo)
 
