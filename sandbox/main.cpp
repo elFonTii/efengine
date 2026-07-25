@@ -10,6 +10,7 @@
 #include <efengine/scene/CameraController.h>
 #include <efengine/scene/SceneGraph.h>
 #include <efengine/scene/Node.h>
+#include <efengine/scene/Behavior.h>
 #include <efengine/math/Transform.h>
 #include <efengine/core/Types.h>
 #include <efengine/core/Log.h>
@@ -20,9 +21,12 @@
 
 #include <imgui.h>
 #include <cstdio>
+#include <cstring>
+#include <typeinfo>
 
 #include <optional>
 #include <string>
+#include <memory>
 #include <cmath>
 #include <unordered_map>
 #include <functional>
@@ -72,6 +76,50 @@ namespace {
         meshes.emplace_back(vertices, indices, materialName);
         return renderer::Model(std::move(meshes));
     }
+
+    // BEHAVIORS 
+    class RotarY : public scene::Behavior {
+        public:
+            explicit RotarY(f32 degPerSec) : m_degPerSec(degPerSec) {}
+            void OnUpdate(scene::UpdateContext& ctx) override {
+                math::Transform t = ctx.node.local;
+                t.rotation.y += ctx.dt * m_degPerSec;
+                ctx.SetLocal(t);
+            }
+        private:
+            f32 m_degPerSec;
+    };
+
+    class OrbitarXZ : public scene::Behavior {
+        public:
+            OrbitarXZ(glm::vec3 center, f32 radius, f32 speed)
+                : m_center(center), m_radius(radius), m_speed(speed) {}
+            void OnUpdate(scene::UpdateContext& ctx) override {
+                m_angle += ctx.dt * m_speed;
+                math::Transform t = ctx.node.local;
+                t.position = m_center + m_radius * glm::vec3(std::cos(m_angle), 0.0f, std::sin(m_angle));
+                ctx.SetLocal(t);
+            }
+        private:
+            glm::vec3 m_center;
+            f32 m_radius;
+            f32 m_speed;
+            f32 m_angle = 0.0f;
+    };
+
+    class RotarSolY : public scene::Behavior {
+        public:
+            explicit RotarSolY(f32 degPerSec) : m_degPerSec(degPerSec) {}
+            void OnUpdate(scene::UpdateContext& ctx) override {
+                m_angle += ctx.dt * m_degPerSec;
+                math::Transform t = ctx.node.local;
+                t.rotation.y = m_angle;
+                ctx.SetLocal(t);
+            }
+        private:
+            f32 m_degPerSec;
+            f32 m_angle = 0.0f;
+    };
 }
 
 int main() {
@@ -156,13 +204,23 @@ int main() {
     scene.AttachLight(sunNode, { scene::LightKind::Directional, glm::vec3(3.0f) });
     scene.SetPrimarySun(sunNode);
 
+    bool animate = true;
+    bool animateSun = false;
+
+    scene.AttachBehavior(ratHandle,  std::make_unique<RotarY>(20.0f))->enabled = animate;
+    scene.AttachBehavior(orbitLight, std::make_unique<OrbitarXZ>(glm::vec3(0.0f, 80.0f, 0.0f), 50.0f, 1.0f))->enabled = animate;
+    scene.AttachBehavior(sunNode,    std::make_unique<RotarSolY>(30.0f))->enabled = animateSun;
+
+    // Prende/apaga todos los behaviors de node
+    auto setEnabled = [&](scene::NodeHandle h, bool on) {
+        if (scene.IsValid(h))
+            for (std::unique_ptr<scene::Behavior>& b : scene.Get(h).behaviors) b->enabled = on;
+    };
+
     scene::Camera cam;
     cam.SetAspect(app.GetWindow().GetAspectRatio());
     scene::CameraController controller(&cam);
     app.GetWindow().SetEventListener(&controller);
-
-    bool animate = true;
-    bool animateSun = false;
 
     scene::NodeHandle selected;
     u32 spawnCounter = 0;
@@ -176,9 +234,14 @@ int main() {
         
         // --- Panel de edición de escena en runtime ---
         ImGui::Begin("Escena");
-        ImGui::Checkbox("Animate", &animate);
+        // Atajos globales: solo empujan al cambiar (no cada frame), asi el toggle
+        // individual de cada behavior en el inspector no se pierde.
+        if (ImGui::Checkbox("Animate", &animate)) {
+            setEnabled(ratHandle,  animate);
+            setEnabled(orbitLight, animate);
+        }
         ImGui::SameLine();
-        ImGui::Checkbox("Animar Sol", &animateSun);
+        if (ImGui::Checkbox("Animar Sol", &animateSun)) setEnabled(sunNode, animateSun);
         ImGui::SliderFloat("Ambient", &scene.ambientFactor, 0.0f, 1.0f);
         if(ImGui::SliderFloat("Exposure", &exposure, 0.0f, 5.0f) == true) { cam.SetExposure(exposure); }
         renderer::BloomSettings& s = app.GetBloomPass().settings(); 
@@ -221,9 +284,11 @@ int main() {
 
             // Marca de que adjunto tiene el nodo: malla, luz, o si es solo transform
             const char* tag = node.mesh ? "[M]" : (node.light ? "[L]" : "[T]");
+            // Los behaviors no son exclusivos con malla/luz, van como sufijo aparte.
+            const char* behTag = node.behaviors.empty() ? "" : " [B]";
 
             ImGui::PushID((int)h.index);
-            const bool open = ImGui::TreeNodeEx("nodo", flags, "%s %s", tag, node.name.c_str());
+            const bool open = ImGui::TreeNodeEx("nodo", flags, "%s %s%s", tag, node.name.c_str(), behTag);
             if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) selected = h;
 
             if (open && !node.children.empty()) {
@@ -255,6 +320,19 @@ int main() {
             changed |= ImGui::DragFloat3("Escala local",   glm::value_ptr(t.scale),    0.05f);
             if (changed) scene.SetLocalTransform(selected, t);
 
+            if (!node.behaviors.empty()) {
+                ImGui::SeparatorText("Behaviors");
+                for (usize i = 0; i < node.behaviors.size(); ++i) {
+                    const char* raw    = typeid(*node.behaviors[i]).name();
+                    const char* lastNs = std::strrchr(raw, ':');
+                    const char* label  = lastNs ? lastNs + 1 : raw;
+
+                    ImGui::PushID((int)i);
+                    ImGui::Checkbox(label, &node.behaviors[i]->enabled);
+                    ImGui::PopID();
+                }
+            }
+
             if (node.light) {
                 const char* kindName = node.light->kind == scene::LightKind::Point ? "Point" : "Directional";
                 ImGui::TextDisabled("luz: %s", kindName);
@@ -281,26 +359,7 @@ int main() {
 
         ImGui::End();
         
-        if (animate) {
-            const f32 elapsed = static_cast<f32>(app.Elapsed());
-            if (scene.IsValid(orbitLight)) {
-                math::Transform lt = scene.Get(orbitLight).local;
-                lt.position = glm::vec3(50.0f * std::cos(elapsed), 80.0f, 50.0f * std::sin(elapsed));
-                scene.SetLocalTransform(orbitLight, lt);
-            }
-            if (scene.IsValid(ratHandle)) {
-                math::Transform rt = scene.Get(ratHandle).local;
-                rt.rotation.y += app.DeltaTime() * 20.0f; // 20 grados/seg
-                scene.SetLocalTransform(ratHandle, rt);
-            }
-        }
-
-        if (animateSun && scene.IsValid(sunNode)) {
-            const f32 t = static_cast<f32>(app.Elapsed());
-            math::Transform st = scene.Get(sunNode).local;
-            st.rotation.y = t * 30.0f;   // gira el sol en Y
-            scene.SetLocalTransform(sunNode, st);
-        }
+        scene.Update(app.DeltaTime());
 
         app.RenderScene(scene, cam);
         app.EndFrame();
