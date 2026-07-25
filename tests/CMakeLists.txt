@@ -23,6 +23,7 @@ add_executable(efengine_tests
     serialization/BinaryIO.test.cpp
     serialization/StringTable.test.cpp
     serialization/EfeFile.test.cpp
+    serialization/SceneDocument.test.cpp
 )
 
 # Include path raíz: los tests consumen el motor como <efengine/...>.
