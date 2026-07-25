@@ -94,5 +94,16 @@ namespace resources {
             return &inserted->second;
         }
     }
+
+    // Ejecutado al serializar (guardar) un modelaso
+    // RAII nos garantiza que la dirección de memoria del modelo no cambia mientras esté en el unordered_map.
+    const std::string* ResourceManager::PathOf(const renderer::Model* model) const {
+        if (model == null) return null;
+
+        for (const auto& entry : m_models) {
+            if (&entry.second == model) return &entry.first; // compara direcciones de memoria, no contenido. 
+        }
+        return null;
+    }
 }
 }
