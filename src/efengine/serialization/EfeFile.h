@@ -23,5 +23,54 @@ namespace serialization {
 
     inline constexpr u8 kMagic[4] = { 'E', 'F', 'E', '1' };
 
+    // Arma un id de chunk de 4 caracteres. No se usan literales multi-caracter
+    // ('STRT') porque su valor es implementation-defined en C++.
+    constexpr u32 FourCC(char a, char b, char c, char d) {
+        return static_cast<u32>(static_cast<u8>(a))
+             | (static_cast<u32>(static_cast<u8>(b)) << 8)
+             | (static_cast<u32>(static_cast<u8>(c)) << 16)
+             | (static_cast<u32>(static_cast<u8>(d)) << 24);
+    }
+
+    // Que describe el archivo. El container es el mismo para todos.
+    enum class ContentType : u32 {
+        Scene = 1,
+        // Mesh = 2, Material = 3 prox...
+    };
+
+    enum class ChunkId : u32 {
+        Strings   = FourCC('S', 'T', 'R', 'T'),
+        Settings  = FourCC('S', 'C', 'N', 'E'),
+        Materials = FourCC('M', 'A', 'T', 'L'),
+        Nodes     = FourCC('N', 'O', 'D', 'E'),
+    };
+
+    // Cantidad de chunks que emite una escena. Va en el header del archivo.
+    inline constexpr u32 kSceneChunkCount = 4u;
+
+    // --- Reglas de compatibilidad -----------------------------------------------
+    // * Chunk nuevo                       -> NO sube kCurrentVersion
+    //   (el reader saltea por byteSize lo que no conoce).
+    // * Campo nuevo al final de un record -> SUBE kCurrentVersion.
+    // * Cambio de significado de un campo -> SUBE kCurrentVersion.
+    // Una version distinta de kCurrentVersion se rechaza: v1 es la primera y no hay
+    // nada que migrar.
+    // ---------------------------------------------------------------------------
+
+    class BinaryWriter;   // fwd
+    class BinaryReader;   // fwd
+
+    // Header: magic(4) + endianCheck(4) + version(4) + contentType(4) + chunkCount(4).
+    void WriteFileHeader(BinaryWriter& w, ContentType type, u32 chunkCount);
+    bool ReadFileHeader(BinaryReader& r, ContentType expected, u32& outChunkCount);
+
+    // Framing: id(4) + byteSize(4) + payload padeado a 4.
+    usize BeginChunk(BinaryWriter& w, ChunkId id);
+    void  EndChunk(BinaryWriter& w, usize marker);
+
+    // Lee el proximo encabezado de chunk. 'outEnd' es el offset absoluto donde termina:
+    // pasalo a BinaryReader::EndSizedBlock para saltear lo que no leiste.
+    bool NextChunk(BinaryReader& r, ChunkId& outId, usize& outEnd);
+
 }
 }
