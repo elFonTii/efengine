@@ -42,21 +42,20 @@ namespace scene {
             void SetLocalTransform(NodeHandle handle, const math::Transform& transform);
             void SetParent(NodeHandle child, NodeHandle newParent);
 
-            // Transforms (y gather: ver Renderables/PointLights/Sun)
+            // Transforms
             void UpdateWorldTransforms();
 
             // Adjuntos
             void AttachMesh(NodeHandle handle, MeshAttachment mesh);
             void AttachLight(NodeHandle handle, LightAttachment light);
 
-            // Comportamientos (Fase 2)
+            // Behaviors
             Behavior* AttachBehavior(NodeHandle handle, std::unique_ptr<Behavior> behavior);
             void      Update(f32 dt);
 
             void       SetPrimarySun(NodeHandle handle);
             NodeHandle PrimarySun() const { return m_primarySun; }
 
-            // Consumo por el renderer (valido tras UpdateWorldTransforms)
             const std::vector<RenderItem>&           Renderables() const { return m_renderables; }
             const std::vector<renderer::PointLight>& PointLights() const { return m_pointLights; }
             const renderer::DirectionalLight&        Sun()         const { return m_sun; }
