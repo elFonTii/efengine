@@ -1,6 +1,6 @@
 #include "Renderer.h"
 
-#include <glad/gl.h>
+#include <efecom/RHI.h>
 
 #include <efengine/core/Assert.h>
 #include <efengine/core/Log.h>
@@ -12,11 +12,11 @@ namespace efengine {
 namespace renderer {
 
     void Renderer::Clear(f32 r, f32 g, f32 b, f32 a) const {
-        glClearColor(r, g, b, a);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        efecom::SetClearColor(r, g, b, a);
+        efecom::Clear(efecom::ClearMask::ColorDepth);
     }
 
-    void Renderer::SetViewport(u32 width, u32 height) const { glViewport(0,0, (GLsizei) width, (GLsizei) height); }
+    void Renderer::SetViewport(u32 width, u32 height) const { efecom::SetViewport(0, 0, width, height); }
 
     void Renderer::Draw(const Model& model, const Shader& shader) const {
         for (const Mesh& mesh : model.meshes()) {
@@ -44,13 +44,13 @@ namespace renderer {
         va.Bind();
         
         if(va.hasIndexBuffer()) {
-            glDrawElements(GL_TRIANGLES, (GLsizei)va.indexCount(), GL_UNSIGNED_INT, nullptr);
+            efecom::DrawIndexed(va.indexCount());
         } else {
-            glDrawArrays(GL_TRIANGLES, 0, (GLsizei)va.vertexCount());
+            efecom::DrawArrays(va.vertexCount());
         }
 
-        glBindVertexArray(0);
-        glUseProgram(0);
+        efecom::BindVertexArray(0);
+        efecom::BindProgram(0);
     }
 
     void Renderer::BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, f32 ambientFactor, const DirectionalLight& sun, const ShadowContext& shadow, const Cubemap* irradiance) {

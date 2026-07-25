@@ -1,6 +1,6 @@
 #include "efengine/renderer/ShadowPass.h"
 
-#include <glad/gl.h>
+#include <efecom/RHI.h>
 
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Shader.h>
@@ -26,11 +26,11 @@ namespace renderer {
             m_settings.nearPlane, m_settings.farPlane);
 
         m_shadowMap.Bind();
-        glEnable(GL_DEPTH_TEST);
-        glClear(GL_DEPTH_BUFFER_BIT);
+        efecom::SetDepthTest(true);
+        efecom::Clear(efecom::ClearMask::Depth);
 
         // Dibujar la geometría de cada objeto (solo posición). Se re-bindea el
-        // shader por objeto: Renderer::Draw hace glUseProgram(0) al terminar, y
+        // shader por objeto: Renderer::Draw desbindea el programa al terminar, y
         // los valores de uniform persisten en el programa entre binds.
         for (const scene::SceneObject& obj : scene.objects()) {
             if (!obj.model) continue;

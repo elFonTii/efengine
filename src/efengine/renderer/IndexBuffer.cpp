@@ -1,6 +1,6 @@
 #include "IndexBuffer.h"
 
-#include <glad/gl.h>
+#include <efecom/RHI.h>
 #include <utility>
 
 #include <efengine/core/Assert.h>
@@ -12,29 +12,15 @@ namespace renderer {
         EF_ASSERT(indices != null, "IndexBuffer: indices no puede ser null");
         EF_ASSERT(count > 0, "IndexBuffer: count debe ser > 0");
 
-        /* GL 3.3 binding de EBO y subida de datos
-        glGenBuffers(1, &m_id);
-        EF_ASSERT(m_id != 0, "IndexBuffer: glGenBuffers fallo");
-
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_id);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                     static_cast<GLsizeiptr>(count) * static_cast<GLsizeiptr>(sizeof(u32)),
-                     indices, GL_STATIC_DRAW);
-        */
-
-        // GL 4.5
-        glCreateBuffers(1, &m_id);
-        EF_ASSERT(m_id != 0, "IndexBuffer: glCreateBuffers fallo");
-        glNamedBufferData(m_id,
-                          static_cast<GLsizeiptr>(count) * static_cast<GLsizeiptr>(sizeof(u32)),
-                          indices, GL_STATIC_DRAW);
+        m_id = efecom::CreateBuffer(indices, static_cast<usize>(count) * sizeof(u32));
+        EF_ASSERT(m_id != 0, "IndexBuffer: efecom::CreateBuffer fallo");
 
         m_count = count;
     }
 
     IndexBuffer::~IndexBuffer() {
         if (m_id != 0) {
-            glDeleteBuffers(1, &m_id);
+            efecom::DestroyBuffer(m_id);
         }
     }
 
@@ -45,7 +31,7 @@ namespace renderer {
     IndexBuffer& IndexBuffer::operator=(IndexBuffer&& other) noexcept {
         if (this != &other) {
             if (m_id != 0) {
-                glDeleteBuffers(1, &m_id);
+                efecom::DestroyBuffer(m_id);
             }
             m_id    = std::exchange(other.m_id, 0);
             m_count = std::exchange(other.m_count, 0);
