@@ -107,6 +107,7 @@ namespace {
         { renderer::TextureSlot::Metallic,  "Metallic",  renderer::ColorSpace::Linear },
         { renderer::TextureSlot::Height,    "Height",    renderer::ColorSpace::Linear },
         { renderer::TextureSlot::Opacity,   "Opacity",   renderer::ColorSpace::sRGB   },
+        { renderer::TextureSlot::Emissive,  "Emissive",  renderer::ColorSpace::sRGB   },
     };
 
     renderer::TextureDef* buscarTextura(renderer::MaterialDef& def, renderer::TextureSlot slot) {
@@ -346,6 +347,13 @@ void DrawMaterialsPanel(EditorContext& ctx) {
     changed |= ImGui::SliderFloat("AO",        &def.aoStrength,  0.0f,  1.0f);
     changed |= ImGui::SliderFloat("Height",    &def.heightScale, 0.0f,  0.2f);
     changed |= ImGui::SliderFloat("Alpha cut", &def.alphaCutoff, 0.0f,  1.0f);
+    changed |= ImGui::SliderFloat("Normal str", &def.normalStrength, 0.0f, 2.0f);
+
+    ImGui::SeparatorText("Emision");
+    changed |= ImGui::ColorEdit3 ("Emis tint", glm::value_ptr(def.emissiveTint));
+    // Rango HDR: para que el bloom lo agarre, la emision tiene que pasar el
+    // threshold del brightpass, que trabaja sobre radiancia lineal sin tonemapear.
+    changed |= ImGui::SliderFloat("Emis int",  &def.emissiveIntensity, 0.0f, 20.0f);
 
     if (changed) aplicarDraft(ctx);
 
