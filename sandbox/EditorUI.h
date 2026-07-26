@@ -7,7 +7,7 @@
 
 namespace efengine {
     namespace application  { class Application; }
-    namespace scene        { class SceneGraph; class Camera; }
+    namespace scene        { class SceneGraph; class Camera; class CameraController; }
     namespace resources    { class SceneAssets; class ResourceManager; }
     namespace serialization { struct SceneRegistry; }
 }
@@ -42,6 +42,7 @@ namespace sandbox {
         efengine::application::Application&           app;
         efengine::scene::SceneGraph&                  scene;
         efengine::scene::Camera&                      camera;
+        efengine::scene::CameraController&            controller;
         efengine::resources::SceneAssets&             assets;
         efengine::resources::ResourceManager&         rm;
         const efengine::serialization::SceneRegistry& registry;
@@ -51,6 +52,11 @@ namespace sandbox {
     // Re-resuelve los handles por nombre y recalcula los flags de animacion.
     // Se llama al arrancar y despues de cada carga de escena.
     void RefreshHandles(EditorContext& ctx);
+
+    // Encuadra el nodo seleccionado. Vive aca y no en el motor porque la
+    // seleccion es un concepto de la UI: la camara no tiene que aprender que
+    // es un nodo seleccionado. Sin seleccion valida, no hace nada.
+    void FocusSelection(EditorContext& ctx);
 
     // Unico punto de entrada: dibuja barra de menu, ventanas y overlay.
     void DrawEditor(EditorContext& ctx);

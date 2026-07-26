@@ -45,6 +45,9 @@ namespace platform {
             // Input
             bool IsKeyPressed(Key _key) const;
 
+            // el loop la llama todos los frames.
+            void SetCursorCaptured(bool captured);
+
             // Accessors
             u32 GetWidth() const { return m_width; }
             u32 GetHeight() const { return m_height; }
@@ -61,6 +64,7 @@ namespace platform {
         u32 m_width = 0;
         u32 m_height = 0;
         IEventListener* m_listener = null;
+        bool m_cursorCaptured = false;
 
         static void OnFramebufferResize(GLFWwindow* handle, int width, int height);
         static void OnCursorPos(GLFWwindow* handle, double xpos, double ypos);

@@ -8,11 +8,13 @@ add_executable(efengine_tests
     core/Time.test.cpp
     math/Transform.test.cpp
     platform/InputCodes.test.cpp
+    platform/Input.test.cpp
     renderer/VertexLayout.test.cpp
     renderer/Vertex.test.cpp
     renderer/PostChain.test.cpp
     renderer/Cubemap.test.cpp
     renderer/ShadowMath.test.cpp
+    renderer/Bounds.test.cpp
     resources/FileIO.test.cpp
     resources/ResourceManager.test.cpp
     scene/NodeHandle.test.cpp
