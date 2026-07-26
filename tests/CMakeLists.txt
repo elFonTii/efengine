@@ -8,6 +8,7 @@ add_executable(efengine_tests
     core/Time.test.cpp
     math/Transform.test.cpp
     platform/InputCodes.test.cpp
+    platform/Input.test.cpp
     renderer/VertexLayout.test.cpp
     renderer/Vertex.test.cpp
     renderer/PostChain.test.cpp
