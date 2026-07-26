@@ -28,3 +28,10 @@ vcpkg_installed/
 
 # Document Directory
 docs/
+
+# Layout de paneles que ImGui guarda al salir. Es preferencia local de cada uno;
+# el layout por defecto lo arma ensureDefaultLayout() en sandbox/EditorUI.cpp.
+imgui.ini
+
+# Blender files
+blender/
