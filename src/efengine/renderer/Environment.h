@@ -39,14 +39,22 @@ namespace renderer {
 
             const Cubemap& env() const { return m_env; }
             const Cubemap& irradiance() const { return m_irradiance; }
+            const Cubemap& prefiltered() const { return m_prefiltered; }
             const Texture& brdfLut() const { return m_brdfLut; }
 
+            // LOD maximo del prefiltrado: en el shader la rugosidad se mapea a
+            // roughness * prefilterMaxLod(). Con 5 mips son 4.
+            f32 prefilterMaxLod() const { return m_prefilterMaxLod; }
+
         private:
-            Environment(Cubemap env, Cubemap irradiance, Texture brdfLut);
+            Environment(Cubemap env, Cubemap irradiance, Cubemap prefiltered, Texture brdfLut,
+                        f32 prefilterMaxLod);
 
             Cubemap m_env;
             Cubemap m_irradiance;
+            Cubemap m_prefiltered;
             Texture m_brdfLut;
+            f32     m_prefilterMaxLod = 0.0f;
     };
 
 }
