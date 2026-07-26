@@ -13,6 +13,7 @@ add_executable(efengine_tests
     renderer/PostChain.test.cpp
     renderer/Cubemap.test.cpp
     renderer/ShadowMath.test.cpp
+    renderer/Bounds.test.cpp
     resources/FileIO.test.cpp
     resources/ResourceManager.test.cpp
     scene/NodeHandle.test.cpp
