@@ -9,8 +9,11 @@ namespace renderer {
     public:
         explicit Model(std::vector<Mesh> meshes);
         const std::vector<Mesh>& meshes() const { return m_meshes; }
+
+        const AABB& bounds() const { return m_bounds; }
     private:
         std::vector<Mesh> m_meshes;
+        AABB              m_bounds;
     };
 }
 }
