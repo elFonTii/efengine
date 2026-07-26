@@ -8,6 +8,7 @@ namespace platform {
         // ASCII
         Escape  = 256,
         Space   = 32,
+        Tab     = 258,
 
         Down    = 264,
         Up      = 265,
@@ -18,7 +19,12 @@ namespace platform {
         A       = 65,
         S       = 83,
         D       = 68,
+        Q       = 81,
+        E       = 69,
+        F       = 70,
 
+        LeftShift = 340,
+        LeftAlt   = 342,
     };
 
     enum class MouseButton : i32 {

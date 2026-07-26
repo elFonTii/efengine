@@ -12,6 +12,7 @@
 #include <efengine/resources/ResourceManager.h>
 #include <efengine/core/Time.h>
 #include <efengine/platform/InputCodes.h>
+#include <efengine/platform/Input.h>
 #include <efengine/renderer/Environment.h>
 #include <efengine/renderer/SkyboxPass.h>
 #include <efengine/renderer/ShadowPass.h>
@@ -32,6 +33,7 @@ namespace application {
             renderer::Renderer& GetRenderer() { return m_renderer; }
             resources::ResourceManager& GetResources() { return m_resources; }
             core::Time& GetTime() { return m_time; }
+            const platform::Input& GetInput() const { return m_input; }
             application::DebugUI& GetDebugUI() { return m_debugUI; }
             renderer::BloomPass& GetBloomPass() { return m_bloomPass; }
             renderer::FxaaPass& GetFxaaPass() { return m_fxaaPass; }
@@ -72,6 +74,8 @@ namespace application {
             renderer::FxaaPass m_fxaaPass;
             renderer::PostChain m_postChain;
             core::Time m_time;
+            // No participa del contrato de orden: no toca GL.
+            platform::Input m_input;
             std::optional<renderer::Environment> m_environment;
             renderer::SkyboxPass m_skyboxPass;
             renderer::ShadowPass m_shadowPass;

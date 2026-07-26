@@ -37,6 +37,10 @@ namespace scene {
 
     const glm::vec3& Camera::Position() const  { return m_position; }
 
+    f32 Camera::Fov() const { return m_fov; }
+
+    const glm::vec3& Camera::Target() const { return m_target; }
+
     
 
 }

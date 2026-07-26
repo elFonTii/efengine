@@ -119,6 +119,13 @@ namespace platform {
         return glfwGetKey(m_handle, (int)_key) == GLFW_PRESS;
     }
 
+    void Window::SetCursorCaptured(bool captured) {
+        if (m_cursorCaptured == captured) return;   // el loop la llama cada frame
+        m_cursorCaptured = captured;
+        glfwSetInputMode(m_handle, GLFW_CURSOR,
+                         captured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+    }
+
     f32 Window::GetAspectRatio() const {
         if(m_width != 0 && m_height != 0) {
             return (f32)m_width / (f32)m_height;

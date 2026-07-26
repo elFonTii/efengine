@@ -16,6 +16,10 @@ namespace scene {
         void SetExposure(f32 exposure);
         f32 Exposure() const;
 
+        // En GRADOS: es como está guardado, ProjectionMatrix le aplica radians().
+        f32 Fov() const;
+        const glm::vec3& Target() const;
+
 
         private:
             glm::vec3 m_position { 0.0f, 0.0f, 0.0f };

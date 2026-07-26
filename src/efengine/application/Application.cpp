@@ -62,12 +62,17 @@ namespace application {
             EF_LOG_ERROR("Application: no se pudo cargar algún compute de IBL (equirect/irradiance)");
         }
 
+        m_window.SetEventListener(&m_input);
+
         EF_LOG_INFO("Application inicializada");
     }
 
     void Application::BeginFrame() {
         m_time.Tick();
         m_window.PollEvents();
+        // Después de PollEvents (que dispara los callbacks de cursor/scroll de
+        // este frame) y antes de que nadie lea el input.
+        m_input.NewFrame(m_window);
         m_debugUI.NewFrame();
     }
 
