@@ -41,5 +41,13 @@ namespace renderer {
         bindMap(*m_shader, m_height,    5, "uHeightMap",    "uHasHeightMap");
         bindMap(*m_shader, m_opacity,   6, "uOpacityMap",   "uHasOpacityMap");
     }
+
+    MaterialMap MakeUniformMaterialMap(const std::vector<std::string>& submeshNames,
+                                       const Material* material) {
+        MaterialMap out;
+        if (material == null) return out;
+        for (const std::string& name : submeshNames) out[name] = material;
+        return out;
+    }
 }
 }

@@ -1,5 +1,7 @@
 #include "EditorUI.h"
 
+#include "AuthoringUI.h"
+
 #include <efengine/application/Application.h>
 #include <efengine/renderer/BloomPass.h>
 #include <efengine/renderer/FxaaPass.h>
@@ -79,6 +81,7 @@ namespace {
         if (ImGui::BeginMenu("Ventanas")) {
             ImGui::MenuItem("Jerarquia",        nullptr, &st.showHierarchy);
             ImGui::MenuItem("Inspector",        nullptr, &st.showInspector);
+            ImGui::MenuItem("Materiales",       nullptr, &st.showMaterials);
             ImGui::MenuItem("Render",           nullptr, &st.showRender);
             ImGui::MenuItem("Overlay de debug", nullptr, &st.showStats);
             ImGui::EndMenu();
@@ -172,6 +175,8 @@ namespace {
         changed |= ImGui::DragFloat3("Rotacion local", glm::value_ptr(t.rotation), 0.5f);
         changed |= ImGui::DragFloat3("Escala local",   glm::value_ptr(t.scale),    0.05f);
         if (changed) ctx.scene.SetLocalTransform(st.selected, t);
+
+        DrawMeshSection(ctx, st.selected);
 
         if (!node.behaviors.empty()) {
             ImGui::SeparatorText("Behaviors");
@@ -301,6 +306,12 @@ void RefreshHandles(EditorContext& ctx) {
     EditorState& st = ctx.state;
 
     st.selected   = scene::NodeHandle{};  // los handles viejos quedaron invalidos
+    st.meshError.clear();   // el error viejo hablaba de una escena que ya no existe
+
+    // Los indices de material de la escena vieja no significan nada en la nueva.
+    st.activeMaterial = resources::SceneAssets::kInvalidIndex;
+    st.draftFor       = resources::SceneAssets::kInvalidIndex;
+    st.materialError.clear();
     st.rat        = ctx.scene.FindByName("model_rata");
     st.orbitLight = ctx.scene.FindByName("luz_animada");
     st.sun        = ctx.scene.FindByName("directional_light");
@@ -333,6 +344,7 @@ void DrawEditor(EditorContext& ctx) {
     drawMainMenuBar(ctx);
     if (ctx.state.showHierarchy) drawHierarchy(ctx);
     if (ctx.state.showInspector) drawInspector(ctx);
+    if (ctx.state.showMaterials) DrawMaterialsPanel(ctx);
     if (ctx.state.showRender)    drawRenderPanel(ctx);
     if (ctx.state.showStats)     drawStatsOverlay(ctx);
 }

@@ -4,6 +4,8 @@
 add_executable(sandbox
     main.cpp
     EditorUI.cpp
+    AssetCatalog.cpp
+    AuthoringUI.cpp
 )
 
 # Linkeamos contra el motor.

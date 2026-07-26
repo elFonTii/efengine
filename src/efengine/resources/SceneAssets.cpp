@@ -14,6 +14,19 @@ namespace resources {
         return index;
     }
 
+    bool SceneAssets::UpdateMaterial(u32 index, renderer::MaterialDef def,
+                                     renderer::Material rebuilt) {
+        if (index >= MaterialCount()) {
+            EF_LOG_WARNING("SceneAssets::UpdateMaterial: indice %u fuera de rango", index);
+            return false;
+        }
+
+        MaterialSlot& slot = m_materials[index];
+        slot.def = std::move(def);
+        *slot.material = std::move(rebuilt);   // sobreescribe el CONTENIDO, no el unique_ptr
+        return true;
+    }
+
     const renderer::MaterialDef* SceneAssets::DefAt(u32 index) const {
         if (index >= MaterialCount()) return null;
         return &m_materials[index].def;
