@@ -18,6 +18,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <imgui.h>
+#include <imgui_internal.h>   // DockBuilder*: API de layout, no esta en imgui.h
 
 #include <cstdio>
 #include <cstring>
@@ -46,6 +47,43 @@ namespace {
     void setBehaviorsEnabled(scene::SceneGraph& scene, scene::NodeHandle h, bool on) {
         if (!scene.IsValid(h)) return;
         for (std::unique_ptr<scene::Behavior>& b : scene.Get(h).behaviors) b->enabled = on;
+    }
+
+    // Arma el layout por defecto: Jerarquia a la izquierda, Inspector y Render
+    // como pestanas a la derecha, Materiales abajo, y el centro libre para la
+    // escena 3D.
+    //
+    // Solo corre cuando no hay layout que respetar, o cuando lo piden explicitamente.
+    // Si corriera siempre pisaria cada frame el acomodo que el usuario dejo guardado.
+    //
+    // "No hay layout" es nodo inexistente (primer arranque, imgui.ini borrado) O nodo
+    // vacio: el ini tambien persiste el dockspace pelado, sin nada adentro, y en ese
+    // caso el nodo existe pero no dice nada. Con los paneles cerrados a mano queda
+    // vacio y esto reconstruye cada frame; es un estado degenerado y sale barato.
+    void ensureDefaultLayout(ImGuiID dockId, bool force) {
+        const ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockId);
+        if (!force && node != nullptr && !node->IsEmpty()) return;
+
+        ImGui::DockBuilderRemoveNode(dockId);   // limpia lo que hubiera
+        ImGui::DockBuilderAddNode(dockId, ImGuiDockNodeFlags_DockSpace
+                                        | ImGuiDockNodeFlags_PassthruCentralNode);
+        ImGui::DockBuilderSetNodeSize(dockId, ImGui::GetMainViewport()->WorkSize);
+
+        // Cada split devuelve el nodo nuevo y deja en 'center' lo que sobra, asi
+        // que las fracciones son sobre el area que queda, no sobre el total.
+        ImGuiID center = dockId;
+        const ImGuiID left   = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left,  0.20f, nullptr, &center);
+        const ImGuiID right  = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.28f, nullptr, &center);
+        const ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down,  0.28f, nullptr, &center);
+
+        ImGui::DockBuilderDockWindow("Jerarquia",  left);
+        // Inspector primero: el primero que se dockea en un nodo queda como pestana
+        // activa, y al abrir es lo que se quiere ver.
+        ImGui::DockBuilderDockWindow("Inspector",  right);
+        ImGui::DockBuilderDockWindow("Render",     right);
+        ImGui::DockBuilderDockWindow("Materiales", bottom);
+
+        ImGui::DockBuilderFinish(dockId);
     }
 
     void drawMainMenuBar(EditorContext& ctx) {
@@ -84,6 +122,13 @@ namespace {
             ImGui::MenuItem("Materiales",       nullptr, &st.showMaterials);
             ImGui::MenuItem("Render",           nullptr, &st.showRender);
             ImGui::MenuItem("Overlay de debug", nullptr, &st.showStats);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Restablecer layout")) {
+                st.resetLayout = true;
+                // Un panel cerrado no se puede redockear: hay que reabrirlos todos
+                // o el layout nuevo tendria huecos.
+                st.showHierarchy = st.showInspector = st.showMaterials = st.showRender = true;
+            }
             ImGui::EndMenu();
         }
 
@@ -267,16 +312,21 @@ namespace {
         ImGui::End();
     }
 
-    void drawStatsOverlay(EditorContext& ctx) {
+    void drawStatsOverlay(EditorContext& ctx, ImGuiID dockId) {
         EditorState& st = ctx.state;
 
-        const ImGuiViewport* vp = ImGui::GetMainViewport();
-        // WorkPos ya descuenta la barra de menu, asi que el overlay no queda debajo.
-        const ImVec2 pos { vp->WorkPos.x + 10.0f, vp->WorkPos.y + 10.0f };
-        ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
+        // El overlay va sobre la escena, no sobre los paneles: se ancla al nodo
+        // central del dockspace (el agujero passthrough). Si todavia no existe
+        // (primer frame), cae al area de trabajo del viewport.
+        const ImGuiViewport*  vp      = ImGui::GetMainViewport();
+        const ImGuiDockNode*  central = ImGui::DockBuilderGetCentralNode(dockId);
+        const ImVec2 origin = central ? central->Pos : vp->WorkPos;
+
+        ImGui::SetNextWindowPos({ origin.x + 10.0f, origin.y + 10.0f }, ImGuiCond_Always);
         ImGui::SetNextWindowBgAlpha(0.35f);
 
         const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration
+                                     | ImGuiWindowFlags_NoDocking
                                      | ImGuiWindowFlags_NoMove
                                      | ImGuiWindowFlags_NoSavedSettings
                                      | ImGuiWindowFlags_NoFocusOnAppearing
@@ -341,12 +391,23 @@ void FocusSelection(EditorContext& ctx) {
 void DrawEditor(EditorContext& ctx) {
     ctx.state.stats.Push(ctx.app.DeltaTime());
 
+    // La barra va primero: el dockspace se ancla al area de trabajo, que es lo
+    // que queda del viewport despues de descontarla.
     drawMainMenuBar(ctx);
+
+    // Y el dockspace antes que los paneles: cada Begin() de abajo consulta en que
+    // nodo esta dockeado, y ese nodo tiene que existir ya.
+    application::DebugUI& ui = ctx.app.GetDebugUI();
+    const ImGuiID dockId = ui.BeginDockspace();
+    ensureDefaultLayout(dockId, ctx.state.resetLayout);
+    ctx.state.resetLayout = false;
+    ui.EndDockspace(dockId);
+
     if (ctx.state.showHierarchy) drawHierarchy(ctx);
     if (ctx.state.showInspector) drawInspector(ctx);
     if (ctx.state.showMaterials) DrawMaterialsPanel(ctx);
     if (ctx.state.showRender)    drawRenderPanel(ctx);
-    if (ctx.state.showStats)     drawStatsOverlay(ctx);
+    if (ctx.state.showStats)     drawStatsOverlay(ctx, dockId);
 }
 
 } // namespace sandbox

@@ -38,6 +38,12 @@ namespace sandbox {
         bool showRender    = true;
         bool showStats     = true;
 
+        // Pedido de reconstruir el layout de paneles desde cero. Lo prende el menu
+        // "Ventanas" y lo apaga el editor en el mismo frame en que lo atiende.
+        // Sin esto no habria vuelta atras: una vez que arrastraste un panel, tu
+        // acomodo queda guardado en imgui.ini y el default no se aplica nunca mas.
+        bool resetLayout = false;
+
         // Autoria de mallas: catalogo de disco + el modelo elegido en el combo.
         AssetCatalog catalog;
         int          modelPick = 0;
