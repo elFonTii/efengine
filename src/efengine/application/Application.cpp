@@ -54,12 +54,22 @@ namespace application {
                                      "assets/shaders/ibl/equirect_to_cube.comp");
         renderer::Shader* irrCS = m_resources.GetComputeShader("irradiance_convolve",
                                      "assets/shaders/ibl/irradiance_convolve.comp");
-        if (eqCS && irrCS) {
-            m_environment = renderer::Environment::Create(
-                "assets/hdr/citrus_orchard_puresky_4k.hdr", *eqCS, *irrCS); // TODO: serializar paths, no pueden seguir creciendo...
+        renderer::Shader* lutCS = m_resources.GetComputeShader("brdf_lut",
+                                     "assets/shaders/ibl/brdf_lut.comp");
+        if (eqCS && irrCS && lutCS) {
+            renderer::EnvironmentDesc envDesc;
+            envDesc.hdrPath = "assets/hdr/citrus_orchard_puresky_4k.hdr";   // TODO: serializar en settings de escena
+
+            renderer::EnvironmentShaders envShaders;
+            envShaders.equirectToCube     = eqCS;
+            envShaders.irradianceConvolve = irrCS;
+            envShaders.brdfLut            = lutCS;
+            // envShaders.prefilterGGX se completa en la Tarea 6.
+
+            m_environment = renderer::Environment::Create(envDesc, envShaders);
             if (!m_environment) EF_LOG_ERROR("Application: no se pudo crear el Environment IBL");
         } else {
-            EF_LOG_ERROR("Application: no se pudo cargar algún compute de IBL (equirect/irradiance)");
+            EF_LOG_ERROR("Application: no se pudo cargar algún compute de IBL (equirect/irradiance/brdf)");
         }
 
         m_window.SetEventListener(&m_input);

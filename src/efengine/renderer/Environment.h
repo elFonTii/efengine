@@ -10,22 +10,39 @@
 namespace efengine {
 namespace renderer {
 
-    struct EnvironmentDesc { const char* hdrPath; u32 faceSize; u32 irradianceSize; u32 prefilterSize; u32 prefilterMips; u32 lutSize; };
-    struct EnvironmentShaders Create(const EnvironmentDesc&, const EnvironmentShaders&);
+    // Parametros del precomputo IBL. Todo lo que hoy son argumentos sueltos de Create.
+    struct EnvironmentDesc {
+        const char* hdrPath        = nullptr;
+        u32         faceSize       = 512;   // cara del env cubemap
+        u32         irradianceSize = 32;    // cara del mapa de irradiancia difusa
+        u32         prefilterSize  = 128;   // cara del mip 0 del prefiltrado
+        u32         prefilterMips  = 5;     // 5 niveles => roughness 0, .25, .5, .75, 1
+        u32         lutSize        = 512;   // lado de la BRDF LUT
+    };
+
+    // Los computes que hacen el precomputo. Punteros no-dueños: viven en el
+    // ResourceManager. Create falla si alguno es null.
+    struct EnvironmentShaders {
+        const Shader* equirectToCube     = nullptr;
+        const Shader* irradianceConvolve = nullptr;
+        const Shader* prefilterGGX       = nullptr;
+        const Shader* brdfLut            = nullptr;
+    };
 
     // Precómputo de ibl: proyecta un .hdr a un cubemap de entorno y lo convoluciona
     // a un mapa de irradiancia difusa (el resultado completo del precómputo IBL) (ro5).
-    // Sigue siendo ro5 válido: ambos miembros son Cubemap RAII, el move/destroy es implícito.
+    // Sigue siendo ro5 válido: los tres miembros son RAII con move (Cubemap y Texture),
+    // el move/destroy es implícito.
     class Environment {
         public:
-            static std::optional<Environment> Create(const EnvironmentDesc&, const EnvironmentShaders&);
+            static std::optional<Environment> Create(const EnvironmentDesc& desc, const EnvironmentShaders& shaders);
 
             const Cubemap& env() const { return m_env; }
             const Cubemap& irradiance() const { return m_irradiance; }
             const Texture& brdfLut() const { return m_brdfLut; }
 
         private:
-            Environment(Cubemap env, Cubemap irradiance);
+            Environment(Cubemap env, Cubemap irradiance, Texture brdfLut);
 
             Cubemap m_env;
             Cubemap m_irradiance;
