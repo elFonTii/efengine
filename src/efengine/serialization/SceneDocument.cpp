@@ -27,7 +27,7 @@ namespace serialization {
         EndChunk(w, marker);
 
         marker = BeginChunk(w, ChunkId::Materials);
-        SerializeVector(w, doc.materials, kMinEncodedMaterial);
+        SerializeVector(w, doc.materials, MinEncodedMaterial(w.Version()));
         EndChunk(w, marker);
 
         marker = BeginChunk(w, ChunkId::Nodes);
@@ -72,7 +72,7 @@ namespace serialization {
                     r.Field(out.primarySunNode);
                     break;
                 case ChunkId::Materials:
-                    SerializeVector(r, out.materials, kMinEncodedMaterial);
+                    SerializeVector(r, out.materials, MinEncodedMaterial(r.Version()));
                     break;
                 case ChunkId::Nodes:
                     SerializeVector(r, out.nodes, kMinEncodedNode);

@@ -127,6 +127,76 @@ namespace {
         CHECK(a.scale.y == doctest::Approx(b.scale.y));
         CHECK(a.scale.z == doctest::Approx(b.scale.z));
     }
+
+    // Arma a mano un .efe v1: header con version 1 y los records con el layout viejo
+    // (material SIN los 3 escalares nuevos, chunk SCNE con el ambientFactor original).
+    // No se puede usar WriteSceneDocument: el writer siempre emite kCurrentVersion.
+    std::vector<u8> documentoV1() {
+        BinaryWriter w;
+
+        // Header a mano, con version 1.
+        w.Bytes(kMagic, 4u);
+        u32 endian  = kEndianCheck;
+        u32 version = 1u;
+        u32 content = static_cast<u32>(ContentType::Scene);
+        u32 chunks  = 4u;
+        w.Field(endian);
+        w.Field(version);
+        w.Field(content);
+        w.Field(chunks);
+
+        StringTable strings;
+        const u32 sMat  = strings.Intern("mat_v1");
+        const u32 sShad = strings.Intern("pbr");
+        const u32 sVert = strings.Intern("assets/shaders/pbr.vert");
+        const u32 sFrag = strings.Intern("assets/shaders/pbr.frag");
+        const u32 sRoot = strings.Intern("root");
+
+        usize marker = BeginChunk(w, ChunkId::Strings);
+        strings.Serialize(w);
+        EndChunk(w, marker);
+
+        // SCNE v1: el primer f32 era ambientFactor.
+        marker = BeginChunk(w, ChunkId::Settings);
+        f32 ambientFactorViejo = 0.08f;
+        u32 primarySun         = kInvalidIndex;
+        w.Field(ambientFactorViejo);
+        w.Field(primarySun);
+        EndChunk(w, marker);
+
+        // MATL v1: 4*u32 + array de texturas + vec3 + 5*f32. Nada mas.
+        marker = BeginChunk(w, ChunkId::Materials);
+        u32 materialCount = 1u;
+        w.Count(materialCount, 52u);
+        u32 nameStr = sMat, shaderStr = sShad, vertStr = sVert, fragStr = sFrag;
+        w.Field(nameStr);
+        w.Field(shaderStr);
+        w.Field(vertStr);
+        w.Field(fragStr);
+        std::vector<TextureRef> sinTexturas;
+        w.Array(sinTexturas);
+        glm::vec3 tint(1.0f);
+        f32 metallic = 0.25f, roughness = 0.5f, ao = 0.5f, height = 0.05f, cutoff = 0.5f;
+        w.Field(tint);
+        w.Field(metallic);
+        w.Field(roughness);
+        w.Field(ao);
+        w.Field(height);
+        w.Field(cutoff);
+        EndChunk(w, marker);
+
+        // NODE no cambio entre v1 y v2: se puede usar el helper de produccion.
+        marker = BeginChunk(w, ChunkId::Nodes);
+        std::vector<NodeRecord> nodes;
+        NodeRecord root;
+        root.nameStr = sRoot;
+        root.parent  = kInvalidIndex;
+        nodes.push_back(root);
+        SerializeVector(w, nodes, kMinEncodedNode);
+        EndChunk(w, marker);
+
+        return w.Take();
+    }
 }
 
 TEST_CASE("EfeSceneDocument: round-trip completo campo por campo") {
@@ -276,4 +346,50 @@ TEST_CASE("EfeSceneDocument: Clear vacia todo") {
     CHECK(d.materials.empty());
     CHECK(d.primarySunNode == kInvalidIndex);
     CHECK(d.strings.Count() == 1u);        // vuelve a tener solo ""
+}
+
+TEST_CASE("SceneDocument: los escalares v2 del material sobreviven el round-trip") {
+    SceneDocument src;
+    const u32 sMat = src.strings.Intern("mat");
+
+    MaterialRecord m;
+    m.nameStr           = sMat;
+    m.emissiveTint      = glm::vec3(0.25f, 0.5f, 0.75f);
+    m.emissiveIntensity = 12.5f;
+    m.normalStrength    = 1.75f;
+    src.materials.push_back(m);
+
+    NodeRecord root;
+    root.nameStr = src.strings.Intern("root");
+    root.parent  = kInvalidIndex;
+    src.nodes.push_back(root);
+
+    std::vector<u8> bytes;
+    REQUIRE(WriteSceneDocument(src, bytes));
+
+    SceneDocument dst;
+    REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), dst));
+    REQUIRE(dst.materials.size() == 1u);
+    CHECK(dst.materials[0].emissiveTint.x == doctest::Approx(0.25f));
+    CHECK(dst.materials[0].emissiveTint.y == doctest::Approx(0.5f));
+    CHECK(dst.materials[0].emissiveTint.z == doctest::Approx(0.75f));
+    CHECK(dst.materials[0].emissiveIntensity == doctest::Approx(12.5f));
+    CHECK(dst.materials[0].normalStrength == doctest::Approx(1.75f));
+}
+
+TEST_CASE("SceneDocument: un archivo v1 carga con los defaults de los campos v2") {
+    const std::vector<u8> bytes = documentoV1();
+
+    SceneDocument dst;
+    REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), dst));
+    REQUIRE(dst.materials.size() == 1u);
+
+    // Lo que v1 SI traia se lee igual.
+    CHECK(dst.materials[0].metallic == doctest::Approx(0.25f));
+    CHECK(dst.materials[0].roughness == doctest::Approx(0.5f));
+
+    // Lo que v1 no traia queda en el default: emision apagada, normal sin escalar.
+    CHECK(dst.materials[0].emissiveTint.x == doctest::Approx(1.0f));
+    CHECK(dst.materials[0].emissiveIntensity == doctest::Approx(0.0f));
+    CHECK(dst.materials[0].normalStrength == doctest::Approx(1.0f));
 }

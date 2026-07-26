@@ -22,6 +22,11 @@ namespace {
         MaterialRecord m;
         m.nameStr = sMat;
         m.textures.push_back(TextureRef{ 0u, sMalla, 1u });
+        // Valores no-default para que el sweep de truncacion/corrupcion recorra
+        // tambien los 20 bytes que agrego v2 al final del record.
+        m.emissiveTint      = glm::vec3(0.5f, 0.25f, 0.125f);
+        m.emissiveIntensity = 8.0f;
+        m.normalStrength    = 1.5f;
         d.materials.push_back(m);
 
         NodeRecord root;
