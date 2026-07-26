@@ -13,7 +13,7 @@ namespace {
     // de tres niveles.
     SceneDocument makeDoc() {
         SceneDocument d;
-        d.ambientFactor = 0.125f;
+        d.iblIntensity = 0.125f;
 
         const u32 sRoot   = d.strings.Intern("root");
         const u32 sRata   = d.strings.Intern("model_rata");
@@ -210,7 +210,7 @@ TEST_CASE("EfeSceneDocument: round-trip completo campo por campo") {
     REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), dst));
 
     // --- settings ---
-    CHECK(dst.ambientFactor == doctest::Approx(src.ambientFactor));
+    CHECK(dst.iblIntensity == doctest::Approx(src.iblIntensity));
     CHECK(dst.primarySunNode == src.primarySunNode);
 
     // --- strings ---
@@ -392,4 +392,32 @@ TEST_CASE("SceneDocument: un archivo v1 carga con los defaults de los campos v2"
     CHECK(dst.materials[0].emissiveTint.x == doctest::Approx(1.0f));
     CHECK(dst.materials[0].emissiveIntensity == doctest::Approx(0.0f));
     CHECK(dst.materials[0].normalStrength == doctest::Approx(1.0f));
+}
+
+TEST_CASE("SceneDocument: un archivo v1 descarta el ambientFactor viejo") {
+    const std::vector<u8> bytes = documentoV1();   // guarda 0.08f en el primer f32 de SCNE
+
+    SceneDocument dst;
+    REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), dst));
+
+    // El 0.08 de v1 significaba "ambiente constante" y no se puede reinterpretar como
+    // intensidad de IBL: la escena entera se veria casi negra. Se descarta.
+    CHECK(dst.iblIntensity == doctest::Approx(1.0f));
+    CHECK(dst.primarySunNode == kInvalidIndex);   // el campo que sigue quedo alineado
+}
+
+TEST_CASE("SceneDocument: iblIntensity sobrevive el round-trip v2") {
+    SceneDocument src;
+    src.iblIntensity = 1.75f;
+    NodeRecord root;
+    root.nameStr = src.strings.Intern("root");
+    root.parent  = kInvalidIndex;
+    src.nodes.push_back(root);
+
+    std::vector<u8> bytes;
+    REQUIRE(WriteSceneDocument(src, bytes));
+
+    SceneDocument dst;
+    REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), dst));
+    CHECK(dst.iblIntensity == doctest::Approx(1.75f));
 }

@@ -39,7 +39,7 @@ namespace {
 
     Armado armarGrafo(scene::SceneGraph& g) {
         Armado a;
-        g.ambientFactor = 0.33f;
+        g.iblIntensity = 0.33f;
 
         a.actor = g.CreateNode("actor");
         math::Transform t;
@@ -106,7 +106,7 @@ TEST_CASE("EfeSceneSerializer: round-trip de jerarquia, transforms, luces y beha
                                            destino, assetsDestino, rm, reg));
 
     // --- settings ---
-    CHECK(destino.ambientFactor == doctest::Approx(0.33f));
+    CHECK(destino.iblIntensity == doctest::Approx(0.33f));
 
     // --- jerarquia por nombre (los handles son nuevos) ---
     scene::NodeHandle actor = destino.FindByName("actor");
@@ -277,7 +277,7 @@ TEST_CASE("EfeSceneSerializer: bytes corruptos no destruyen la escena cargada") 
                                                vivo, assetsVivo, rm, reg));
 
     CHECK(vivo.IsValid(vivo.FindByName("actor")));        // la escena sigue en pie
-    CHECK(vivo.ambientFactor == doctest::Approx(0.33f));
+    CHECK(vivo.iblIntensity == doctest::Approx(0.33f));
 }
 
 TEST_CASE("EfeSceneSerializer: grafo con solo la raiz round-trip") {

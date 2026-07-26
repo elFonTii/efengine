@@ -29,7 +29,7 @@ namespace renderer {
             void Draw(const Model& va, const Shader& shader) const;
             void Draw(const Model& model, const MaterialMap& materials) const;
             void Draw(const VertexArray& va, const Shader& shader) const;
-            void BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, f32 ambientFactor, const DirectionalLight& sun, const ShadowContext& shadow, const Cubemap* irradiance);
+            void BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, const DirectionalLight& sun, const ShadowContext& shadow, const Cubemap* irradiance);
             void Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix);
 
         private:
@@ -38,7 +38,6 @@ namespace renderer {
             glm::mat4 m_view = { 1.0f };
             glm::mat4 m_projection = { 1.0f };
             glm::vec3 m_viewPos { 0.0f };
-            f32 m_ambient = 0.0f;
             std::vector<PointLight> m_lights;
             DirectionalLight m_sun { glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };
             ShadowContext m_shadow {};

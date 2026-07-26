@@ -180,7 +180,7 @@ namespace serialization {
                                   const SceneRegistry& reg,
                                   SceneDocument& out) {
         out.Clear();
-        out.ambientFactor = graph.ambientFactor;
+        out.iblIntensity = graph.iblIntensity;
 
         // Los materiales van primero: los bindings de los nodos referencian sus indices,
         // y el orden del vector de SceneAssets es el orden del chunk MATL.
@@ -318,7 +318,7 @@ namespace serialization {
         if (doc.primarySunNode != kInvalidIndex && doc.primarySunNode < handles.size()) {
             outGraph.SetPrimarySun(handles[doc.primarySunNode]);
         }
-        outGraph.ambientFactor = doc.ambientFactor;
+        outGraph.iblIntensity = doc.iblIntensity;
         return true;
     }
 

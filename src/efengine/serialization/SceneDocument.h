@@ -81,7 +81,9 @@ namespace serialization {
 
     struct SceneDocument {
         StringTable strings;
-        f32 ambientFactor  = 0.08f;
+        // Multiplica el ambiente difuso Y el especular del IBL. 1.0 = el HDR tal cual.
+        // En v1 este f32 era ambientFactor (un ambiente constante que nunca se conecto).
+        f32 iblIntensity   = 1.0f;
         u32 primarySunNode = kInvalidIndex;
         std::vector<MaterialRecord> materials;
         std::vector<NodeRecord>     nodes; 

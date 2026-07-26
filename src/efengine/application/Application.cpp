@@ -106,7 +106,7 @@ namespace application {
         // Al Framebuffer de escena
         m_sceneFB.Bind();
         m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
-        m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.PointLights(), scene.ambientFactor, scene.Sun(), shadowCtx,
+        m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.PointLights(), scene.Sun(), shadowCtx,
                               m_environment ? &m_environment->irradiance() : nullptr);
 
          if (m_environment) {

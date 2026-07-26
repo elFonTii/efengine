@@ -53,11 +53,10 @@ namespace renderer {
         efecom::BindProgram(0);
     }
 
-    void Renderer::BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, f32 ambientFactor, const DirectionalLight& sun, const ShadowContext& shadow, const Cubemap* irradiance) {
+    void Renderer::BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, const DirectionalLight& sun, const ShadowContext& shadow, const Cubemap* irradiance) {
         // inicializacion simplemente
         m_view = view;
         m_projection = projection;
-        m_ambient = ambientFactor;
         m_viewPos = viewPos;
         m_lights.assign(lights.begin(), lights.end());
         m_sun = sun;

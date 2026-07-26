@@ -10,7 +10,7 @@ namespace {
     // strings, materiales, bindings, payloads y luces que se puedan cortar por el medio.
     std::vector<u8> bytesValidos() {
         SceneDocument d;
-        d.ambientFactor = 0.2f;
+        d.iblIntensity = 0.2f;
 
         const u32 sRoot = d.strings.Intern("root");
         const u32 sMalla = d.strings.Intern("assets/models/x.fbx");

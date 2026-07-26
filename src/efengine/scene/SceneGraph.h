@@ -21,7 +21,7 @@ namespace scene {
 
     class SceneGraph {
         public:
-            f32 ambientFactor = 0.08f;
+            f32 iblIntensity = 1.0f;
 
             SceneGraph();
 
