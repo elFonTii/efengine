@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>efe inspector — efengine</title>
+<style>
+:root{
+  --bg:#14171e; --panel:#1b2029; --panel2:#20262f; --line:#2b3340;
+  --ink:#d8dee9; --dim:#7c8798;
+  --tag:#e8a33d;    /* chunk tags / offsets */
+  --str:#5cc8d7;    /* string refs */
+  --num:#c792ea;    /* floats */
+  --int:#9ac86f;    /* enteros / enums */
+  --bad:#e06c75;
+  --mono:ui-monospace,'Cascadia Code','JetBrains Mono',Consolas,'Liberation Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;line-height:1.55}
+header{display:flex;align-items:baseline;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:15px;font-weight:600;letter-spacing:.04em}
+header h1 b{color:var(--tag)}
+#fileinfo{color:var(--dim);font-size:12px}
+#fileinfo .ok{color:var(--int)} #fileinfo .err{color:var(--bad)}
+main{padding:18px 20px;max-width:1100px}
+#drop{border:1.5px dashed var(--line);border-radius:8px;padding:56px 24px;text-align:center;color:var(--dim);cursor:pointer;transition:border-color .15s,background .15s}
+#drop.hover{border-color:var(--tag);background:var(--panel)}
+#drop kbd{color:var(--ink)}
+section.chunk{margin:14px 0;border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:hidden}
+section.chunk>h2{display:flex;align-items:baseline;gap:12px;padding:9px 14px;cursor:pointer;font-size:13px;user-select:none;background:var(--panel2)}
+section.chunk>h2 .tag{color:var(--tag);font-weight:700;letter-spacing:.08em}
+section.chunk>h2 .meta{color:var(--dim);font-weight:400;font-size:12px}
+section.chunk>h2::before{content:'▾';color:var(--dim);width:14px;display:inline-block;transition:transform .12s}
+section.chunk.closed>h2::before{transform:rotate(-90deg)}
+section.chunk.closed>.body{display:none}
+.body{padding:12px 14px;overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th{color:var(--dim);font-weight:500;text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:3px 12px 6px 0}
+td{padding:2.5px 12px 2.5px 0;vertical-align:top;white-space:nowrap}
+tr+tr td{border-top:1px solid #232a35}
+.s{color:var(--str)} .n{color:var(--num)} .i{color:var(--int)} .o{color:var(--tag)} .d{color:var(--dim)}
+.vec{color:var(--num)} .vec i{color:var(--dim);font-style:normal;margin:0 2px}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:4px;padding:0 6px;font-size:11px;color:var(--dim);margin-right:6px}
+.guess{border-bottom:1px dotted var(--dim);cursor:help}
+.tree{list-style:none}
+.tree li{padding-left:0}
+.tree .node{padding:5px 0;border-top:1px solid #232a35}
+.tree > li:first-child > .node{border-top:none}
+.tree ul{list-style:none;padding-left:22px;border-left:1px solid var(--line);margin-left:6px}
+.nodename{color:var(--ink);font-weight:600}
+.ntype{font-size:11px;border-radius:4px;padding:0 6px;margin-left:8px}
+.ntype.mesh{background:#243421;color:var(--int)} .ntype.light{background:#33301e;color:var(--tag)}
+.ntype.empty{background:#262c36;color:var(--dim)} .ntype.unk{background:#3a2226;color:var(--bad)}
+.props{color:var(--dim);font-size:12px;margin-top:2px}
+.props div{padding:1px 0}
+.hex{font-size:12px;line-height:1.5;color:var(--dim);white-space:pre}
+.hex .a{color:var(--tag)} .hex .t{color:var(--str)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--dim);font-size:11px;padding:10px 0 0}
+.legend span::before{content:'■ ';font-size:10px}
+.legend .ls::before{color:var(--str)} .legend .ln::before{color:var(--num)}
+.legend .li::before{color:var(--int)} .legend .lo::before{color:var(--tag)}
+.note{color:var(--dim);font-size:12px;margin:6px 0 10px}
+.note b{color:var(--ink);font-weight:600}
+#err{color:var(--bad);padding:14px;display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1><b>efe</b> inspector <span class="d">· efengine</span></h1>
+  <span id="fileinfo">sin archivo</span>
+</header>
+<main>
+  <div id="drop">arrastrá un <kbd>.efe</kbd> acá, o hacé click para elegirlo</div>
+  <input type="file" id="fi" accept=".efe" hidden>
+  <div id="err"></div>
+  <div id="out"></div>
+  <div class="legend" id="legend" style="display:none">
+    <span class="ls">string (índice → STRT)</span>
+    <span class="ln">float32</span>
+    <span class="li">entero / enum</span>
+    <span class="lo">offset / tamaño</span>
+  </div>
+</main>
+<script>
+'use strict';
+const $=s=>document.querySelector(s);
+const drop=$('#drop'), fi=$('#fi'), out=$('#out'), err=$('#err'), info=$('#fileinfo');
+
+drop.onclick=()=>fi.click();
+fi.onchange=()=>fi.files[0]&&load(fi.files[0]);
+['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('hover')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('hover')}));
+drop.addEventListener('drop',ev=>ev.dataTransfer.files[0]&&load(ev.dataTransfer.files[0]));
+document.body.addEventListener('dragover',e=>e.preventDefault());
+document.body.addEventListener('drop',e=>{e.preventDefault();e.dataTransfer.files[0]&&load(e.dataTransfer.files[0])});
+
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function load(file){
+  const r=new FileReader();
+  r.onload=()=>{try{render(file,new DataView(r.result))}catch(e){fail(file,e)}};
+  r.readAsArrayBuffer(file);
+}
+function fail(file,e){
+  out.innerHTML=''; $('#legend').style.display='none';
+  err.style.display='block';
+  err.textContent=`No se pudo parsear ${file.name}: ${e.message}. Revisá el hexdump con otro visor o ajustá el parser si cambió el formato.`;
+  console.error(e);
+}
+
+/* ---------- lector secuencial ---------- */
+function reader(dv,off){
+  let p=off;
+  return {
+    get pos(){return p}, set pos(v){p=v},
+    u32(){const v=dv.getUint32(p,true);p+=4;return v},
+    i32(){const v=dv.getInt32(p,true);p+=4;return v},
+    f32(){const v=dv.getFloat32(p,true);p+=4;return v},
+    vec3(){return [this.f32(),this.f32(),this.f32()]},
+    floats(n){const a=[];for(let i=0;i<n;i++)a.push(this.f32());return a},
+    tag(){let s='';for(let i=0;i<4;i++)s+=String.fromCharCode(dv.getUint8(p+i));p+=4;return s},
+  };
+}
+const fnum=v=>{const s=+v.toFixed(4);return String(s)};
+const F=v=>`<span class="n">${fnum(v)}</span>`;
+const V3=v=>`<span class="vec">(${fnum(v[0])}<i>,</i>${fnum(v[1])}<i>,</i>${fnum(v[2])})</span>`;
+const I=v=>`<span class="i">${v}</span>`;
+const STRREF=(S,i)=>i>=0&&i<S.length?`<span class="s" title="str #${i}">${esc(S[i])||'&quot;&quot;'}</span>`:`<span class="d">str#${i}??</span>`;
+
+/* ---------- enums conocidos (ajustar si el motor cambia) ---------- */
+const NODE_TYPES={0:'empty',1:'mesh',2:'light'};
+const LIGHT_TYPES={0:'point',1:'directional'};
+const TEX_SLOTS={0:'diffuse',1:'normal',2:'ao',3:'roughness',4:'metallic',5:'displacement'};
+const MESH_SRC={0:'archivo',1:'primitiva'};
+
+function render(file,dv){
+  err.style.display='none'; out.innerHTML='';
+  const size=dv.byteLength;
+  const r=reader(dv,0);
+  const magic=r.tag();
+  if(magic!=='EFE1') throw new Error(`magic inválido: "${magic}" (esperaba EFE1)`);
+  const bom=r.u32();               // 0x01020304 escrito en little-endian
+  const bomOk=bom===0x01020304;
+  const ver=r.u32(), flags=r.u32(), nchunks=r.u32();
+  info.innerHTML=`${esc(file.name)} · ${size} bytes · EFE1 v${ver} · `+
+    (bomOk?`<span class="ok">little-endian ✓</span>`:`<span class="err">BOM raro: 0x${bom.toString(16)}</span>`)+
+    ` · ${nchunks} chunks`;
+
+  // directorio de chunks
+  const chunks=[];
+  let p=r.pos;
+  for(let i=0;i<nchunks;i++){
+    const rr=reader(dv,p);
+    const tag=rr.tag(), csize=rr.u32();
+    chunks.push({tag,off:p,payload:p+8,size:csize});
+    p+=8+csize;
+  }
+  if(p!==size) note(`⚠ los chunks terminan en ${p} pero el archivo mide ${size} bytes — hay ${size-p} bytes sin mapear.`);
+
+  // STRT primero (todo lo demás lo referencia)
+  const strt=chunks.find(c=>c.tag==='STRT');
+  const S=strt?parseSTRT(dv,strt):[];
+
+  for(const c of chunks){
+    let body, meta=`payload 0x${c.payload.toString(16)}–0x${(c.payload+c.size).toString(16)} · ${c.size} bytes`;
+    try{
+      if(c.tag==='STRT') body=viewSTRT(S);
+      else if(c.tag==='SCNE') body=viewSCNE(dv,c,S);
+      else if(c.tag==='MATL') body=viewMATL(dv,c,S);
+      else if(c.tag==='NODE') body=viewNODE(dv,c,S);
+      else body=`<div class="note">Chunk desconocido — hexdump crudo:</div>`+hexdump(dv,c.payload,c.size);
+    }catch(e){
+      body=`<div class="note" style="color:var(--bad)">Error parseando este chunk (${esc(e.message)}) — hexdump crudo:</div>`+hexdump(dv,c.payload,c.size);
+    }
+    const sec=document.createElement('section');
+    sec.className='chunk';
+    sec.innerHTML=`<h2><span class="tag">${esc(c.tag)}</span><span class="meta">${meta}</span></h2><div class="body">${body}</div>`;
+    sec.querySelector('h2').onclick=()=>sec.classList.toggle('closed');
+    out.appendChild(sec);
+  }
+  $('#legend').style.display='flex';
+  drop.style.display='none';
+}
+function note(html){const d=document.createElement('div');d.className='note';d.innerHTML=html;out.appendChild(d)}
+
+/* ---------- STRT: u32 count, (count+1) offsets u32, blob ---------- */
+function parseSTRT(dv,c){
+  const r=reader(dv,c.payload);
+  const n=r.u32();
+  const offs=[]; for(let i=0;i<=n;i++)offs.push(r.u32());
+  const base=r.pos, dec=new TextDecoder();
+  const S=[];
+  for(let i=0;i<n;i++)
+    S.push(dec.decode(new Uint8Array(dv.buffer,base+offs[i],offs[i+1]-offs[i])));
+  return S;
+}
+function viewSTRT(S){
+  let rows=S.map((s,i)=>`<tr><td class="o">${i}</td><td class="s">${esc(s)||'<span class="d">(vacío)</span>'}</td><td class="d">${s.length}</td></tr>`).join('');
+  return `<table><tr><th>#</th><th>string</th><th>len</th></tr>${rows}</table>`;
+}
+
+/* ---------- SCNE: 2×u32 (semántica no confirmada) ---------- */
+function viewSCNE(dv,c,S){
+  const r=reader(dv,c.payload);
+  const vals=[]; while(r.pos<c.payload+c.size) vals.push(r.u32());
+  const guess = vals.length===2
+    ? `<div class="note">Lectura probable: <span class="guess" title="no confirmado contra el serializador">nombre = ${STRREF(S,vals[0])}, u32 = ${I(vals[1])}</span> (¿índice de nodo? ¿flags?). Verificalo contra tu writer en C++.</div>`
+    : '';
+  return guess+`<table><tr><th>#</th><th>u32</th><th>como float</th><th>como string</th></tr>`+
+    vals.map((v,i)=>{
+      const f=new Float32Array(new Uint32Array([v]).buffer)[0];
+      return `<tr><td class="o">${i}</td><td class="i">${v}</td><td class="n">${fnum(f)}</td><td>${v<S.length?STRREF(S,v):'<span class="d">—</span>'}</td></tr>`;
+    }).join('')+`</table>`;
+}
+
+/* ---------- MATL ---------- */
+function viewMATL(dv,c,S){
+  const r=reader(dv,c.payload);
+  const n=r.u32();
+  let html=`<div class="note">${I(n)} materiales · esquema: name, shader, vert, frag, ntex, [slot, path, srgb]×ntex, 8 floats</div>`;
+  for(let m=0;m<n;m++){
+    const name=r.u32(), shader=r.u32(), vert=r.u32(), frag=r.u32(), ntex=r.u32();
+    html+=`<table style="margin-bottom:10px"><tr>
+      <th>mat #${m}</th><th colspan="3">${STRREF(S,name)} <span class="pill">shader ${STRREF(S,shader)}</span></th></tr>
+      <tr><td class="d">vert</td><td colspan="3">${STRREF(S,vert)}</td></tr>
+      <tr><td class="d">frag</td><td colspan="3">${STRREF(S,frag)}</td></tr>`;
+    for(let t=0;t<ntex;t++){
+      const slot=r.u32(), path=r.u32(), srgb=r.u32();
+      html+=`<tr><td class="d">tex</td>
+        <td><span class="guess i" title="enum ${slot} — mapeo inferido">${TEX_SLOTS[slot]??('slot '+slot)}</span></td>
+        <td>${STRREF(S,path)}</td>
+        <td class="d">${srgb?'sRGB':''}</td></tr>`;
+    }
+    const fl=r.floats(8);
+    html+=`<tr><td class="d">params</td><td colspan="3"><span class="guess" title="8 floats — etiquetas sin confirmar (¿tint rgb + factores PBR?)">[${fl.map(fnum).join(', ')}]</span></td></tr></table>`;
+  }
+  checkConsumed(r,c);
+  return html;
+}
+
+/* ---------- NODE ---------- */
+function viewNODE(dv,c,S){
+  const r=reader(dv,c.payload);
+  const n=r.u32();
+  const nodes=[];
+  for(let i=0;i<n;i++){
+    const nd={idx:i,name:r.u32(),parent:r.i32(),type:r.u32(),
+              pos:r.vec3(),rot:r.vec3(),scale:r.vec3(),children:[]};
+    if(nd.type===1){ // mesh
+      nd.src=r.u32(); nd.path=r.u32();
+      const bs=r.u32(); nd.params=r.floats(bs>>2);
+      const mc=r.u32(); nd.mats=[];
+      for(let k=0;k<mc;k++) nd.mats.push([r.u32(),r.u32()]); // [submesh_str, mat_idx]
+    }else if(nd.type===2){ // light
+      nd.lightType=r.u32(); nd.color=r.vec3();
+    }else if(nd.type!==0){
+      throw new Error(`tipo de nodo desconocido ${nd.type} en nodo ${i} (offset 0x${r.pos.toString(16)})`);
+    }
+    const sc=r.u32(); nd.scripts=[];
+    for(let k=0;k<sc;k++){
+      const sn=r.u32(), fl=r.u32(), bs=r.u32();
+      nd.scripts.push({name:sn,flag:fl,params:r.floats(bs>>2)});
+    }
+    nodes.push(nd);
+  }
+  checkConsumed(r,c);
+  // armar árbol
+  const roots=[];
+  nodes.forEach(nd=>{
+    if(nd.parent>=0&&nd.parent<nodes.length&&nd.parent!==nd.idx) nodes[nd.parent].children.push(nd);
+    else roots.push(nd);
+  });
+  const ONE=v=>v[0]===1&&v[1]===1&&v[2]===1, ZERO=v=>!v[0]&&!v[1]&&!v[2];
+  function nodeHtml(nd){
+    const t=NODE_TYPES[nd.type]??'unk';
+    let props='';
+    if(!ZERO(nd.pos))   props+=`<div>pos ${V3(nd.pos)}</div>`;
+    if(!ZERO(nd.rot))   props+=`<div>rot ${V3(nd.rot)}</div>`;
+    if(!ONE(nd.scale))  props+=`<div>scale ${V3(nd.scale)}</div>`;
+    if(nd.type===1){
+      props+=`<div>${MESH_SRC[nd.src]??('src '+nd.src)} → ${STRREF(S,nd.path)}`+
+        (nd.params.length?` <span class="d">params</span> [${nd.params.map(F).join(', ')}]`:'')+`</div>`;
+      nd.mats.forEach(([sm,mi])=>props+=`<div>mat: ${STRREF(S,sm)} → ${I('#'+mi)}</div>`);
+    }
+    if(nd.type===2){
+      props+=`<div><span class="guess" title="enum ${nd.lightType} — mapeo inferido">${LIGHT_TYPES[nd.lightType]??('light '+nd.lightType)}</span> · color/intensidad ${V3(nd.color)}</div>`;
+    }
+    nd.scripts.forEach(sc=>props+=`<div>script ${STRREF(S,sc.name)}`+
+      (sc.flag?` <span class="d">flag ${sc.flag}</span>`:'')+
+      (sc.params.length?` [${sc.params.map(F).join(', ')}]`:'')+`</div>`);
+    return `<div class="node"><span class="o">#${nd.idx}</span> <span class="nodename">${STRREF(S,nd.name)}</span>`+
+      `<span class="ntype ${t}">${t}</span>`+
+      (props?`<div class="props">${props}</div>`:'')+`</div>`+
+      (nd.children.length?`<ul>${nd.children.map(ch=>`<li>${nodeHtml(ch)}</li>`).join('')}</ul>`:'');
+  }
+  return `<div class="note">${I(n)} nodos</div><ul class="tree">${roots.map(nd=>`<li>${nodeHtml(nd)}</li>`).join('')}</ul>`;
+}
+
+function checkConsumed(r,c){
+  const end=c.payload+c.size;
+  if(r.pos!==end) throw new Error(`el parser consumió hasta 0x${r.pos.toString(16)} pero el chunk termina en 0x${end.toString(16)}`);
+}
+
+/* ---------- hexdump genérico ---------- */
+function hexdump(dv,off,len){
+  const max=Math.min(len,4096);
+  let s='';
+  for(let i=0;i<max;i+=16){
+    let hx='',tx='';
+    for(let j=0;j<16;j++){
+      if(i+j<len){
+        const b=dv.getUint8(off+i+j);
+        hx+=b.toString(16).padStart(2,'0')+' ';
+        tx+=(b>=32&&b<127)?String.fromCharCode(b):'·';
+      }else hx+='   ';
+    }
+    s+=`<span class="a">${(off+i).toString(16).padStart(6,'0')}</span>  ${hx} <span class="t">${esc(tx)}</span>\n`;
+  }
+  if(len>max)s+=`… (${len-max} bytes más)`;
+  return `<div class="hex">${s}</div>`;
+}
+</script>
+</body>
+</html>
