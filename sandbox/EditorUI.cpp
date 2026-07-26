@@ -5,7 +5,9 @@
 #include <efengine/renderer/FxaaPass.h>
 #include <efengine/renderer/ShadowPass.h>
 #include <efengine/resources/SceneAssets.h>
+#include <efengine/renderer/Model.h>
 #include <efengine/scene/Camera.h>
+#include <efengine/scene/CameraController.h>
 #include <efengine/scene/Node.h>
 #include <efengine/scene/SceneGraph.h>
 #include <efengine/serialization/SceneRegistry.h>
@@ -155,6 +157,8 @@ namespace {
 
         scene::Node& node = ctx.scene.Get(st.selected);
         ImGui::Text("Nodo: %s", node.name.c_str());
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Focus")) FocusSelection(ctx);
         ImGui::TextDisabled("handle { index=%u, gen=%u }", node.self.index, node.self.generation);
 
         // El world es derivado: se muestra como lectura, no se edita.
@@ -203,6 +207,32 @@ namespace {
             ImGui::SliderFloat("Ambient", &ctx.scene.ambientFactor, 0.0f, 1.0f);
             f32 exposure = ctx.camera.Exposure();
             if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 5.0f)) ctx.camera.SetExposure(exposure);
+        }
+
+        if (ImGui::CollapsingHeader("Camara")) {
+            scene::CameraSettings& cs = ctx.controller.settings();
+            ImGui::SliderFloat("Velocidad",     &cs.moveSpeed,       1.0f,    200.0f);
+            ImGui::SliderFloat("Boost (Shift)", &cs.boostMultiplier, 1.0f,    20.0f);
+            ImGui::SliderFloat("Sensibilidad",  &cs.lookSensitivity, 0.0005f, 0.02f,  "%.4f");
+            ImGui::SliderFloat("Paneo",         &cs.panSpeed,        0.0001f, 0.01f,  "%.4f");
+            ImGui::SliderFloat("Dolly",         &cs.dollySpeed,      0.01f,   0.5f);
+            ImGui::Checkbox("Invertir X", &cs.invertX);
+            ImGui::SameLine();
+            ImGui::Checkbox("Invertir Y", &cs.invertY);
+
+            ImGui::TextDisabled("mouselook: %s", ctx.controller.LookToggled() ? "ON (Tab/Esc para salir)"
+                                                                             : "off (Tab para entrar)");
+            ImGui::TextDisabled("pivote a %.2f | yaw %.1f | pitch %.1f",
+                                ctx.controller.PivotDistance(),
+                                glm::degrees(ctx.controller.Yaw()),
+                                glm::degrees(ctx.controller.Pitch()));
+
+            // Los bindings son invisibles: nadie los adivina mirando la ventana.
+            ImGui::SeparatorText("Controles");
+            ImGui::TextDisabled("Tab mirar libre  -  RMB mirar sostenido");
+            ImGui::TextDisabled("Alt+LMB orbitar  -  MMB panear");
+            ImGui::TextDisabled("scroll dolly  -  WASD volar  -  Q/E bajar-subir");
+            ImGui::TextDisabled("Shift acelerar  -  F encuadrar seleccion");
         }
 
         if (ImGui::CollapsingHeader("Bloom")) {
@@ -276,6 +306,25 @@ void RefreshHandles(EditorContext& ctx) {
     st.sun        = ctx.scene.FindByName("directional_light");
     st.animate    = algunBehaviorActivo(ctx.scene, st.rat);
     st.animateSun = algunBehaviorActivo(ctx.scene, st.sun);
+}
+
+void FocusSelection(EditorContext& ctx) {
+    EditorState& st = ctx.state;
+    if (!ctx.scene.IsValid(st.selected)) return;
+
+    const scene::Node& node = ctx.scene.Get(st.selected);
+
+    // node.worldMatrix es derivado y se recalcula en scene.Update(), que en el
+    // loop corre DESPUES de esto: se usa la matriz del frame anterior. Un frame
+    // de retraso en un encuadre no se percibe.
+    if (node.mesh && node.mesh->model && node.mesh->model->bounds().Valid()) {
+        const renderer::AABB mundo = node.mesh->model->bounds().Transformed(node.worldMatrix);
+        ctx.controller.Focus(mundo.Center(), mundo.Radius());
+    } else {
+        // Nodo pelado, luz, o modelo sin submeshes: no hay AABB del que sacar
+        // un radio, asi que centrar es lo unico que se puede hacer.
+        ctx.controller.Focus(glm::vec3(node.worldMatrix[3]));
+    }
 }
 
 void DrawEditor(EditorContext& ctx) {

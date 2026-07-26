@@ -22,6 +22,7 @@
 #include <memory>
 #include <vector>
 
+
 namespace {
     using namespace efengine;
     
@@ -157,19 +158,36 @@ int main() {
     scene::Camera cam;
     cam.SetAspect(app.GetWindow().GetAspectRatio());
     scene::CameraController controller(&cam);
-    app.GetWindow().SetEventListener(&controller);
+    // El listener de la ventana ahora es el Input de Application; el
+    // controller solo lo consume.
 
     // El estado de la UI vive aca (el loop es el dueno); el editor solo lo usa.
     sandbox::EditorState editorState;
-    sandbox::EditorContext editor { app, scene, cam, assets, rm, registry, editorState };
+    sandbox::EditorContext editor { app, scene, cam, controller, assets, rm, registry, editorState };
     sandbox::RefreshHandles(editor);
 
     while (app.Running()) {
         app.BeginFrame();
-        if (app.IsKeyPressed(platform::Key::Escape)) app.Close();
-        controller.SetInputEnabled(!app.GetDebugUI().WantsMouse());
+        // Esc sale primero del mouselook: cerrar el sandbox de un tecleo
+        // mientras el cursor esta capturado es demasiado facil.
+        if (app.IsKeyPressed(platform::Key::Escape)) {
+            if (controller.LookToggled()) controller.SetLookToggled(false);
+            else                          app.Close();
+        }
+
+        const platform::Input& in = app.GetInput();
+
+        controller.SetMouseEnabled(!app.GetDebugUI().WantsMouse());
+        controller.SetKeyboardEnabled(!app.GetDebugUI().WantsKeyboard());
 
         sandbox::DrawEditor(editor);
+
+        // Despues de DrawEditor para que use la seleccion de ESTE frame.
+        if (in.WasPressed(platform::Key::F)) sandbox::FocusSelection(editor);
+
+        controller.Update(in, app.DeltaTime());
+        app.GetWindow().SetCursorCaptured(controller.WantsCursorCaptured());
+        cam.SetAspect(app.GetWindow().GetAspectRatio());
 
         scene.Update(app.DeltaTime());
 
