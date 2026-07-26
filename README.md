@@ -10,6 +10,11 @@ Motor gráfico en **C++17 / OpenGL 4.5 Core**, construido desde cero como proyec
 - **Tests:** doctest + CTest
 
 ---
+### 2026-26-07
+<img width="1919" height="1031" alt="image" src="https://github.com/user-attachments/assets/5144fd21-405d-4fd4-ac80-02e6f254d224" />
+
+---
+
 
 ## Estructura del proyecto
 
