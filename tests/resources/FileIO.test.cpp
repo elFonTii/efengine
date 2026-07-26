@@ -64,3 +64,75 @@ TEST_CASE("FileIO::ReadBytes archivo vacio -> vector vacio, no nullopt") {
     REQUIRE(r.has_value());     // el archivo existe: leerlo funciono
     CHECK(r->empty());          // simplemente no tiene bytes
 }
+
+// ---------------------------------------------------------------------------
+
+#include <filesystem>
+#include <system_error>
+
+namespace {
+    // Arbolito temporal que se borra solo. El test NO puede mirar assets/ real:
+    // ctest corre con el cwd en build/ y no hay garantia de que exista.
+    struct DirTemporal {
+        std::filesystem::path root;
+
+        explicit DirTemporal(const char* nombre)
+            : root(std::filesystem::temp_directory_path() / nombre) {
+            std::error_code ec;
+            std::filesystem::remove_all(root, ec);
+            std::filesystem::create_directories(root / "sub");
+        }
+        ~DirTemporal() {
+            std::error_code ec;
+            std::filesystem::remove_all(root, ec);
+        }
+
+        void Archivo(const char* rel) const {
+            std::ofstream out(root / rel);
+            out << "x";
+        }
+        std::string Path() const { return root.generic_string(); }
+    };
+}
+
+TEST_CASE("FileIO::ListFiles filtra por extension sin distinguir mayusculas") {
+    DirTemporal d("efengine_listfiles_ext");
+    d.Archivo("b.png");
+    d.Archivo("a.PNG");
+    d.Archivo("c.txt");
+
+    const auto r = efengine::resources::FileIO::ListFiles(d.Path().c_str(), {"png"}, false);
+
+    REQUIRE(r.size() == 2u);
+    CHECK(r[0] == d.Path() + "/a.PNG");   // alfabetico, no orden de creacion
+    CHECK(r[1] == d.Path() + "/b.png");
+}
+
+TEST_CASE("FileIO::ListFiles: recursive decide si entra a los subdirectorios") {
+    DirTemporal d("efengine_listfiles_rec");
+    d.Archivo("raiz.fbx");
+    d.Archivo("sub/hijo.fbx");
+
+    const auto plano = efengine::resources::FileIO::ListFiles(d.Path().c_str(), {".fbx"}, false);
+    REQUIRE(plano.size() == 1u);
+    CHECK(plano[0] == d.Path() + "/raiz.fbx");
+
+    const auto hondo = efengine::resources::FileIO::ListFiles(d.Path().c_str(), {".fbx"}, true);
+    REQUIRE(hondo.size() == 2u);
+    CHECK(hondo[0] == d.Path() + "/raiz.fbx");        // 'r' < 's': el orden es estable
+    CHECK(hondo[1] == d.Path() + "/sub/hijo.fbx");
+}
+
+TEST_CASE("FileIO::ListFiles con lista de extensiones vacia devuelve todos los archivos") {
+    DirTemporal d("efengine_listfiles_todos");
+    d.Archivo("uno.png");
+    d.Archivo("dos.txt");
+
+    const auto r = efengine::resources::FileIO::ListFiles(d.Path().c_str(), {}, false);
+    CHECK(r.size() == 2u);
+}
+
+TEST_CASE("FileIO::ListFiles directorio inexistente -> vector vacio, sin excepcion") {
+    const auto r = efengine::resources::FileIO::ListFiles("no_existe_dir_12345", {".png"}, false);
+    CHECK(r.empty());
+}

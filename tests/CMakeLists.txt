@@ -15,8 +15,10 @@ add_executable(efengine_tests
     renderer/Cubemap.test.cpp
     renderer/ShadowMath.test.cpp
     renderer/Bounds.test.cpp
+    renderer/MaterialMap.test.cpp
     resources/FileIO.test.cpp
     resources/ResourceManager.test.cpp
+    resources/SceneAssets.test.cpp
     scene/NodeHandle.test.cpp
     scene/SceneGraph.test.cpp
     scene/Camera.test.cpp
