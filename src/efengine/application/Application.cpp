@@ -115,11 +115,22 @@ namespace application {
             shadowCtx.biasMax          = m_shadowPass.settings().biasMax;
         }
 
+        // Las 4 piezas del IBL precomputado. Sin Environment quedan en null y el
+        // shader apaga el ambiente entero en vez de samplear una unidad equivocada.
+        renderer::IblContext ibl;
+        ibl.intensity = scene.iblIntensity;
+        if (m_environment) {
+            ibl.irradiance  = &m_environment->irradiance();
+            ibl.prefiltered = &m_environment->prefiltered();
+            ibl.brdfLut     = &m_environment->brdfLut();
+            ibl.maxLod      = m_environment->prefilterMaxLod();
+        }
+
         // Al Framebuffer de escena
         m_sceneFB.Bind();
         m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
         m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.PointLights(), scene.Sun(), shadowCtx,
-                              m_environment ? &m_environment->irradiance() : nullptr);
+                              ibl);
 
          if (m_environment) {
             m_skyboxPass.Draw(m_environment->env(), camera.ViewMatrix(), camera.ProjectionMatrix());
