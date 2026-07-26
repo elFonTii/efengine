@@ -172,6 +172,37 @@ TEST_CASE("EfeFile: chunk que promete mas bytes de los que hay se rechaza") {
     CHECK_FALSE(NextChunk(r, id, end));
 }
 
+TEST_CASE("EfeFile: un header v1 se acepta y el reader recuerda la version") {
+    const std::vector<u8> bytes = makeFile(1u, kEndianCheck, ContentType::Scene,
+                                           { { ChunkId::Nodes, 1u } });
+
+    BinaryReader r(bytes);
+    u32 chunkCount = 0u;
+    CHECK(ReadFileHeader(r, ContentType::Scene, chunkCount));
+    CHECK(r.Version() == 1u);
+}
+
+TEST_CASE("EfeFile: lo que escribe el writer se lee como la version actual") {
+    BinaryWriter w;
+    WriteFileHeader(w, ContentType::Scene, 1u);
+
+    BinaryReader r(w.Buffer());
+    u32 chunkCount = 0u;
+    REQUIRE(ReadFileHeader(r, ContentType::Scene, chunkCount));
+    CHECK(r.Version() == kCurrentVersion);
+    CHECK(kCurrentVersion == 2u);
+    CHECK(w.Version() == kCurrentVersion);
+}
+
+TEST_CASE("EfeFile: version 0 se rechaza") {
+    const std::vector<u8> bytes = makeFile(0u, kEndianCheck, ContentType::Scene,
+                                           { { ChunkId::Nodes, 1u } });
+
+    BinaryReader r(bytes);
+    u32 chunkCount = 0u;
+    CHECK_FALSE(ReadFileHeader(r, ContentType::Scene, chunkCount));
+}
+
 TEST_CASE("EfeFile: FourCC es estable y distingue chunks") {
     CHECK(FourCC('S', 'T', 'R', 'T') == static_cast<u32>(ChunkId::Strings));
     CHECK(FourCC('S', 'C', 'N', 'E') == static_cast<u32>(ChunkId::Settings));

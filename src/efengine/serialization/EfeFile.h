@@ -18,8 +18,14 @@ namespace serialization {
     // Si al leer sale 0x04030201 el archivo es de otra endianness.
     inline constexpr u32 kEndianCheck = 0x01020304u;
 
-    // Version del esquema
-    inline constexpr u32 kCurrentVersion = 1u;
+    // Version del esquema. v2 agrega los escalares de emissive/normalStrength al
+    // MaterialRecord y cambia el significado del primer f32 del chunk SCNE
+    // (ambientFactor -> iblIntensity).
+    inline constexpr u32 kCurrentVersion      = 2u;
+
+    // Version mas vieja que esta build todavia sabe leer. Se escribe SIEMPRE
+    // kCurrentVersion: leer v1 es solo para no dejar ilegibles las escenas guardadas.
+    inline constexpr u32 kMinSupportedVersion = 1u;
 
     inline constexpr u8 kMagic[4] = { 'E', 'F', 'E', '1' };
 
@@ -53,8 +59,10 @@ namespace serialization {
     //   (el reader saltea por byteSize lo que no conoce).
     // * Campo nuevo al final de un record -> SUBE kCurrentVersion.
     // * Cambio de significado de un campo -> SUBE kCurrentVersion.
-    // Una version distinta de kCurrentVersion se rechaza: v1 es la primera y no hay
-    // nada que migrar.
+    // Una version mayor a kCurrentVersion se rechaza (no se puede adivinar el futuro).
+    // Una version entre kMinSupportedVersion y kCurrentVersion se lee con los campos
+    // que esa version tenia: los Serialize ramifican con ar.Version(). El writer
+    // siempre emite kCurrentVersion, asi que abrir y guardar migra el archivo.
     // ---------------------------------------------------------------------------
 
     class BinaryWriter;   // fwd

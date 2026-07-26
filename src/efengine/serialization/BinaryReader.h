@@ -1,5 +1,6 @@
 #pragma once
 #include <efengine/core/Types.h>
+#include <efengine/serialization/EfeFile.h>   // kCurrentVersion
 
 #include <cstring>
 #include <type_traits>
@@ -56,6 +57,12 @@ namespace serialization {
             void  EndSizedBlock(usize end);
 
             bool  Ok() const { return m_ok; }
+
+            // Version del archivo que se esta leyendo. La setea ReadFileHeader;
+            // hasta entonces se asume la actual (para buffers armados a mano en tests).
+            u32  Version() const { return m_fileVersion; }
+            void SetVersion(u32 version) { m_fileVersion = version; }
+
             usize Remaining() const { return m_ok ? (m_size - m_cursor) : 0u; }
             usize Cursor() const { return m_cursor; }
             usize Size() const { return m_size; }
@@ -70,6 +77,7 @@ namespace serialization {
             usize     m_size = 0u;
             usize     m_cursor = 0u;
             bool      m_ok = true;
+            u32       m_fileVersion = kCurrentVersion;
     };
 
 }
