@@ -91,7 +91,7 @@ namespace efecom {
     enum class TextureFormat {
         R8, RG8, RGB8, RGBA8,   // lineales, 8 bits por canal
         SRGB8, SRGB8_A8,        // sRGB, 8 bits por canal
-        RGBA16F,                // HDR half-float
+        RGBA16F, RG16F,         // HDR half-float (RG16F: la BRDF LUT, que solo usa 2 canales)
         Depth24, Depth32F,      // solo profundidad (attachments)
     };
     enum class TextureFilter { Nearest, Linear, LinearMipmapLinear };
@@ -114,6 +114,23 @@ namespace efecom {
     void DestroyTexture(u32 texture);            // también libera cubemaps
     void BindTexture2D(u32 texture, u32 unit);   // unidad de textura para samplers
 
+    // Textura 2D de storage INMUTABLE (glTextureStorage2D, estilo DSA). Es lo que
+    // pide image load/store y el camino al que apunta el refactor DSA. No sube
+    // pixeles: el contenido lo escribe un compute. Filtro/wrap por default en
+    // Linear + ClampToEdge, que es lo que necesita una LUT (con Repeat aparece un
+    // halo en los bordes al muestrear en rasante).
+    struct Texture2DStorageDesc {
+        u32           width     = 0;
+        u32           height    = 0;
+        TextureFormat format    = TextureFormat::RGBA16F;
+        u32           mipCount  = 1;
+        TextureFilter minFilter = TextureFilter::Linear;
+        TextureFilter magFilter = TextureFilter::Linear;
+        TextureWrap   wrapS     = TextureWrap::ClampToEdge;
+        TextureWrap   wrapT     = TextureWrap::ClampToEdge;
+    };
+    u32 CreateTexture2DStorage(const Texture2DStorageDesc& desc);
+
     // ── Cubemaps ───────────────────────────────────────────────────────────
     // Storage inmutable de 6 caras cuadradas con mipCount niveles.
     // Filtro trilinear + clamp en las 3 dimensiones (lo que pide IBL).
@@ -124,6 +141,9 @@ namespace efecom {
     // Imagen de shader (imageStore en compute): bindea todas las capas del nivel.
     enum class ImageAccess { ReadOnly, WriteOnly, ReadWrite };
     void BindImageLayered(u32 unit, u32 texture, u32 level, ImageAccess access, TextureFormat format);
+
+    // Imagen de shader no-layered (image2D): bindea UN nivel de una textura 2D.
+    void BindImage2D(u32 unit, u32 texture, u32 level, ImageAccess access, TextureFormat format);
 
     // ── Compute ────────────────────────────────────────────────────────────
     void DispatchCompute(u32 groupsX, u32 groupsY, u32 groupsZ);
