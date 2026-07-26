@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 // material no posee, solo contiene observadores para shaders y texturas.
 namespace efengine {
@@ -51,5 +52,12 @@ namespace renderer {
     };
 
     using MaterialMap = std::unordered_map<std::string, const Material*>;
+
+    // Un mismo material para todos los submeshes. Toma NOMBRES y no un Model
+    // porque construir un Mesh crea un VAO y necesita contexto GL: asi esto se
+    // puede testear headless. material == null devuelve mapa vacio, nunca
+    // entradas nulas (son las que hacen que el renderer loguee por frame).
+    MaterialMap MakeUniformMaterialMap(const std::vector<std::string>& submeshNames,
+                                       const Material* material);
 }
 }

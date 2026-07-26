@@ -1,9 +1,13 @@
 #pragma once
 
+#include "AssetCatalog.h"
 #include "FrameStats.h"
 
 #include <efengine/core/Types.h>
+#include <efengine/renderer/MaterialDef.h>
 #include <efengine/scene/NodeHandle.h>
+
+#include <string>
 
 namespace efengine {
     namespace application  { class Application; }
@@ -30,8 +34,29 @@ namespace sandbox {
 
         bool showHierarchy = true;
         bool showInspector = true;
+        bool showMaterials = true;
         bool showRender    = true;
         bool showStats     = true;
+
+        // Pedido de reconstruir el layout de paneles desde cero. Lo prende el menu
+        // "Ventanas" y lo apaga el editor en el mismo frame en que lo atiende.
+        // Sin esto no habria vuelta atras: una vez que arrastraste un panel, tu
+        // acomodo queda guardado en imgui.ini y el default no se aplica nunca mas.
+        bool resetLayout = false;
+
+        // Autoria de mallas: catalogo de disco + el modelo elegido en el combo.
+        AssetCatalog catalog;
+        int          modelPick = 0;
+        std::string  meshError;
+
+        // Autoria de materiales. activeMaterial es un indice en SceneAssets
+        // (kInvalidIndex de SceneAssets = 0xFFFFFFFF cuando no hay ninguno).
+        // El draft es la copia que se edita; draftFor recuerda de que indice
+        // se cargo, para no recargarlo cada frame y perder la edicion.
+        u32 activeMaterial = 0xFFFFFFFFu;
+        u32 draftFor       = 0xFFFFFFFFu;
+        efengine::renderer::MaterialDef materialDraft;
+        std::string materialError;
 
         FrameStats stats;
     };

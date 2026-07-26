@@ -260,3 +260,45 @@ TEST_CASE("SceneGraph: Renderables/PointLights se limpian entre updates") {
 
     CHECK(g.Renderables().size() == 1u);   // no se duplica
 }
+
+TEST_CASE("SceneGraph::DetachMesh saca la malla y deja hijos y luz intactos") {
+    scene::SceneGraph g;
+    renderer::Model model = MakeEmptyModelSG();
+
+    scene::NodeHandle h    = g.CreateChild(g.Root(), "conMalla");
+    scene::NodeHandle hijo = g.CreateChild(h, "hijo");
+    g.AttachMesh(h, { &model, {} });
+    g.AttachLight(h, { scene::LightKind::Point, glm::vec3(1.0f) });
+    REQUIRE(g.Get(h).mesh.has_value());
+
+    g.DetachMesh(h);
+
+    CHECK_FALSE(g.Get(h).mesh.has_value());
+    CHECK(g.Get(h).light.has_value());          // la luz no se toca
+    REQUIRE(g.Get(h).children.size() == 1u);    // los hijos tampoco
+    CHECK(g.Get(h).children[0] == hijo);
+}
+
+TEST_CASE("SceneGraph::DetachMesh saca el nodo de Renderables") {
+    scene::SceneGraph g;
+    renderer::Model model = MakeEmptyModelSG();
+
+    scene::NodeHandle h = g.CreateNode("conMalla");
+    g.AttachMesh(h, { &model, {} });
+
+    g.UpdateWorldTransforms();
+    REQUIRE(g.Renderables().size() == 1u);
+
+    g.DetachMesh(h);
+    g.UpdateWorldTransforms();
+    CHECK(g.Renderables().empty());
+}
+
+TEST_CASE("SceneGraph::DetachMesh es no-op con handle invalido o nodo sin malla") {
+    scene::SceneGraph g;
+
+    g.DetachMesh(scene::NodeHandle{});          // handle nulo: no debe abortar
+    scene::NodeHandle h = g.CreateNode("pelado");
+    g.DetachMesh(h);
+    CHECK_FALSE(g.Get(h).mesh.has_value());
+}

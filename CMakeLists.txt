@@ -70,11 +70,13 @@ FetchContent_Declare(
 
 # Dear ImGui - GUI inmediata para tooling de debug en runtime. No trae
 # CMakeLists propio: tras poblarlo se arma un target manual (igual que stb).
-# Se fija a un tag estable (no docking branch: un solo panel no lo necesita).
+# Se fija al tag estable de la rama "docking": el editor tiene varios paneles y
+# necesita DockSpace/DockBuilder para armar un layout tipo Unity. Es la misma
+# version que master (v1.91.5), con el docking mergeado.
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG v1.91.5
+    GIT_TAG v1.91.5-docking
 )
 
 # Opciones de GLFW: no compilar sus docs/tests/examples.
@@ -128,12 +130,14 @@ add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/misc/cpp/imgui_stdlib.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
 target_include_directories(imgui PUBLIC
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
+    ${imgui_SOURCE_DIR}/misc/cpp
 )
 target_link_libraries(imgui PUBLIC glfw)
 

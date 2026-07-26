@@ -52,6 +52,12 @@ namespace scene {
 
             // Adjuntos
             void AttachMesh(NodeHandle handle, MeshAttachment mesh);
+
+            // Saca la malla del nodo. No toca hijos, luz ni behaviors. Handle
+            // invalido o nodo sin malla: no-op silencioso (la UI puede pedirlo
+            // sobre un nodo que ya se destruyo).
+            void DetachMesh(NodeHandle handle);
+
             void AttachLight(NodeHandle handle, LightAttachment light);
 
             // Behaviors

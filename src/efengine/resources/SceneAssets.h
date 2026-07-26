@@ -20,6 +20,12 @@ namespace resources {
             static constexpr u32 kInvalidIndex = 0xFFFFFFFFu; // valor centinela
 
             u32 AddMaterial(renderer::MaterialDef def, renderer::Material mat);
+            // Reemplaza def y CONTENIDO del material del slot, sin cambiar su
+            // direccion: los MeshAttachment::materials de los nodos guardan
+            // const Material* y no tienen que enterarse de la edicion.
+            // false si el indice es invalido (y entonces no toca nada).
+            bool UpdateMaterial(u32 index, renderer::MaterialDef def, renderer::Material rebuilt);
+
             u32 MaterialCount() const { return static_cast<u32>(m_materials.size()); }
 
             const renderer::MaterialDef* DefAt(u32 index) const;

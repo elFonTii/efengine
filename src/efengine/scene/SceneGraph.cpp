@@ -101,6 +101,11 @@ namespace scene {
         m_slots[handle.index].node.mesh = std::move(mesh);
     }
 
+    void SceneGraph::DetachMesh(NodeHandle handle) {
+        if (!IsValid(handle)) return;
+        m_slots[handle.index].node.mesh.reset();
+    }
+
     void SceneGraph::AttachLight(NodeHandle handle, LightAttachment light) {
         EF_ASSERT(IsValid(handle), "SceneGraph::AttachLight: handle invalido");
         m_slots[handle.index].node.light = light;
