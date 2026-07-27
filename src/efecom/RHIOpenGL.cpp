@@ -112,6 +112,108 @@ namespace efecom {
         else         glDisable(GL_DEPTH_TEST);
     }
 
+    // ── Estado de rasterizacion ────────────────────────────────────────────
+    namespace {
+        GLenum toGlDepthFunc(DepthFunc f) {
+            switch (f) {
+                case DepthFunc::Never:        return GL_NEVER;
+                case DepthFunc::Less:         return GL_LESS;
+                case DepthFunc::Equal:        return GL_EQUAL;
+                case DepthFunc::LessEqual:    return GL_LEQUAL;
+                case DepthFunc::Greater:      return GL_GREATER;
+                case DepthFunc::NotEqual:     return GL_NOTEQUAL;
+                case DepthFunc::GreaterEqual: return GL_GEQUAL;
+                case DepthFunc::Always:       return GL_ALWAYS;
+            }
+            return GL_LESS;
+        }
+
+        GLenum toGlBlendFactor(BlendFactor f) {
+            switch (f) {
+                case BlendFactor::Zero:             return GL_ZERO;
+                case BlendFactor::One:              return GL_ONE;
+                case BlendFactor::SrcAlpha:         return GL_SRC_ALPHA;
+                case BlendFactor::OneMinusSrcAlpha: return GL_ONE_MINUS_SRC_ALPHA;
+                case BlendFactor::DstAlpha:         return GL_DST_ALPHA;
+                case BlendFactor::OneMinusDstAlpha: return GL_ONE_MINUS_DST_ALPHA;
+                case BlendFactor::SrcColor:         return GL_SRC_COLOR;
+                case BlendFactor::OneMinusSrcColor: return GL_ONE_MINUS_SRC_COLOR;
+                case BlendFactor::DstColor:         return GL_DST_COLOR;
+                case BlendFactor::OneMinusDstColor: return GL_ONE_MINUS_DST_COLOR;
+            }
+            return GL_ONE;
+        }
+
+        GLenum toGlBlendOp(BlendOp op) {
+            switch (op) {
+                case BlendOp::Add:             return GL_FUNC_ADD;
+                case BlendOp::Subtract:        return GL_FUNC_SUBTRACT;
+                case BlendOp::ReverseSubtract: return GL_FUNC_REVERSE_SUBTRACT;
+                case BlendOp::Min:             return GL_MIN;
+                case BlendOp::Max:             return GL_MAX;
+            }
+            return GL_FUNC_ADD;
+        }
+
+        // Ultimo estado aplicado. g_stateValid = false fuerza reemitir todo:
+        // arranca invalido porque el estado real de GL al abrir el contexto no
+        // tiene por que coincidir con los defaults de PipelineState.
+        PipelineState g_state;
+        bool          g_stateValid = false;
+    }
+
+    void ResetPipelineStateCache() { g_stateValid = false; }
+
+    void ApplyPipelineState(const PipelineState& s) {
+        const bool all = !g_stateValid;
+
+        if (all || s.depthTest != g_state.depthTest) {
+            if (s.depthTest) glEnable(GL_DEPTH_TEST);
+            else             glDisable(GL_DEPTH_TEST);
+        }
+        if (all || s.depthWrite != g_state.depthWrite) {
+            glDepthMask(s.depthWrite ? GL_TRUE : GL_FALSE);
+        }
+        if (all || s.depthFunc != g_state.depthFunc) {
+            glDepthFunc(toGlDepthFunc(s.depthFunc));
+        }
+        if (all || s.cullMode != g_state.cullMode) {
+            if (s.cullMode == CullMode::None) {
+                glDisable(GL_CULL_FACE);
+            } else {
+                glEnable(GL_CULL_FACE);
+                glCullFace(s.cullMode == CullMode::Back ? GL_BACK : GL_FRONT);
+            }
+        }
+        if (all || s.frontFace != g_state.frontFace) {
+            glFrontFace(s.frontFace == FrontFace::CounterClockwise ? GL_CCW : GL_CW);
+        }
+        if (all || s.blendEnable != g_state.blendEnable) {
+            if (s.blendEnable) glEnable(GL_BLEND);
+            else               glDisable(GL_BLEND);
+        }
+        if (all || s.srcColor != g_state.srcColor || s.dstColor != g_state.dstColor
+                || s.srcAlpha != g_state.srcAlpha || s.dstAlpha != g_state.dstAlpha) {
+            glBlendFuncSeparate(toGlBlendFactor(s.srcColor), toGlBlendFactor(s.dstColor),
+                                toGlBlendFactor(s.srcAlpha), toGlBlendFactor(s.dstAlpha));
+        }
+        if (all || s.colorOp != g_state.colorOp || s.alphaOp != g_state.alphaOp) {
+            glBlendEquationSeparate(toGlBlendOp(s.colorOp), toGlBlendOp(s.alphaOp));
+        }
+        if (all || s.colorWrite[0] != g_state.colorWrite[0]
+                || s.colorWrite[1] != g_state.colorWrite[1]
+                || s.colorWrite[2] != g_state.colorWrite[2]
+                || s.colorWrite[3] != g_state.colorWrite[3]) {
+            glColorMask(s.colorWrite[0] ? GL_TRUE : GL_FALSE,
+                        s.colorWrite[1] ? GL_TRUE : GL_FALSE,
+                        s.colorWrite[2] ? GL_TRUE : GL_FALSE,
+                        s.colorWrite[3] ? GL_TRUE : GL_FALSE);
+        }
+
+        g_state      = s;
+        g_stateValid = true;
+    }
+
     // ── Buffers ────────────────────────────────────────────────────────────
     u32 CreateBuffer(const void* data, usize size) {
         u32 id = 0;

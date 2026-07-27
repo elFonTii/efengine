@@ -44,7 +44,64 @@ namespace efecom {
     };
     void Clear(ClearMask mask);
 
-    void SetDepthTest(bool enabled);
+    // ── Estado de rasterizacion ────────────────────────────────────────────
+    // Todo el estado que en Vulkan es inmutable dentro de un pipeline object va
+    // junto en un struct. Cada pase declara el suyo entero: nadie "restaura" nada,
+    // porque restaurar depende de saber cual era el default y eso se rompe en
+    // silencio cuando el default cambia.
+    enum class DepthFunc   { Never, Less, Equal, LessEqual, Greater, NotEqual, GreaterEqual, Always };
+    enum class CullMode    { None, Back, Front };
+    enum class FrontFace   { CounterClockwise, Clockwise };
+    enum class BlendFactor { Zero, One, SrcAlpha, OneMinusSrcAlpha, DstAlpha, OneMinusDstAlpha,
+                             SrcColor, OneMinusSrcColor, DstColor, OneMinusDstColor };
+    enum class BlendOp     { Add, Subtract, ReverseSubtract, Min, Max };
+
+    struct PipelineState {
+        bool        depthTest   = true;
+        bool        depthWrite  = true;
+        DepthFunc   depthFunc   = DepthFunc::Less;
+        CullMode    cullMode    = CullMode::Back;
+        FrontFace   frontFace   = FrontFace::CounterClockwise;
+        bool        blendEnable = false;
+        BlendFactor srcColor    = BlendFactor::SrcAlpha;
+        BlendFactor dstColor    = BlendFactor::OneMinusSrcAlpha;
+        BlendFactor srcAlpha    = BlendFactor::One;
+        BlendFactor dstAlpha    = BlendFactor::OneMinusSrcAlpha;
+        BlendOp     colorOp     = BlendOp::Add;
+        BlendOp     alphaOp     = BlendOp::Add;
+        bool        colorWrite[4] = { true, true, true, true };
+    };
+
+    // Comparacion campo por campo. El backend la usa para emitir solo las llamadas
+    // gl* de lo que cambio; olvidarse un campo aca es un bug de estado invisible.
+    inline bool operator==(const PipelineState& a, const PipelineState& b) {
+        return a.depthTest   == b.depthTest
+            && a.depthWrite  == b.depthWrite
+            && a.depthFunc   == b.depthFunc
+            && a.cullMode    == b.cullMode
+            && a.frontFace   == b.frontFace
+            && a.blendEnable == b.blendEnable
+            && a.srcColor    == b.srcColor
+            && a.dstColor    == b.dstColor
+            && a.srcAlpha    == b.srcAlpha
+            && a.dstAlpha    == b.dstAlpha
+            && a.colorOp     == b.colorOp
+            && a.alphaOp     == b.alphaOp
+            && a.colorWrite[0] == b.colorWrite[0]
+            && a.colorWrite[1] == b.colorWrite[1]
+            && a.colorWrite[2] == b.colorWrite[2]
+            && a.colorWrite[3] == b.colorWrite[3];
+    }
+    inline bool operator!=(const PipelineState& a, const PipelineState& b) { return !(a == b); }
+
+    void ApplyPipelineState(const PipelineState& state);
+
+    // Invalida el cache del backend: la proxima ApplyPipelineState reemite TODO.
+    // Obligatorio cuando algo externo toca el estado de GL a espaldas del RHI
+    // (el backend de ImGui lo hace en cada Render).
+    void ResetPipelineStateCache();
+
+    void SetDepthTest(bool enabled);   // TODO(Task 4): se borra al migrar los pases
 
     // ── Buffers (VBO / EBO) ────────────────────────────────────────────────
     // Buffer estático: crea y sube los datos de una vez. Sirve tanto para
