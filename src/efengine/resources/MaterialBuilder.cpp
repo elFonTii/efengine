@@ -50,6 +50,7 @@ namespace resources {
         material.emissiveTint      = def.emissiveTint;
         material.emissiveIntensity = def.emissiveIntensity;
         material.normalStrength    = def.normalStrength;
+        material.doubleSided       = def.doubleSided;
 
         return material;
     }

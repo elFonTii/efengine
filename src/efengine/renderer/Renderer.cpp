@@ -136,9 +136,9 @@ namespace renderer {
             const Material& mat = *it->second;
             const Shader& shader = mat.shader();
 
-            // El estado sale del material: hoy todos son de una cara sola, pero
-            // OpaqueDoubleSidedState() entra en juego con el flag doubleSided.
-            efecom::ApplyPipelineState(OpaqueState());
+            // El estado sale del material.
+            efecom::ApplyPipelineState(mat.doubleSided ? OpaqueDoubleSidedState()
+                                                       : OpaqueState());
 
             applyFrameUniforms(shader);
             shader.Bind();

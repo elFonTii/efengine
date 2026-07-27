@@ -42,6 +42,9 @@ namespace renderer {
             // Escala la componente tangencial del normal map. 1 = el mapa tal cual.
             f32       normalStrength    = 1.0f;
 
+            // Elige el PipelineState del draw: OpaqueState u OpaqueDoubleSidedState.
+            bool      doubleSided       = false;
+
             void Bind() const;
 
         private:

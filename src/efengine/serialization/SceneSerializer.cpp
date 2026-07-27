@@ -143,6 +143,7 @@ namespace serialization {
             r.emissiveTint      = def.emissiveTint;
             r.emissiveIntensity = def.emissiveIntensity;
             r.normalStrength    = def.normalStrength;
+            r.doubleSided       = def.doubleSided ? 1u : 0u;
             return r;
         }
 
@@ -169,6 +170,7 @@ namespace serialization {
             def.emissiveTint      = r.emissiveTint;
             def.emissiveIntensity = r.emissiveIntensity;
             def.normalStrength    = r.normalStrength;
+            def.doubleSided       = (r.doubleSided != 0u);
             return def;
         }
 
