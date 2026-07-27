@@ -15,7 +15,9 @@ namespace renderer {
         public:
             SkyboxPass(Renderer& renderer, VertexArray& fullscreenQuad, Shader* skyboxShader);
 
-            void Draw(const Cubemap& env, const glm::mat4& view, const glm::mat4& projection) const;
+            // Sin view/projection: uInvViewProjRot sale del bloque Frame, que
+            // llena Renderer::BeginScene. Llamar DESPUES de BeginScene.
+            void Draw(const Cubemap& env) const;
 
         private:
             Renderer&    m_renderer;

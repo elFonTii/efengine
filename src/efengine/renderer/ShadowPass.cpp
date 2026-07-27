@@ -29,14 +29,16 @@ namespace renderer {
         efecom::ApplyPipelineState(ShadowDepthState());
         efecom::Clear(efecom::ClearMask::Depth);
 
-        // Dibujar la geometría de cada objeto (solo posición). Se re-bindea el
-        // shader por objeto: Renderer::Draw desbindea el programa al terminar, y
-        // los valores de uniform persisten en el programa entre binds.
+        // Una sola subida por pase: la matriz light-space no cambia entre objetos.
+        const ShadowPassBlock pass { m_lightSpaceMatrix };
+        m_passUbo.Update(&pass, sizeof(pass));
+        m_passUbo.BindTo(kPassBinding);
+
+        m_shader->Bind();
         for (const scene::RenderItem& item : scene.Renderables()) {
             if (!item.model) continue;
-            m_shader->Bind();
-            m_shader->SetMat4("uLightSpaceMatrix", m_lightSpaceMatrix);
-            m_shader->SetMat4("uModel", item.world);
+            // Lo unico que cambia por objeto es el bloque Object (binding 2).
+            m_renderer.SetObjectMatrix(item.world);
             for (const Mesh& mesh : item.model->meshes()) {
                 m_renderer.Draw(mesh.vertexArray(), *m_shader);
             }

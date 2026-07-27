@@ -1,7 +1,6 @@
 #include "efengine/renderer/SkyboxPass.h"
 
 #include <efecom/RHI.h>
-#include <glm/gtc/matrix_inverse.hpp>
 
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Shader.h>
@@ -18,15 +17,11 @@ namespace renderer {
         EF_ASSERT(m_shader != null, "SkyboxPass: shader de skybox nulo (fallo al cargar)");
     }
 
-    void SkyboxPass::Draw(const Cubemap& env, const glm::mat4& view, const glm::mat4& projection) const {
-
-        const glm::mat4 invVPRot = glm::inverse(projection * glm::mat4(glm::mat3(view)));
-
+    void SkyboxPass::Draw(const Cubemap& env) const {
         // No se restaura nada al salir: el pase que sigue declara su propio estado.
         efecom::ApplyPipelineState(SkyboxState());
 
         m_shader->Bind();
-        m_shader->SetMat4("uInvViewProjRot", invVPRot);
         env.Bind(0);
         m_renderer.Draw(m_quad, *m_shader);
     }

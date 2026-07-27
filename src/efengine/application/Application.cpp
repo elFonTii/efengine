@@ -144,7 +144,7 @@ namespace application {
                               ibl);
 
          if (m_environment) {
-            m_skyboxPass.Draw(m_environment->env(), camera.ViewMatrix(), camera.ProjectionMatrix());
+            m_skyboxPass.Draw(m_environment->env());
          }
 
         for(const scene::RenderItem& item : scene.Renderables()) {
