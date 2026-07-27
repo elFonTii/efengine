@@ -254,7 +254,7 @@ namespace {
         if (!ImGui::Begin("Render", &st.showRender)) { ImGui::End(); return; }
 
         if (ImGui::CollapsingHeader("Iluminacion", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::SliderFloat("Ambient", &ctx.scene.ambientFactor, 0.0f, 1.0f);
+            ImGui::SliderFloat("Intensidad IBL", &ctx.scene.iblIntensity, 0.0f, 2.0f);
             f32 exposure = ctx.camera.Exposure();
             if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 5.0f)) ctx.camera.SetExposure(exposure);
         }

@@ -19,6 +19,7 @@ namespace renderer {
         Metallic  = 4,
         Height    = 5,
         Opacity   = 6,
+        Emissive  = 7,
     };
 
     struct TextureDef {
@@ -43,6 +44,12 @@ namespace renderer {
         f32       aoStrength  = 0.5f;
         f32       heightScale = 0.05f;
         f32       alphaCutoff = 0.5f;
+
+        // v2 del formato. Los defaults dejan el material igual que antes de la Fase 1:
+        // emision apagada y normal map sin escalar.
+        glm::vec3 emissiveTint      = glm::vec3(1.0f);   // blanco = no tiñe el mapa
+        f32       emissiveIntensity = 0.0f;              // 0 = sin emision
+        f32       normalStrength    = 1.0f;              // 1 = el mapa tal cual
     };
 
 }

@@ -24,6 +24,7 @@ namespace renderer {
             void SetMetallicMap(const Texture* texture);
             void SetHeightMap(const Texture* texture);
             void SetOpacityMap(const Texture* texture);
+            void SetEmissiveMap(const Texture* texture);
 
             const Shader& shader() const { return *m_shader; }
 
@@ -34,6 +35,12 @@ namespace renderer {
             f32 aoStrength = 0.5f;
             f32 heightScale = 0.05f;
             f32 alphaCutoff = 0.5f;
+
+            // Emision propia: no la modula el AO, ni la sombra, ni la intensidad de IBL.
+            glm::vec3 emissiveTint      = glm::vec3(1.0f);
+            f32       emissiveIntensity = 0.0f;
+            // Escala la componente tangencial del normal map. 1 = el mapa tal cual.
+            f32       normalStrength    = 1.0f;
 
             void Bind() const;
 
@@ -49,6 +56,7 @@ namespace renderer {
             const Texture* m_metallic  = null;
             const Texture* m_height    = null;
             const Texture* m_opacity   = null;
+            const Texture* m_emissive  = null;
     };
 
     using MaterialMap = std::unordered_map<std::string, const Material*>;

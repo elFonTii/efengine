@@ -7,7 +7,7 @@ namespace serialization {
 
     void SceneDocument::Clear() {
         strings.Clear();
-        ambientFactor  = 0.08f;
+        iblIntensity   = 1.0f;
         primarySunNode = kInvalidIndex;
         materials.clear();
         nodes.clear();
@@ -22,12 +22,12 @@ namespace serialization {
         EndChunk(w, marker);
 
         marker = BeginChunk(w, ChunkId::Settings);
-        w.Field(doc.ambientFactor);
+        w.Field(doc.iblIntensity);
         w.Field(doc.primarySunNode);
         EndChunk(w, marker);
 
         marker = BeginChunk(w, ChunkId::Materials);
-        SerializeVector(w, doc.materials, kMinEncodedMaterial);
+        SerializeVector(w, doc.materials, MinEncodedMaterial(w.Version()));
         EndChunk(w, marker);
 
         marker = BeginChunk(w, ChunkId::Nodes);
@@ -68,11 +68,21 @@ namespace serialization {
                     vioStrings = true;
                     break;
                 case ChunkId::Settings:
-                    r.Field(out.ambientFactor);
+                    if (r.Version() >= 2u) {
+                        r.Field(out.iblIntensity);
+                    } else {
+                        // v1: el f32 era ambientFactor. Hay que CONSUMIRLO igual para no
+                        // desalinear el cursor, pero su valor no significa lo mismo.
+                        f32 legacyAmbient = 0.0f;
+                        r.Field(legacyAmbient);
+                        out.iblIntensity = 1.0f;
+                        EF_LOG_INFO("SceneDocument: escena v1 migrada, ambientFactor %.3f "
+                                    "descartado, iblIntensity = 1.0", legacyAmbient);
+                    }
                     r.Field(out.primarySunNode);
                     break;
                 case ChunkId::Materials:
-                    SerializeVector(r, out.materials, kMinEncodedMaterial);
+                    SerializeVector(r, out.materials, MinEncodedMaterial(r.Version()));
                     break;
                 case ChunkId::Nodes:
                     SerializeVector(r, out.nodes, kMinEncodedNode);

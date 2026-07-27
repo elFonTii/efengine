@@ -32,6 +32,10 @@ namespace serialization {
         f32       aoStrength  = 0.5f;
         f32       heightScale = 0.05f;
         f32       alphaCutoff = 0.5f;
+
+        glm::vec3 emissiveTint      = glm::vec3(1.0f);
+        f32       emissiveIntensity = 0.0f;
+        f32       normalStrength    = 1.0f;
     };
 
     struct MaterialBinding {            // por Array
@@ -77,7 +81,9 @@ namespace serialization {
 
     struct SceneDocument {
         StringTable strings;
-        f32 ambientFactor  = 0.08f;
+        // Multiplica el ambiente difuso Y el especular del IBL. 1.0 = el HDR tal cual.
+        // En v1 este f32 era ambientFactor (un ambiente constante que nunca se conecto).
+        f32 iblIntensity   = 1.0f;
         u32 primarySunNode = kInvalidIndex;
         std::vector<MaterialRecord> materials;
         std::vector<NodeRecord>     nodes; 
@@ -85,7 +91,12 @@ namespace serialization {
         void Clear();
     };
 
-    inline constexpr usize kMinEncodedMaterial = 52u;   // 4*u32 + count + vec3 + 5*f32
+    // Tamano minimo de un MaterialRecord codificado, por version:
+    //   v1: 4*u32 + count del array + vec3 + 5*f32                    = 52
+    //   v2: + vec3 (emissiveTint) + f32 (intensity) + f32 (strength)   = 72
+    inline constexpr usize MinEncodedMaterial(u32 version) {
+        return (version >= 2u) ? 72u : 52u;
+    }
     inline constexpr usize kMinEncodedNode     = 52u;   // 3*u32 + transform(36) + count
     inline constexpr usize kMinEncodedBehavior = 12u;   // 2*u32 + count del payload
 
@@ -119,6 +130,13 @@ namespace serialization {
         ar.Field(m.aoStrength);
         ar.Field(m.heightScale);
         ar.Field(m.alphaCutoff);
+
+        // v2 al final del record. Leyendo v1 estos campos no se tocan
+        if (ar.Version() >= 2u) {
+            ar.Field(m.emissiveTint);
+            ar.Field(m.emissiveIntensity);
+            ar.Field(m.normalStrength);
+        }
     }
 
     template <class Ar>

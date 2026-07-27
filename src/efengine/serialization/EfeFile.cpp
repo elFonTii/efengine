@@ -50,11 +50,12 @@ namespace serialization {
             EF_LOG_ERROR("EfeFile: el archivo es de otra endianness (leyo 0x%08X)", endian);
             r.Fail(); outChunkCount = 0u; return false;
         }
-        if (version != kCurrentVersion) {
-            EF_LOG_ERROR("EfeFile: version %u no soportada (esta build lee %u)",
-                         version, kCurrentVersion);
+        if (version < kMinSupportedVersion || version > kCurrentVersion) {
+            EF_LOG_ERROR("EfeFile: version %u no soportada (esta build lee %u..%u)",
+                         version, kMinSupportedVersion, kCurrentVersion);
             r.Fail(); outChunkCount = 0u; return false;
         }
+        r.SetVersion(version);
         if (content != static_cast<u32>(expected)) {
             EF_LOG_ERROR("EfeFile: contentType %u, se esperaba %u",
                          content, static_cast<u32>(expected));

@@ -53,16 +53,15 @@ namespace renderer {
         efecom::BindProgram(0);
     }
 
-    void Renderer::BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, f32 ambientFactor, const DirectionalLight& sun, const ShadowContext& shadow, const Cubemap* irradiance) {
+    void Renderer::BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, const DirectionalLight& sun, const ShadowContext& shadow, const IblContext& ibl) {
         // inicializacion simplemente
         m_view = view;
         m_projection = projection;
-        m_ambient = ambientFactor;
         m_viewPos = viewPos;
         m_lights.assign(lights.begin(), lights.end());
         m_sun = sun;
         m_shadow = shadow;
-        m_irradiance = irradiance;
+        m_ibl = ibl;
 
         // si la cantidad de luces es mayor a las soportadas por el shader recortar
         if(m_lights.size() > kMaxLights) {
@@ -98,20 +97,30 @@ namespace renderer {
         shader.SetVec3("uLightDir", m_sun.direction);
         shader.SetVec3("uDirLightColor", m_sun.color);
 
-        // Sombra direccional (shadow map en unit 7)
+        // Sombra direccional (shadow map en unit 8: las 0-7 son del material)
         shader.SetMat4("uLightSpaceMatrix", m_shadow.lightSpaceMatrix);
         shader.SetInt("uShadowEnabled", m_shadow.enabled ? 1 : 0);
         shader.SetFloat("uShadowBiasMin", m_shadow.biasMin);
         shader.SetFloat("uShadowBiasMax", m_shadow.biasMax);
         if (m_shadow.map != null) {
-            m_shadow.map->Bind(7);
-            shader.SetInt("uShadowMap", 7);
+            m_shadow.map->Bind(8);
+            shader.SetInt("uShadowMap", 8);
         }
 
-        // IBL difuso (irradiance cubemap en unit 8)
-        if (m_irradiance != null) {
-            m_irradiance->Bind(8);
-            shader.SetInt("uIrradianceMap", 8);
+        // IBL: irradiancia 9, prefiltrado 10, BRDF LUT 11. Los tres o ninguno.
+        const bool hasIbl = (m_ibl.irradiance != null
+                          && m_ibl.prefiltered != null
+                          && m_ibl.brdfLut != null);
+        shader.SetInt("uHasIbl", hasIbl ? 1 : 0);
+        shader.SetFloat("uIblIntensity", m_ibl.intensity);
+        if (hasIbl) {
+            m_ibl.irradiance->Bind(9);
+            shader.SetInt("uIrradianceMap", 9);
+            m_ibl.prefiltered->Bind(10);
+            shader.SetInt("uPrefilterMap", 10);
+            m_ibl.brdfLut->Bind(11);
+            shader.SetInt("uBrdfLUT", 11);
+            shader.SetFloat("uPrefilterMaxLod", m_ibl.maxLod);
         }
     };
 

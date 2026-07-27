@@ -27,6 +27,7 @@ namespace efecom {
                 case TextureFormat::SRGB8:    return { GL_SRGB8,               GL_RGB,             GL_UNSIGNED_BYTE };
                 case TextureFormat::SRGB8_A8: return { GL_SRGB8_ALPHA8,        GL_RGBA,            GL_UNSIGNED_BYTE };
                 case TextureFormat::RGBA16F:  return { GL_RGBA16F,             GL_RGBA,            GL_FLOAT };
+                case TextureFormat::RG16F:    return { GL_RG16F,               GL_RG,              GL_FLOAT };
                 case TextureFormat::Depth24:  return { GL_DEPTH_COMPONENT24,   GL_DEPTH_COMPONENT, GL_FLOAT };
                 case TextureFormat::Depth32F: return { GL_DEPTH_COMPONENT32F,  GL_DEPTH_COMPONENT, GL_FLOAT };
             }
@@ -239,6 +240,22 @@ namespace efecom {
         glBindTexture(GL_TEXTURE_2D, texture);
     }
 
+    u32 CreateTexture2DStorage(const Texture2DStorageDesc& desc) {
+        u32 id = 0;
+        glCreateTextures(GL_TEXTURE_2D, 1, &id);
+        EFCOM_ASSERT(id != 0, "CreateTexture2DStorage: glCreateTextures devuelve 0 (sin contexto GL)");
+        
+        glTextureStorage2D(id, (GLsizei)desc.mipCount, to_gl(desc.format).internalFormat,
+                           (GLsizei)desc.width, (GLsizei)desc.height);
+
+        glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, to_gl(desc.minFilter));
+        glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, to_gl(desc.magFilter));
+        glTextureParameteri(id, GL_TEXTURE_WRAP_S, to_gl(desc.wrapS));
+        glTextureParameteri(id, GL_TEXTURE_WRAP_T, to_gl(desc.wrapT));
+
+        return id;
+    }
+
     // ── Cubemaps ───────────────────────────────────────────────────────────
     u32 CreateCubemap(u32 size, TextureFormat format, u32 mipCount) {
         u32 id = 0;
@@ -261,6 +278,10 @@ namespace efecom {
 
     void BindImageLayered(u32 unit, u32 texture, u32 level, ImageAccess access, TextureFormat format) {
         glBindImageTexture(unit, texture, (GLint)level, GL_TRUE, 0, to_gl(access), to_gl(format).internalFormat);
+    }
+
+    void BindImage2D(u32 unit, u32 texture, u32 level, ImageAccess access, TextureFormat format) {
+        glBindImageTexture(unit, texture, (GLint)level, GL_FALSE, 0, to_gl(access), to_gl(format).internalFormat);
     }
 
     // ── Compute ────────────────────────────────────────────────────────────

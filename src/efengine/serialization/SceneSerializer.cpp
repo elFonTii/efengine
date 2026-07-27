@@ -140,6 +140,9 @@ namespace serialization {
             r.aoStrength  = def.aoStrength;
             r.heightScale = def.heightScale;
             r.alphaCutoff = def.alphaCutoff;
+            r.emissiveTint      = def.emissiveTint;
+            r.emissiveIntensity = def.emissiveIntensity;
+            r.normalStrength    = def.normalStrength;
             return r;
         }
 
@@ -163,6 +166,9 @@ namespace serialization {
             def.aoStrength  = r.aoStrength;
             def.heightScale = r.heightScale;
             def.alphaCutoff = r.alphaCutoff;
+            def.emissiveTint      = r.emissiveTint;
+            def.emissiveIntensity = r.emissiveIntensity;
+            def.normalStrength    = r.normalStrength;
             return def;
         }
 
@@ -174,7 +180,7 @@ namespace serialization {
                                   const SceneRegistry& reg,
                                   SceneDocument& out) {
         out.Clear();
-        out.ambientFactor = graph.ambientFactor;
+        out.iblIntensity = graph.iblIntensity;
 
         // Los materiales van primero: los bindings de los nodos referencian sus indices,
         // y el orden del vector de SceneAssets es el orden del chunk MATL.
@@ -312,7 +318,7 @@ namespace serialization {
         if (doc.primarySunNode != kInvalidIndex && doc.primarySunNode < handles.size()) {
             outGraph.SetPrimarySun(handles[doc.primarySunNode]);
         }
-        outGraph.ambientFactor = doc.ambientFactor;
+        outGraph.iblIntensity = doc.iblIntensity;
         return true;
     }
 

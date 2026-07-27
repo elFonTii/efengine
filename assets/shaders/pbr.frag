@@ -48,8 +48,15 @@ uniform sampler2D uAOMap;
 uniform int       uHasAOMap;
 uniform float     uAOStrength;   // 0 = sin AO, 1 = AO pleno
 
-// --- IBL difuso (mapa de irradiancia precomputado) ---
+// --- IBL (split-sum de Karis) ---
+// Difuso: irradiancia precomputada. Especular: environment prefiltrado por
+// rugosidad (un mip por nivel) + la LUT que integra el termino escalar.
 uniform samplerCube uIrradianceMap;
+uniform samplerCube uPrefilterMap;
+uniform sampler2D   uBrdfLUT;
+uniform float       uPrefilterMaxLod;   // mip mas alto del prefiltrado (mips - 1)
+uniform float       uIblIntensity;      // SceneGraph::iblIntensity
+uniform int         uHasIbl;            // 0 = escena sin environment: ambiente = 0
 
 // --- Height / Displacement (Parallax Occlusion Mapping) ---
 uniform sampler2D uHeightMap;
@@ -59,6 +66,15 @@ uniform float     uHeightScale;  // profundidad del relieve (p. ej. 0.05)
 uniform sampler2D uOpacityMap;
 uniform int       uHasOpacityMap;
 uniform float     uAlphaCutoff;
+
+// --- Emision propia ---
+uniform sampler2D uEmissiveMap;
+uniform int       uHasEmissiveMap;
+uniform vec3      uEmissiveTint;
+uniform float     uEmissiveIntensity;
+
+// Escala la componente tangencial del normal map: 0 = plano, 1 = el mapa, >1 exagerado.
+uniform float uNormalStrength;
 
 const float PI = 3.14159265359;
 
@@ -205,6 +221,9 @@ void main() {
     vec3 N;
     if (uHasNormalMap == 1) {
         vec3 n = texture(uNormalMap, uv).rgb * 2.0 - 1.0;  // [0,1] → [-1,1]
+        // Escalar solo XY inclina más o menos la normal sin sacarla del hemisferio;
+        // la renormalización de abajo recompone Z.
+        n.xy *= uNormalStrength;
         N = normalize(vTBN * n);
     } else {
         N = normalize(vTBN[2]);
@@ -234,19 +253,36 @@ void main() {
         Lo += (1.0 - shadow) * CookTorranceBRDF(N, V, Ld, F0, albedo, metallic, roughness) * uDirLightColor;
     }
 
-    // --- Ambiente + composición ---
-    // El AO solo modula la luz indirecta (ambiente), no la directa.
-    // uAOStrength interpola entre "sin oclusión" (1.0) y el valor del mapa.
-    // --- Ambiente por IBL difuso ---
-    // El irradiance map da la luz difusa entrante para la normal N. kD descuenta
-    // la fracción especular (Fresnel) para no duplicar energía; los metales no
-    // tienen difuso. El AO solo modula esta luz indirecta.
-    float ao  = (uHasAOMap == 1) ? mix(1.0, texture(uAOMap, uv).r, uAOStrength) : 1.0;
-    vec3  F   = FresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
-    vec3  kD  = (vec3(1.0) - F) * (1.0 - metallic);
-    vec3  irr = texture(uIrradianceMap, N).rgb;
-    vec3  ambient = kD * irr * albedo * ao;
-    vec3  color   = ambient + Lo;
+    // --- Luz indirecta: IBL difuso + especular (split-sum) ---
+    // El AO solo modula la indirecta, nunca la directa. uAOStrength interpola entre
+    // "sin oclusión" (1.0) y el valor del mapa.
+    float ao    = (uHasAOMap == 1) ? mix(1.0, texture(uAOMap, uv).r, uAOStrength) : 1.0;
+    float NdotV = max(dot(N, V), 0.0);
+
+    // F con corrección por rugosidad: acá SÍ se usa el resultado, no solo para kD.
+    vec3 F  = FresnelSchlickRoughness(NdotV, F0, roughness);
+    vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);   // los metales no tienen difuso
+
+    vec3 ambient = vec3(0.0);
+    if (uHasIbl == 1) {
+        vec3 diffuseIBL = kD * texture(uIrradianceMap, N).rgb * albedo;
+
+        // El vector reflejado indexa el prefiltrado; la rugosidad elige el mip.
+        vec3 R          = reflect(-V, N);
+        vec3 prefiltered = textureLod(uPrefilterMap, R, roughness * uPrefilterMaxLod).rgb;
+        vec2 ab          = texture(uBrdfLUT, vec2(NdotV, roughness)).rg;
+        vec3 specularIBL = prefiltered * (F * ab.x + ab.y);
+
+        ambient = (diffuseIBL + specularIBL) * ao * uIblIntensity;
+    }
+
+    // --- Emision propia: no la toca el AO, ni la sombra, ni la intensidad de IBL ---
+    // Sale en HDR lineal, así que florece con bloom recién cuando la intensidad
+    // supera el threshold del brightpass.
+    vec3 emissive = (uHasEmissiveMap == 1 ? texture(uEmissiveMap, uv).rgb : vec3(1.0))
+                  * uEmissiveTint * uEmissiveIntensity;
+
+    vec3 color = ambient + Lo + emissive;
 
     // Radiancia lineal HDR sin tonemapear: el tone mapping + gamma ahora ocurren
     // una sola vez en el present pass (assets/shaders/tonemap.frag), Ciclo 1 HDR.

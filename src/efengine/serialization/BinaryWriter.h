@@ -1,5 +1,6 @@
 #pragma once
 #include <efengine/core/Types.h>
+#include <efengine/serialization/EfeFile.h>   // kCurrentVersion
 
 #include <cstring>
 #include <type_traits>
@@ -41,6 +42,10 @@ namespace serialization {
             void  EndSizedBlock(usize marker);
 
             bool  Ok() const { return true; }
+
+            // El writer siempre emite la version actual: no se escriben archivos viejos.
+            u32   Version() const { return kCurrentVersion; }
+
             usize Size() const { return m_buffer.size(); }
 
             const std::vector<u8>& Buffer() const { return m_buffer; }

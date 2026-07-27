@@ -1,0 +1,97 @@
+#version 450 core
+// Integra el termino escalar del split-sum (Karis 2013, "Real Shading in UE4") a
+// una LUT 2D: X = NdotV (0..1), Y = roughness (0..1), salida = vec2(A, B).
+// En pbr.frag el especular ambiente sale de prefiltered * (F * A + B).
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(rg16f, binding = 0) uniform writeonly image2D uBrdfLut;
+
+const float PI = 3.14159265359;
+const uint  kSamples = 1024u;
+
+// Van der Corput: invierte los bits del indice. Es la mitad low-discrepancy de
+// Hammersley, que reparte las muestras mucho mejor que un random.
+float radicalInverseVdC(uint bits) {
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10;   // 1 / 2^32
+}
+
+vec2 hammersley(uint i, uint n) {
+    return vec2(float(i) / float(n), radicalInverseVdC(i));
+}
+
+// Half-vector sesgado por la distribucion GGX alrededor de N.
+// a = roughness^2: la misma convencion que DistributionGGX de pbr.frag.
+vec3 importanceSampleGGX(vec2 Xi, vec3 N, float roughness) {
+    float a = roughness * roughness;
+
+    float phi      = 2.0 * PI * Xi.x;
+    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y));
+    float sinTheta = sqrt(max(1.0 - cosTheta * cosTheta, 0.0));
+
+    vec3 h = vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+
+    // Tangente -> mundo. El 'up' alternativo evita que el cross degenere.
+    vec3 up      = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 tangent = normalize(cross(up, N));
+    vec3 bitan   = cross(N, tangent);
+
+    return normalize(tangent * h.x + bitan * h.y + N * h.z);
+}
+
+// OJO: para IBL el remap de k es roughness^2 / 2, NO el (roughness+1)^2 / 8 que usa
+// GeometrySchlickGGX en pbr.frag para luz directa. Copiar el helper de alla sin
+// cambiar esta linea desbalancea la energia del especular ambiente, y el sintoma
+// no se lee como bug: se lee como "el metal quedo un poco opaco".
+float geometrySchlickGGX(float NdotX, float roughness) {
+    float k = (roughness * roughness) / 2.0;
+    return NdotX / (NdotX * (1.0 - k) + k);
+}
+
+void main() {
+    ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size  = imageSize(uBrdfLut);
+    if (texel.x >= size.x || texel.y >= size.y) return;   // sobrante del dispatch
+
+    // Centro de texel -> (NdotV, roughness). Se muestrea el centro para que NdotV
+    // nunca sea exactamente 0, donde la integral degenera.
+    vec2  uv        = (vec2(texel) + 0.5) / vec2(size);
+    float NdotV     = uv.x;
+    float roughness = uv.y;
+
+    // Se trabaja en espacio tangente con N fija: la integral solo depende del angulo.
+    vec3 N = vec3(0.0, 0.0, 1.0);
+    vec3 V = vec3(sqrt(max(1.0 - NdotV * NdotV, 0.0)), 0.0, NdotV);
+
+    float A = 0.0;
+    float B = 0.0;
+
+    for (uint i = 0u; i < kSamples; ++i) {
+        vec2 Xi = hammersley(i, kSamples);
+        vec3 H  = importanceSampleGGX(Xi, N, roughness);
+        vec3 L  = normalize(2.0 * dot(V, H) * H - V);   // reflejo de V sobre H
+
+        float NdotL = max(L.z, 0.0);
+        if (NdotL <= 0.0) continue;
+
+        float NdotH = max(H.z, 0.0);
+        float VdotH = max(dot(V, H), 0.0);
+
+        float G     = geometrySchlickGGX(NdotL, roughness)
+                    * geometrySchlickGGX(NdotV, roughness);
+        float G_Vis = (G * VdotH) / max(NdotH * NdotV, 1e-6);
+
+        // Fc es el termino de Fresnel de Schlick con F0 = 0: separa la integral en
+        // A (lo que escala a F0) y B (lo que se suma), que es todo el truco del split-sum.
+        float Fc = pow(1.0 - VdotH, 5.0);
+
+        A += (1.0 - Fc) * G_Vis;
+        B += Fc * G_Vis;
+    }
+
+    imageStore(uBrdfLut, texel, vec4(A / float(kSamples), B / float(kSamples), 0.0, 1.0));
+}

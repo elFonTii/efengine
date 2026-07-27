@@ -140,6 +140,21 @@ namespace renderer {
         return Texture(id, width, height);
     }
 
+    // Textura vacía de storage inmutable: el contenido lo escribe un compute vía
+    // imageStore, no se suben pixeles. Filtro y wrap quedan en el default del desc
+    // (Linear + ClampToEdge), que es lo que necesita una LUT.
+    Texture Texture::CreateStorage2D(u32 width, u32 height, efecom::TextureFormat format) {
+        efecom::Texture2DStorageDesc desc;
+        desc.width  = width;
+        desc.height = height;
+        desc.format = format;
+
+        const u32 id = efecom::CreateTexture2DStorage(desc);
+        EF_ASSERT(id != 0, "Texture::CreateStorage2D: No hay contexto GL");
+
+        return Texture(id, width, height);
+    }
+
     Texture::Texture(u32 id, u32 width, u32 height) {
         m_id = id;
         m_width = width;
@@ -168,6 +183,8 @@ namespace renderer {
         }
         return *this;
     }
+
+    void Texture::BindImage(u32 unit, u32 level, efecom::ImageAccess access, efecom::TextureFormat format) const { efecom::BindImage2D(unit, m_id, level, access, format); }
 
     void Texture::Bind(u32 unit) const {
         EF_ASSERT(m_id != 0, "Texture::Bind: Textura no válida");

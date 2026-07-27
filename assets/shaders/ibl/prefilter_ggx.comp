@@ -1,0 +1,108 @@
+#version 450 core
+// Prefiltra el environment map para el termino especular del split-sum: cada mip
+// guarda la radiancia entrante convolucionada con el lobulo GGX de una rugosidad
+// fija. Un invocation por texel de cara; gl_GlobalInvocationID.z = cara (0..5).
+// El nivel destino se elige desde C++ con BindImage(unit, mip, ...).
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(binding = 0) uniform samplerCube uEnv;                           // radiancia, CON mips
+layout(rgba16f, binding = 0) uniform writeonly imageCube uPrefiltered;   // el mip destino
+
+uniform float uRoughness;     // rugosidad de este mip
+uniform float uEnvFaceSize;   // resolucion de cara del env, para el mip bias
+
+const float PI = 3.14159265359;
+const uint  kSamples = 1024u;
+
+// Misma tabla que equirect_to_cube.comp e irradiance_convolve.comp: invierte el
+// major-axis del spec GL. Sin esto aparecen costuras entre caras.
+vec3 dirForFace(uint face, vec2 uv) {
+    vec3 d;
+    if      (face == 0u) d = vec3( 1.0, -uv.y, -uv.x); // +X
+    else if (face == 1u) d = vec3(-1.0, -uv.y,  uv.x); // -X
+    else if (face == 2u) d = vec3( uv.x,  1.0,  uv.y); // +Y
+    else if (face == 3u) d = vec3( uv.x, -1.0, -uv.y); // -Y
+    else if (face == 4u) d = vec3( uv.x, -uv.y,  1.0); // +Z
+    else                 d = vec3(-uv.x, -uv.y, -1.0); // -Z
+    return normalize(d);
+}
+
+float radicalInverseVdC(uint bits) {
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10;
+}
+
+vec2 hammersley(uint i, uint n) {
+    return vec2(float(i) / float(n), radicalInverseVdC(i));
+}
+
+vec3 importanceSampleGGX(vec2 Xi, vec3 N, float roughness) {
+    float a = roughness * roughness;
+
+    float phi      = 2.0 * PI * Xi.x;
+    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y));
+    float sinTheta = sqrt(max(1.0 - cosTheta * cosTheta, 0.0));
+
+    vec3 h = vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+
+    vec3 up      = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 tangent = normalize(cross(up, N));
+    vec3 bitan   = cross(N, tangent);
+
+    return normalize(tangent * h.x + bitan * h.y + N * h.z);
+}
+
+// Misma NDF que pbr.frag, con a = roughness^2.
+float distributionGGX(float NdotH, float roughness) {
+    float a  = roughness * roughness;
+    float a2 = a * a;
+    float d  = NdotH * NdotH * (a2 - 1.0) + 1.0;
+    return a2 / max(PI * d * d, 1e-7);
+}
+
+void main() {
+    ivec3 texel = ivec3(gl_GlobalInvocationID);   // (x, y, cara)
+    ivec2 size  = imageSize(uPrefiltered);        // tamano del MIP bindeado
+    if (texel.x >= size.x || texel.y >= size.y) return;
+
+    vec2 uv = (vec2(texel.xy) + 0.5) / vec2(size) * 2.0 - 1.0;
+    vec3 N  = dirForFace(uint(texel.z), uv);
+
+    // La aproximacion del split-sum asume V = R = N: por eso el resultado se puede
+    // indexar despues con el vector reflejado sin importar desde donde se mire.
+    vec3 V = N;
+
+    vec3  color  = vec3(0.0);
+    float weight = 0.0;
+
+    for (uint i = 0u; i < kSamples; ++i) {
+        vec2 Xi = hammersley(i, kSamples);
+        vec3 H  = importanceSampleGGX(Xi, N, uRoughness);
+        vec3 L  = normalize(2.0 * dot(V, H) * H - V);
+
+        float NdotL = dot(N, L);
+        if (NdotL <= 0.0) continue;
+
+        // Mip bias por pdf: cada muestra lee del mip cuyo texel cubre el angulo
+        // solido que le corresponde. Sin esto, una fuente chica y muy brillante del
+        // HDR (el sol) se convierte en fireflies a rugosidad alta. Este es el motivo
+        // por el que Environment::Create genera los mips del env.
+        float NdotH = max(dot(N, H), 0.0);
+        float VdotH = max(dot(V, H), 0.0);
+        float D     = distributionGGX(NdotH, uRoughness);
+        float pdf   = (D * NdotH / (4.0 * max(VdotH, 1e-4))) + 1e-4;
+
+        float saTexel  = 4.0 * PI / (6.0 * uEnvFaceSize * uEnvFaceSize);
+        float saSample = 1.0 / (float(kSamples) * pdf);
+        float mipLevel = (uRoughness <= 0.0) ? 0.0 : 0.5 * log2(saSample / saTexel);
+
+        color  += textureLod(uEnv, L, mipLevel).rgb * NdotL;
+        weight += NdotL;
+    }
+
+    imageStore(uPrefiltered, texel, vec4(color / max(weight, 1e-4), 1.0));
+}

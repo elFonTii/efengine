@@ -33,6 +33,7 @@ namespace resources {
                 case renderer::TextureSlot::Metallic:  material.SetMetallicMap(t);  break;
                 case renderer::TextureSlot::Height:    material.SetHeightMap(t);    break;
                 case renderer::TextureSlot::Opacity:   material.SetOpacityMap(t);   break;
+                case renderer::TextureSlot::Emissive:  material.SetEmissiveMap(t);  break;
                 default:
                     EF_LOG_WARNING("BuildMaterial: slot de textura %u desconocido",
                                    static_cast<u32>(tex.slot));
@@ -46,6 +47,9 @@ namespace resources {
         material.aoStrength  = def.aoStrength;
         material.heightScale = def.heightScale;
         material.alphaCutoff = def.alphaCutoff;
+        material.emissiveTint      = def.emissiveTint;
+        material.emissiveIntensity = def.emissiveIntensity;
+        material.normalStrength    = def.normalStrength;
 
         return material;
     }

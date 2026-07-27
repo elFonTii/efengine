@@ -54,12 +54,24 @@ namespace application {
                                      "assets/shaders/ibl/equirect_to_cube.comp");
         renderer::Shader* irrCS = m_resources.GetComputeShader("irradiance_convolve",
                                      "assets/shaders/ibl/irradiance_convolve.comp");
-        if (eqCS && irrCS) {
-            m_environment = renderer::Environment::Create(
-                "assets/hdr/citrus_orchard_puresky_4k.hdr", *eqCS, *irrCS); // TODO: serializar paths, no pueden seguir creciendo...
+        renderer::Shader* preCS = m_resources.GetComputeShader("prefilter_ggx",
+                                     "assets/shaders/ibl/prefilter_ggx.comp");
+        renderer::Shader* lutCS = m_resources.GetComputeShader("brdf_lut",
+                                     "assets/shaders/ibl/brdf_lut.comp");
+        if (eqCS && irrCS && preCS && lutCS) {
+            renderer::EnvironmentDesc envDesc;
+            envDesc.hdrPath = "assets/hdr/citrus_orchard_puresky_4k.hdr";   // TODO: serializar en settings de escena
+
+            renderer::EnvironmentShaders envShaders;
+            envShaders.equirectToCube     = eqCS;
+            envShaders.irradianceConvolve = irrCS;
+            envShaders.prefilterGGX       = preCS;
+            envShaders.brdfLut            = lutCS;
+
+            m_environment = renderer::Environment::Create(envDesc, envShaders);
             if (!m_environment) EF_LOG_ERROR("Application: no se pudo crear el Environment IBL");
         } else {
-            EF_LOG_ERROR("Application: no se pudo cargar algún compute de IBL (equirect/irradiance)");
+            EF_LOG_ERROR("Application: no se pudo cargar algún compute de IBL (equirect/irradiance/prefilter/brdf)");
         }
 
         m_window.SetEventListener(&m_input);
@@ -103,11 +115,22 @@ namespace application {
             shadowCtx.biasMax          = m_shadowPass.settings().biasMax;
         }
 
+        // Las 4 piezas del IBL precomputado. Sin Environment quedan en null y el
+        // shader apaga el ambiente entero en vez de samplear una unidad equivocada.
+        renderer::IblContext ibl;
+        ibl.intensity = scene.iblIntensity;
+        if (m_environment) {
+            ibl.irradiance  = &m_environment->irradiance();
+            ibl.prefiltered = &m_environment->prefiltered();
+            ibl.brdfLut     = &m_environment->brdfLut();
+            ibl.maxLod      = m_environment->prefilterMaxLod();
+        }
+
         // Al Framebuffer de escena
         m_sceneFB.Bind();
         m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
-        m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.PointLights(), scene.ambientFactor, scene.Sun(), shadowCtx,
-                              m_environment ? &m_environment->irradiance() : nullptr);
+        m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.PointLights(), scene.Sun(), shadowCtx,
+                              ibl);
 
          if (m_environment) {
             m_skyboxPass.Draw(m_environment->env(), camera.ViewMatrix(), camera.ProjectionMatrix());
