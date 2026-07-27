@@ -305,7 +305,6 @@ namespace efecom {
     }
 
     void DestroyFramebuffer(u32 framebuffer) { glDeleteFramebuffers(1, &framebuffer); }
-    void BindFramebuffer(u32 framebuffer)    { glBindFramebuffer(GL_FRAMEBUFFER, framebuffer); }
 
     // Extent del backbuffer. Lo fija el motor en el init del contexto y en cada
     // resize de ventana; en un backend Vulkan saldria del swapchain.

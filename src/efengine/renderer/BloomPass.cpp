@@ -25,7 +25,7 @@ namespace renderer {
         m_fboB.Resize(std::max(1u,width/2), std::max(1u,height/2));
     }
 
-void BloomPass::Apply(const Texture& input, const Framebuffer* target) {
+void BloomPass::Apply(const Texture& input, const RenderTarget& target) {
     // brightpass: escena full-res -> m_fboA (1/2 res)
     m_fboA.Bind();
     m_brightpass->Bind();
@@ -54,12 +54,7 @@ void BloomPass::Apply(const Texture& input, const Framebuffer* target) {
     }
 
     // Composite aditivo: escena full-res + blur (1/2 res, upscale LINEAR) sale al target
-    if (target != null) {
-        target->Bind();
-    } else {
-        efecom::BindFramebuffer(0);
-        m_renderer.SetViewport(input.width(), input.height());
-    }
+    target.Bind();
     m_composite->Bind();
     input.Bind(0);
     src->ColorTexture().Bind(1);

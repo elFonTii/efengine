@@ -24,7 +24,7 @@ namespace renderer {
 
             BloomSettings& settings() { return m_settings; }
 
-            void Apply(const Texture& input, const Framebuffer* target) override;
+            void Apply(const Texture& input, const RenderTarget& target) override;
             void Resize(u32 width, u32 height) override;
 
             private:

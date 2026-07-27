@@ -22,12 +22,8 @@ namespace renderer {
 
     void TonemapPass::Resize(u32 width, u32 height) {}
     
-    void TonemapPass::Apply(const Texture& input, const Framebuffer* target){
-        if(target != null) { target->Bind(); }
-        if(target == null) {
-            efecom::BindFramebuffer(0);
-            m_renderer.SetViewport(input.width(), input.height());
-        }
+    void TonemapPass::Apply(const Texture& input, const RenderTarget& target){
+        target.Bind();   // bindea Y fija el viewport
 
         m_shader->Bind();
         input.Bind(0);

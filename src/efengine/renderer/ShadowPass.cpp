@@ -41,7 +41,6 @@ namespace renderer {
             }
         }
 
-        m_shadowMap.Unbind();
         return m_lightSpaceMatrix;
     }
 

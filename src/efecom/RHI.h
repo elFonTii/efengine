@@ -151,7 +151,6 @@ namespace efecom {
     // Framebuffers
     u32  CreateFramebuffer();
     void DestroyFramebuffer(u32 framebuffer);
-    void BindFramebuffer(u32 framebuffer);       // 0 = backbuffer
     u32  GetPresentTarget();
     void SetPresentExtent(u32 width, u32 height);
     void GetPresentExtent(u32& outWidth, u32& outHeight);

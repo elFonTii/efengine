@@ -27,14 +27,18 @@ namespace renderer {
         for(u32 i = 0; i < count; i++) {
             PassRoute route = postChainTarget(i, count);
 
-            Framebuffer* target = route.toBackbuffer
+            Framebuffer* scratch = route.toPresent
                 ? null
                 : (route.scratch == 0 ? &scratch_1 : &scratch_2);
 
+            const RenderTarget target = route.toPresent
+                ? RenderTarget::Present()
+                : scratch->Target();
+
             m_passes[i]->Apply(*input, target);
 
-            if(!route.toBackbuffer)
-                input = &target->ColorTexture();
+            if(!route.toPresent)
+                input = &scratch->ColorTexture();
         }
         
         efecom::SetDepthTest(true);

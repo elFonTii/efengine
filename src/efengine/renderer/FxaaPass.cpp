@@ -18,13 +18,8 @@ namespace renderer {
 
     void FxaaPass::Resize(u32 width, u32 height) {} 
 
-    void FxaaPass::Apply(const Texture& input, const Framebuffer* target) {
-        if (target != null) {
-            target->Bind();
-        } else {
-            efecom::BindFramebuffer(0);
-            m_renderer.SetViewport(input.width(), input.height());
-        }
+    void FxaaPass::Apply(const Texture& input, const RenderTarget& target) {
+        target.Bind();
 
         m_shader->Bind();
         input.Bind(0);
