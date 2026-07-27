@@ -17,6 +17,7 @@ add_executable(efengine_tests
     renderer/Bounds.test.cpp
     renderer/MaterialMap.test.cpp
     renderer/RenderTarget.test.cpp
+    renderer/PipelineState.test.cpp
     resources/FileIO.test.cpp
     resources/ResourceManager.test.cpp
     resources/SceneAssets.test.cpp
