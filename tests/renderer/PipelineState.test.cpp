@@ -72,7 +72,11 @@ TEST_CASE("ShadowDepthState: escribe profundidad, igual que el opaco") {
     CHECK(s.depthFunc  == DepthFunc::Less);
 }
 
-TEST_CASE("Todos los estados arrancan sin culling (se prende en un commit aparte)") {
-    CHECK(OpaqueState().cullMode      == CullMode::None);
-    CHECK(ShadowDepthState().cullMode == CullMode::None);
+TEST_CASE("El estado opaco cullea la cara de atras; el double-sided no") {
+    CHECK(OpaqueState().cullMode            == CullMode::Back);
+    CHECK(ShadowDepthState().cullMode       == CullMode::Back);
+    CHECK(OpaqueDoubleSidedState().cullMode == CullMode::None);
+    // Los pases que dibujan un quad fullscreen no tienen cara de atras que cullear.
+    CHECK(SkyboxState().cullMode     == CullMode::None);
+    CHECK(FullscreenState().cullMode == CullMode::None);
 }

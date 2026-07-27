@@ -8,7 +8,7 @@ namespace renderer {
         s.depthTest   = true;
         s.depthWrite  = true;
         s.depthFunc   = efecom::DepthFunc::Less;
-        s.cullMode    = efecom::CullMode::None;   // TODO(Task 6): pasa a Back
+        s.cullMode    = efecom::CullMode::Back;
         s.blendEnable = false;
         return s;
     }
@@ -36,7 +36,7 @@ namespace renderer {
         s.depthTest   = true;
         s.depthWrite  = true;
         s.depthFunc   = efecom::DepthFunc::Less;
-        s.cullMode    = efecom::CullMode::None;   // TODO(Task 6): pasa a Back
+        s.cullMode    = efecom::CullMode::Back;
         s.blendEnable = false;
         return s;
     }
