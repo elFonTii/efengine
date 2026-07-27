@@ -348,6 +348,7 @@ void DrawMaterialsPanel(EditorContext& ctx) {
     changed |= ImGui::SliderFloat("Height",    &def.heightScale, 0.0f,  0.2f);
     changed |= ImGui::SliderFloat("Alpha cut", &def.alphaCutoff, 0.0f,  1.0f);
     changed |= ImGui::SliderFloat("Normal str", &def.normalStrength, 0.0f, 2.0f);
+    changed |= ImGui::Checkbox("Doble cara", &def.doubleSided);
 
     ImGui::SeparatorText("Emision");
     changed |= ImGui::ColorEdit3 ("Emis tint", glm::value_ptr(def.emissiveTint));
