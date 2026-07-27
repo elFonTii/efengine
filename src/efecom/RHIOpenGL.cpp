@@ -307,6 +307,27 @@ namespace efecom {
     void DestroyFramebuffer(u32 framebuffer) { glDeleteFramebuffers(1, &framebuffer); }
     void BindFramebuffer(u32 framebuffer)    { glBindFramebuffer(GL_FRAMEBUFFER, framebuffer); }
 
+    // Extent del backbuffer. Lo fija el motor en el init del contexto y en cada
+    // resize de ventana; en un backend Vulkan saldria del swapchain.
+    namespace { u32 g_presentWidth = 0u; u32 g_presentHeight = 0u; }
+
+    u32  GetPresentTarget() { return 0u; }   // en GL el backbuffer ES el FBO 0
+    void SetPresentExtent(u32 width, u32 height) {
+        g_presentWidth  = width;
+        g_presentHeight = height;
+    }
+
+    // Solo lo consume renderer::RenderTarget::Present(). No toca GL.
+    void GetPresentExtent(u32& outWidth, u32& outHeight) {
+        outWidth  = g_presentWidth;
+        outHeight = g_presentHeight;
+    }
+
+    void BindRenderTarget(u32 target, u32 width, u32 height) {
+        glBindFramebuffer(GL_FRAMEBUFFER, target);
+        glViewport(0, 0, (GLsizei)width, (GLsizei)height);
+    }
+
     void FramebufferColorTexture(u32 framebuffer, u32 texture) {
         glNamedFramebufferTexture(framebuffer, GL_COLOR_ATTACHMENT0, texture, 0);
     }

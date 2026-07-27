@@ -16,6 +16,7 @@ add_executable(efengine_tests
     renderer/ShadowMath.test.cpp
     renderer/Bounds.test.cpp
     renderer/MaterialMap.test.cpp
+    renderer/RenderTarget.test.cpp
     resources/FileIO.test.cpp
     resources/ResourceManager.test.cpp
     resources/SceneAssets.test.cpp

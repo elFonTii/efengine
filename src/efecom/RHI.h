@@ -85,7 +85,7 @@ namespace efecom {
     void SetUniformVec3(i32 location, const f32* values3);   // 3 floats
     void SetUniformMat4(i32 location, const f32* values16);  // 16 floats, column-major
 
-    // ── Texturas 2D ────────────────────────────────────────────────────────
+    // Texturas 2D
     // El formato interno determina también el layout de los pixeles de origen:
     // los formatos de 8 bits suben bytes, los flotantes/depth suben floats.
     enum class TextureFormat {
@@ -114,11 +114,6 @@ namespace efecom {
     void DestroyTexture(u32 texture);            // también libera cubemaps
     void BindTexture2D(u32 texture, u32 unit);   // unidad de textura para samplers
 
-    // Textura 2D de storage INMUTABLE (glTextureStorage2D, estilo DSA). Es lo que
-    // pide image load/store y el camino al que apunta el refactor DSA. No sube
-    // pixeles: el contenido lo escribe un compute. Filtro/wrap por default en
-    // Linear + ClampToEdge, que es lo que necesita una LUT (con Repeat aparece un
-    // halo en los bordes al muestrear en rasante).
     struct Texture2DStorageDesc {
         u32           width     = 0;
         u32           height    = 0;
@@ -131,21 +126,20 @@ namespace efecom {
     };
     u32 CreateTexture2DStorage(const Texture2DStorageDesc& desc);
 
-    // ── Cubemaps ───────────────────────────────────────────────────────────
+    // Cubemaps
     // Storage inmutable de 6 caras cuadradas con mipCount niveles.
-    // Filtro trilinear + clamp en las 3 dimensiones (lo que pide IBL).
     u32  CreateCubemap(u32 size, TextureFormat format, u32 mipCount);
     void BindTextureUnit(u32 texture, u32 unit); // bind directo (cualquier tipo de textura)
     void GenerateTextureMipmaps(u32 texture);
 
-    // Imagen de shader (imageStore en compute): bindea todas las capas del nivel.
+    // Imagen de shader (imageStore en compute)
     enum class ImageAccess { ReadOnly, WriteOnly, ReadWrite };
     void BindImageLayered(u32 unit, u32 texture, u32 level, ImageAccess access, TextureFormat format);
 
-    // Imagen de shader no-layered (image2D): bindea UN nivel de una textura 2D.
+    // Imagen de shader bindea UN nivel de una textura 2D.
     void BindImage2D(u32 unit, u32 texture, u32 level, ImageAccess access, TextureFormat format);
 
-    // ── Compute ────────────────────────────────────────────────────────────
+    // Compute
     void DispatchCompute(u32 groupsX, u32 groupsY, u32 groupsZ);
 
     enum class Barrier : u32 {
@@ -154,25 +148,27 @@ namespace efecom {
     };
     void IssueMemoryBarrier(Barrier bits);
 
-    // ── Framebuffers ───────────────────────────────────────────────────────
+    // Framebuffers
     u32  CreateFramebuffer();
     void DestroyFramebuffer(u32 framebuffer);
     void BindFramebuffer(u32 framebuffer);       // 0 = backbuffer
+    u32  GetPresentTarget();
+    void SetPresentExtent(u32 width, u32 height);
+    void GetPresentExtent(u32& outWidth, u32& outHeight);
+    void BindRenderTarget(u32 target, u32 width, u32 height);
     void FramebufferColorTexture(u32 framebuffer, u32 texture);
     void FramebufferDepthTexture(u32 framebuffer, u32 texture);
     void FramebufferDisableColor(u32 framebuffer); // FBO solo-profundidad (shadow maps)
     bool FramebufferComplete(u32 framebuffer);
-
-    // Renderbuffer de profundidad (24 bits) para FBOs que no muestrean depth.
     u32  CreateDepthRenderbuffer(u32 width, u32 height);
     void DestroyRenderbuffer(u32 renderbuffer);
     void FramebufferDepthRenderbuffer(u32 framebuffer, u32 renderbuffer);
 
-    // ── Draw (triángulos; índices u32) ─────────────────────────────────────
+    // Draw (triángulos; índices u32)
     void DrawIndexed(u32 indexCount);
     void DrawArrays(u32 vertexCount);
 
-    // ── Operadores de bits para las máscaras ───────────────────────────────
+    // Operadores de bits para las máscaras
     inline constexpr ClearMask operator|(ClearMask a, ClearMask b) {
         return static_cast<ClearMask>(static_cast<u32>(a) | static_cast<u32>(b));
     }
