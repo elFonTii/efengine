@@ -1,6 +1,7 @@
 #include "efengine/renderer/Material.h"
 #include "efengine/renderer/Texture.h"
 #include "efengine/renderer/Shader.h"
+#include "efengine/renderer/MaterialDef.h"
 #include "efengine/core/Assert.h"
 #include "efengine/core/Log.h"
 
@@ -17,36 +18,52 @@ namespace renderer {
 
 
 
-    void Material::bindMap(const Shader& shader, const Texture* texture, u32 unit, const char* mapUniform, const char* hasUniform) {
-        if(texture == null) {
-            shader.SetInt(hasUniform, 0);
-            return;
+    namespace {
+        // Bindea la textura a la unidad si esta. TextureSlot es la unica fuente de
+        // verdad de la correspondencia slot <-> unidad <-> bit.
+        void bindSiEsta(const Texture* texture, TextureSlot slot) {
+            if (texture == null) return;
+            texture->Bind(static_cast<u32>(slot));
         }
-         texture->Bind(unit); shader.SetInt(mapUniform, unit); shader.SetInt(hasUniform, 1);
+
+        u32 bitSiEsta(const Texture* texture, TextureSlot slot) {
+            return (texture != null) ? (1u << static_cast<u32>(slot)) : 0u;
+        }
     }
 
-    void Material::Bind() const {
-        EF_ASSERT(m_shader != null, "Material::Bind: shader nulo");
-        m_shader->Bind();
-        m_shader->SetVec3("uAlbedoTint", albedoTint);
-        m_shader->SetFloat("uMetallic", metallic);
-        m_shader->SetFloat("uRoughness", roughness);
-        m_shader->SetFloat("uAOStrength", aoStrength);
-        m_shader->SetFloat("uHeightScale", heightScale);
-        m_shader->SetFloat("uAlphaCutoff", alphaCutoff);
-        m_shader->SetVec3("uEmissiveTint", emissiveTint);
-        m_shader->SetFloat("uEmissiveIntensity", emissiveIntensity);
-        m_shader->SetFloat("uNormalStrength", normalStrength);
-        bindMap(*m_shader, m_albedo,    0, "uAlbedoMap",    "uHasAlbedoMap");
-        bindMap(*m_shader, m_normal,    1, "uNormalMap",    "uHasNormalMap");
-        bindMap(*m_shader, m_ao,        2, "uAOMap",        "uHasAOMap");
-        bindMap(*m_shader, m_roughness, 3, "uRoughnessMap", "uHasRoughnessMap");
-        bindMap(*m_shader, m_metallic,  4, "uMetallicMap",  "uHasMetallicMap");
-        bindMap(*m_shader, m_height,    5, "uHeightMap",    "uHasHeightMap");
-        bindMap(*m_shader, m_opacity,   6, "uOpacityMap",   "uHasOpacityMap");
-        // La unidad de cada mapa es el valor de su TextureSlot; de 8 en adelante son
-        // los mapas de frame (shadow, irradiancia, prefiltrado, LUT).
-        bindMap(*m_shader, m_emissive,  7, "uEmissiveMap",  "uHasEmissiveMap");
+    void Material::BindTextures() const {
+        // La unidad de cada mapa es el valor de su TextureSlot; de 8 en adelante
+        // son los mapas de frame (shadow, irradiancia, prefiltrado, LUT).
+        bindSiEsta(m_albedo,    TextureSlot::Albedo);
+        bindSiEsta(m_normal,    TextureSlot::Normal);
+        bindSiEsta(m_ao,        TextureSlot::AO);
+        bindSiEsta(m_roughness, TextureSlot::Roughness);
+        bindSiEsta(m_metallic,  TextureSlot::Metallic);
+        bindSiEsta(m_height,    TextureSlot::Height);
+        bindSiEsta(m_opacity,   TextureSlot::Opacity);
+        bindSiEsta(m_emissive,  TextureSlot::Emissive);
+        // Un mapa ausente no desbindea su unidad: el shader nunca la muestrea
+        // porque el bit correspondiente del mapMask esta en cero.
+    }
+
+    MaterialBlock Material::ToBlock() const {
+        MaterialBlock b {};
+        b.albedoTint   = glm::vec4(albedoTint, 0.0f);
+        b.emissiveTint = glm::vec4(emissiveTint, 0.0f);
+        b.scalars0     = glm::vec4(metallic, roughness, aoStrength, heightScale);
+        b.scalars1     = glm::vec4(alphaCutoff, emissiveIntensity, normalStrength, 0.0f);
+
+        const u32 mask = bitSiEsta(m_albedo,    TextureSlot::Albedo)
+                       | bitSiEsta(m_normal,    TextureSlot::Normal)
+                       | bitSiEsta(m_ao,        TextureSlot::AO)
+                       | bitSiEsta(m_roughness, TextureSlot::Roughness)
+                       | bitSiEsta(m_metallic,  TextureSlot::Metallic)
+                       | bitSiEsta(m_height,    TextureSlot::Height)
+                       | bitSiEsta(m_opacity,   TextureSlot::Opacity)
+                       | bitSiEsta(m_emissive,  TextureSlot::Emissive);
+        b.mapMask = glm::uvec4(mask, 0u, 0u, 0u);
+
+        return b;
     }
 
     MaterialMap MakeUniformMaterialMap(const std::vector<std::string>& submeshNames,

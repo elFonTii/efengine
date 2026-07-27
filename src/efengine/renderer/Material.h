@@ -1,5 +1,6 @@
 #pragma once
 #include <efengine/core/Types.h>
+#include <efengine/renderer/ShaderBlocks.h>
 #include <glm/glm.hpp>
 #include <string>
 #include <unordered_map>
@@ -45,11 +46,18 @@ namespace renderer {
             // Elige el PipelineState del draw: OpaqueState u OpaqueDoubleSidedState.
             bool      doubleSided       = false;
 
-            void Bind() const;
+            // Bindea los mapas del material a sus unidades (0-7, el valor de su
+            // TextureSlot). NO bindea el shader ni sube nada al UBO: los samplers
+            // ya saben su unidad por layout(binding=N) en el GLSL.
+            void BindTextures() const;
+
+            // Empaqueta los escalares y la presencia de cada mapa en el bloque
+            // std140. Funcion pura: no toca la GPU. El UBO lo posee el Renderer,
+            // no el Material — meterle un handle aca rompe MaterialMap.test.cpp,
+            // que construye un Material headless.
+            MaterialBlock ToBlock() const;
 
         private:
-            static void bindMap(const Shader& shader, const Texture* texture, u32 unit, const char* mapUniform, const char* hasUniform);
-
             const Shader* m_shader;
             
             const Texture* m_albedo    = null;

@@ -19,25 +19,6 @@ namespace renderer {
 
     void Renderer::SetViewport(u32 width, u32 height) const { efecom::SetViewport(0, 0, width, height); }
 
-    void Renderer::Draw(const Model& model, const Shader& shader) const {
-        for (const Mesh& mesh : model.meshes()) {
-            Draw(mesh.vertexArray(), shader); // Realiza un dibujado por cada mesh dentro del fbx
-        }
-    }
-
-    void Renderer::Draw(const Model& model, const MaterialMap& materials) const {
-        for (const Mesh& mesh : model.meshes()) {
-            auto it = materials.find(mesh.materialName());
-            if (it == materials.end() || it->second == null) {
-                EF_LOG_WARNING("Renderer::Draw: sin material para malla '%s'", mesh.materialName().c_str());
-                continue;
-            }
-            const Material& mat = *it->second;
-            mat.Bind();
-            Draw(mesh.vertexArray(), mat.shader());
-        }
-    }
-
     void Renderer::Draw(const VertexArray& va, const Shader& shader) const {
         EF_ASSERT(va.vertexCount() > 0, "Renderer::Draw: VertexArray sin vertices");
 
@@ -143,7 +124,32 @@ namespace renderer {
             applyFrameUniforms(shader);
             shader.Bind();
             shader.SetMat4("uModel", modelMatrix);
-            mat.Bind();
+            mat.BindTextures();
+            // TODO(Task 9): esto sale del MaterialBlock por UBO.
+            shader.SetVec3 ("uAlbedoTint",        mat.albedoTint);
+            shader.SetFloat("uMetallic",          mat.metallic);
+            shader.SetFloat("uRoughness",         mat.roughness);
+            shader.SetFloat("uAOStrength",        mat.aoStrength);
+            shader.SetFloat("uHeightScale",       mat.heightScale);
+            shader.SetFloat("uAlphaCutoff",       mat.alphaCutoff);
+            shader.SetVec3 ("uEmissiveTint",      mat.emissiveTint);
+            shader.SetFloat("uEmissiveIntensity", mat.emissiveIntensity);
+            shader.SetFloat("uNormalStrength",    mat.normalStrength);
+            {
+                const MaterialBlock blk = mat.ToBlock();
+                shader.SetInt("uHasAlbedoMap",    (blk.mapMask.x & (1u << 0)) ? 1 : 0);
+                shader.SetInt("uHasNormalMap",    (blk.mapMask.x & (1u << 1)) ? 1 : 0);
+                shader.SetInt("uHasAOMap",        (blk.mapMask.x & (1u << 2)) ? 1 : 0);
+                shader.SetInt("uHasRoughnessMap", (blk.mapMask.x & (1u << 3)) ? 1 : 0);
+                shader.SetInt("uHasMetallicMap",  (blk.mapMask.x & (1u << 4)) ? 1 : 0);
+                shader.SetInt("uHasHeightMap",    (blk.mapMask.x & (1u << 5)) ? 1 : 0);
+                shader.SetInt("uHasOpacityMap",   (blk.mapMask.x & (1u << 6)) ? 1 : 0);
+                shader.SetInt("uHasEmissiveMap",  (blk.mapMask.x & (1u << 7)) ? 1 : 0);
+                shader.SetInt("uAlbedoMap",    0); shader.SetInt("uNormalMap",    1);
+                shader.SetInt("uAOMap",        2); shader.SetInt("uRoughnessMap", 3);
+                shader.SetInt("uMetallicMap",  4); shader.SetInt("uHeightMap",    5);
+                shader.SetInt("uOpacityMap",   6); shader.SetInt("uEmissiveMap",  7);
+            }
 
             Draw(mesh.vertexArray(), shader);
             }
