@@ -197,6 +197,81 @@ namespace {
 
         return w.Take();
     }
+
+    // Arma a mano un .efe v2: material CON los 3 escalares de v2 pero SIN el
+    // doubleSided de v3. Igual que documentoV1(), no se puede usar
+    // WriteSceneDocument porque el writer siempre emite kCurrentVersion.
+    std::vector<u8> documentoV2() {
+        BinaryWriter w;
+
+        // Header a mano, con version 2.
+        w.Bytes(kMagic, 4u);
+        u32 endian  = kEndianCheck;
+        u32 version = 2u;
+        u32 content = static_cast<u32>(ContentType::Scene);
+        u32 chunks  = 4u;
+        w.Field(endian);
+        w.Field(version);
+        w.Field(content);
+        w.Field(chunks);
+
+        StringTable strings;
+        const u32 sMat  = strings.Intern("mat_v2");
+        const u32 sShad = strings.Intern("pbr");
+        const u32 sVert = strings.Intern("assets/shaders/pbr.vert");
+        const u32 sFrag = strings.Intern("assets/shaders/pbr.frag");
+        const u32 sRoot = strings.Intern("root");
+
+        usize marker = BeginChunk(w, ChunkId::Strings);
+        strings.Serialize(w);
+        EndChunk(w, marker);
+
+        // SCNE v2: el primer f32 ya es iblIntensity, no el ambientFactor de v1.
+        marker = BeginChunk(w, ChunkId::Settings);
+        f32 iblIntensity = 1.0f;
+        u32 primarySun   = kInvalidIndex;
+        w.Field(iblIntensity);
+        w.Field(primarySun);
+        EndChunk(w, marker);
+
+        // MATL v2: lo de v1 + vec3 emissiveTint + f32 intensity + f32 strength.
+        marker = BeginChunk(w, ChunkId::Materials);
+        u32 materialCount = 1u;
+        w.Count(materialCount, 72u);
+        u32 nameStr = sMat, shaderStr = sShad, vertStr = sVert, fragStr = sFrag;
+        w.Field(nameStr);
+        w.Field(shaderStr);
+        w.Field(vertStr);
+        w.Field(fragStr);
+        std::vector<TextureRef> sinTexturas;
+        w.Array(sinTexturas);
+        glm::vec3 tint(1.0f);
+        f32 metallic = 0.25f, roughness = 0.5f, ao = 0.5f, height = 0.05f, cutoff = 0.5f;
+        w.Field(tint);
+        w.Field(metallic);
+        w.Field(roughness);
+        w.Field(ao);
+        w.Field(height);
+        w.Field(cutoff);
+        glm::vec3 emisTint(1.0f);
+        f32 emisIntensity = 3.0f, normalStrength = 1.5f;
+        w.Field(emisTint);
+        w.Field(emisIntensity);
+        w.Field(normalStrength);
+        EndChunk(w, marker);
+
+        // NODE no cambio entre v2 y v3: se puede usar el helper de produccion.
+        marker = BeginChunk(w, ChunkId::Nodes);
+        std::vector<NodeRecord> nodes;
+        NodeRecord root;
+        root.nameStr = sRoot;
+        root.parent  = kInvalidIndex;
+        nodes.push_back(root);
+        SerializeVector(w, nodes, kMinEncodedNode);
+        EndChunk(w, marker);
+
+        return w.Take();
+    }
 }
 
 TEST_CASE("EfeSceneDocument: round-trip completo campo por campo") {
@@ -375,6 +450,51 @@ TEST_CASE("SceneDocument: los escalares v2 del material sobreviven el round-trip
     CHECK(dst.materials[0].emissiveTint.z == doctest::Approx(0.75f));
     CHECK(dst.materials[0].emissiveIntensity == doctest::Approx(12.5f));
     CHECK(dst.materials[0].normalStrength == doctest::Approx(1.75f));
+}
+
+TEST_CASE("SceneDocument: doubleSided sobrevive el round-trip") {
+    SceneDocument src;
+    const u32 sMat = src.strings.Intern("mat");
+
+    MaterialRecord m;
+    m.nameStr      = sMat;
+    m.doubleSided  = 1u;
+    src.materials.push_back(m);
+
+    NodeRecord root;
+    root.nameStr = src.strings.Intern("root");
+    root.parent  = kInvalidIndex;
+    src.nodes.push_back(root);
+
+    std::vector<u8> bytes;
+    REQUIRE(WriteSceneDocument(src, bytes));
+
+    SceneDocument dst;
+    REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), dst));
+    REQUIRE(dst.materials.size() == 1u);
+    CHECK(dst.materials[0].doubleSided == 1u);
+}
+
+TEST_CASE("SceneDocument: un archivo v2 migra con doubleSided en false") {
+    const std::vector<u8> bytes = documentoV2();
+
+    SceneDocument dst;
+    REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), dst));
+    REQUIRE(dst.materials.size() == 1u);
+
+    // Lo que v2 SI traia se lee igual.
+    CHECK(dst.materials[0].metallic == doctest::Approx(0.25f));
+    CHECK(dst.materials[0].normalStrength == doctest::Approx(1.5f));
+    CHECK(dst.materials[0].emissiveIntensity == doctest::Approx(3.0f));
+
+    // Lo que v2 no traia queda en el default: material de una cara sola.
+    CHECK(dst.materials[0].doubleSided == 0u);
+}
+
+TEST_CASE("MinEncodedMaterial: un u32 mas por material en v3") {
+    CHECK(MinEncodedMaterial(1u) == 52u);
+    CHECK(MinEncodedMaterial(2u) == 72u);
+    CHECK(MinEncodedMaterial(3u) == 76u);
 }
 
 TEST_CASE("SceneDocument: un archivo v1 carga con los defaults de los campos v2") {
