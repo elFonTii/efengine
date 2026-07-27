@@ -107,6 +107,19 @@ namespace efecom {
     u32  CreateBuffer(const void* data, usize size);
     void DestroyBuffer(u32 buffer);
 
+    // Buffer de uniforms de contenido dinamico (se reescribe por frame o por draw).
+    // DestroyBuffer sirve para liberarlo, igual que un VBO.
+    u32  CreateUniformBuffer(usize size);
+    void UpdateBuffer(u32 buffer, const void* data, usize size, usize offset);
+
+    // Engancha el buffer entero a un indice de binding de uniform block. El
+    // binding es estado GLOBAL, no por programa: alcanza con hacerlo una vez.
+    //
+    // Camino de upgrade Vulkan-friendly cuando el volumen de draws lo pida:
+    // BindUniformBufferRange(buffer, binding, offset, size) sobre un ring buffer
+    // de un frame, con offsets dinamicos. Se agrega aca sin tocar ni un shader.
+    void BindUniformBuffer(u32 buffer, u32 bindingIndex);
+
     // ── Vertex arrays ──────────────────────────────────────────────────────
     // Modelo de binding points (estilo DSA): el buffer se engancha a un
     // bindingIndex del VA y cada atributo (siempre floats) se asocia a él.

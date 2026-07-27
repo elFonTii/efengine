@@ -220,6 +220,23 @@ namespace efecom {
 
     void DestroyBuffer(u32 buffer) { glDeleteBuffers(1, &buffer); }
 
+    u32 CreateUniformBuffer(usize size) {
+        u32 id = 0;
+        glCreateBuffers(1, &id);
+        EFCOM_ASSERT(id != 0, "CreateUniformBuffer: glCreateBuffers fallo (sin contexto GL)");
+        // DYNAMIC_DRAW: se reescribe por frame o por draw, no es contenido estatico.
+        glNamedBufferData(id, (GLsizeiptr)size, nullptr, GL_DYNAMIC_DRAW);
+        return id;
+    }
+
+    void UpdateBuffer(u32 buffer, const void* data, usize size, usize offset) {
+        glNamedBufferSubData(buffer, (GLintptr)offset, (GLsizeiptr)size, data);
+    }
+
+    void BindUniformBuffer(u32 buffer, u32 bindingIndex) {
+        glBindBufferBase(GL_UNIFORM_BUFFER, (GLuint)bindingIndex, (GLuint)buffer);
+    }
+
     // ── Vertex arrays ──────────────────────────────────────────────────────
     u32 CreateVertexArray() {
         u32 id = 0;
