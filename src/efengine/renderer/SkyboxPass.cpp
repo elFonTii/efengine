@@ -6,6 +6,7 @@
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/Cubemap.h>
+#include <efengine/renderer/PipelineStates.h>
 #include <efengine/renderer/VertexArray.h>
 #include <efengine/core/Assert.h>
 
@@ -21,14 +22,13 @@ namespace renderer {
 
         const glm::mat4 invVPRot = glm::inverse(projection * glm::mat4(glm::mat3(view)));
 
-        efecom::SetDepthTest(false);
+        // No se restaura nada al salir: el pase que sigue declara su propio estado.
+        efecom::ApplyPipelineState(SkyboxState());
 
         m_shader->Bind();
         m_shader->SetMat4("uInvViewProjRot", invVPRot);
         env.Bind(0);
         m_renderer.Draw(m_quad, *m_shader);
-
-        efecom::SetDepthTest(true);
     }
 
 }

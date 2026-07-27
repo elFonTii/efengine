@@ -107,11 +107,6 @@ namespace efecom {
         glClear(bits);
     }
 
-    void SetDepthTest(bool enabled) {
-        if (enabled) glEnable(GL_DEPTH_TEST);
-        else         glDisable(GL_DEPTH_TEST);
-    }
-
     // ── Estado de rasterizacion ────────────────────────────────────────────
     namespace {
         GLenum toGlDepthFunc(DepthFunc f) {

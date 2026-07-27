@@ -18,7 +18,6 @@ namespace renderer {
 
         efecom::SetViewport(0, 0, window.GetWidth(), window.GetHeight()); // Si lo inicializo en Window el contexto de opengl no está activo todavía "access violation -1073741819"
         efecom::SetPresentExtent(window.GetWidth(), window.GetHeight());
-        efecom::SetDepthTest(true); // Test de profundidad que descarta fragmentos ocultos (las tapas traseras de una forma no tapen las delanteras)
         log_gpu_info();
     }
 

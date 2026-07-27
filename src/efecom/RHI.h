@@ -101,8 +101,6 @@ namespace efecom {
     // (el backend de ImGui lo hace en cada Render).
     void ResetPipelineStateCache();
 
-    void SetDepthTest(bool enabled);   // TODO(Task 4): se borra al migrar los pases
-
     // ── Buffers (VBO / EBO) ────────────────────────────────────────────────
     // Buffer estático: crea y sube los datos de una vez. Sirve tanto para
     // vértices como para índices (el uso lo decide el vertex array).

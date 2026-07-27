@@ -88,6 +88,9 @@ namespace application {
         // este frame) y antes de que nadie lea el input.
         m_input.NewFrame(m_window);
         m_debugUI.NewFrame();
+        // ImGui_ImplOpenGL3_RenderDrawData del frame anterior piso blend, cull y
+        // depth a espaldas del RHI: el cache del backend quedo mintiendo.
+        efecom::ResetPipelineStateCache();
     }
 
     void Application::EndFrame() {

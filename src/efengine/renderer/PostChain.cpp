@@ -1,6 +1,7 @@
 #include "efengine/renderer/PostChain.h"
 #include <efengine/core/Assert.h>
 #include <efecom/RHI.h>
+#include <efengine/renderer/PipelineStates.h>
 
 namespace efengine {
 namespace renderer {
@@ -20,7 +21,7 @@ namespace renderer {
     }
 
     void PostChain::Run(const Texture& sceneHDR) {
-        efecom::SetDepthTest(false);
+        efecom::ApplyPipelineState(FullscreenState());
         const u32 count = static_cast<u32>(m_passes.size());
         const Texture* input = &sceneHDR;
 
@@ -40,8 +41,6 @@ namespace renderer {
             if(!route.toPresent)
                 input = &scratch->ColorTexture();
         }
-        
-        efecom::SetDepthTest(true);
     }
 }
 }

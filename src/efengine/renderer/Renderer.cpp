@@ -6,6 +6,7 @@
 #include <efengine/core/Log.h>
 #include <efengine/renderer/Texture.h>
 #include <efengine/renderer/Cubemap.h>
+#include <efengine/renderer/PipelineStates.h>
 
 
 namespace efengine {
@@ -134,6 +135,10 @@ namespace renderer {
             }
             const Material& mat = *it->second;
             const Shader& shader = mat.shader();
+
+            // El estado sale del material: hoy todos son de una cara sola, pero
+            // OpaqueDoubleSidedState() entra en juego con el flag doubleSided.
+            efecom::ApplyPipelineState(OpaqueState());
 
             applyFrameUniforms(shader);
             shader.Bind();

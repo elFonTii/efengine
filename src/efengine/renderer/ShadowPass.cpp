@@ -5,6 +5,7 @@
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/ShadowMath.h>
+#include <efengine/renderer/PipelineStates.h>
 #include <efengine/renderer/Model.h>
 #include <efengine/renderer/Mesh.h>
 #include <efengine/scene/SceneGraph.h>
@@ -25,7 +26,7 @@ namespace renderer {
             m_settings.nearPlane, m_settings.farPlane);
 
         m_shadowMap.Bind();
-        efecom::SetDepthTest(true);
+        efecom::ApplyPipelineState(ShadowDepthState());
         efecom::Clear(efecom::ClearMask::Depth);
 
         // Dibujar la geometría de cada objeto (solo posición). Se re-bindea el
