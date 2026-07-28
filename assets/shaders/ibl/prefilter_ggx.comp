@@ -8,8 +8,9 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(binding = 0) uniform samplerCube uEnv;                           // radiancia, CON mips
 layout(rgba16f, binding = 0) uniform writeonly imageCube uPrefiltered;   // el mip destino
 
-uniform float uRoughness;     // rugosidad de este mip
-uniform float uEnvFaceSize;   // resolucion de cara del env, para el mip bias
+layout(std140, binding = 4) uniform PassParams {
+    vec4 uParams;   // x = rugosidad de este mip, y = resolucion de cara del env
+};
 
 const float PI = 3.14159265359;
 const uint  kSamples = 1024u;
@@ -81,7 +82,7 @@ void main() {
 
     for (uint i = 0u; i < kSamples; ++i) {
         vec2 Xi = hammersley(i, kSamples);
-        vec3 H  = importanceSampleGGX(Xi, N, uRoughness);
+        vec3 H  = importanceSampleGGX(Xi, N, uParams.x);
         vec3 L  = normalize(2.0 * dot(V, H) * H - V);
 
         float NdotL = dot(N, L);
@@ -93,12 +94,12 @@ void main() {
         // por el que Environment::Create genera los mips del env.
         float NdotH = max(dot(N, H), 0.0);
         float VdotH = max(dot(V, H), 0.0);
-        float D     = distributionGGX(NdotH, uRoughness);
+        float D     = distributionGGX(NdotH, uParams.x);
         float pdf   = (D * NdotH / (4.0 * max(VdotH, 1e-4))) + 1e-4;
 
-        float saTexel  = 4.0 * PI / (6.0 * uEnvFaceSize * uEnvFaceSize);
+        float saTexel  = 4.0 * PI / (6.0 * uParams.y * uParams.y);
         float saSample = 1.0 / (float(kSamples) * pdf);
-        float mipLevel = (uRoughness <= 0.0) ? 0.0 : 0.5 * log2(saSample / saTexel);
+        float mipLevel = (uParams.x <= 0.0) ? 0.0 : 0.5 * log2(saSample / saTexel);
 
         color  += textureLod(uEnv, L, mipLevel).rgb * NdotL;
         weight += NdotL;

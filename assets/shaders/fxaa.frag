@@ -9,8 +9,11 @@
 in vec2 vUV;
 out vec4 FragColor;
 
-uniform sampler2D uScreenTexture;   // imagen LDR gamma-encoded (salida del tonemap)
-uniform bool      uEnabled;         // off → passthrough, para comparar on/off
+layout(binding = 0) uniform sampler2D uScreenTexture;   // imagen LDR gamma-encoded (salida del tonemap)
+
+layout(std140, binding = 4) uniform PassParams {
+    vec4 uParams;   // x = enabled (0 = passthrough, para comparar on/off)
+};
 
 // Tunables clásicos de la variante compacta.
 const float SPAN_MAX   = 8.0;         // largo máximo del muestreo a lo largo del borde
@@ -24,7 +27,7 @@ void main() {
     vec2 texel = 1.0 / vec2(textureSize(uScreenTexture, 0));   // resolución-agnóstico
     vec3 rgbM  = texture(uScreenTexture, vUV).rgb;
 
-    if (!uEnabled) { FragColor = vec4(rgbM, 1.0); return; }
+    if (uParams.x < 0.5) { FragColor = vec4(rgbM, 1.0); return; }
 
     // Luma del centro y de los 4 vecinos diagonales.
     float lM  = luma(rgbM);
