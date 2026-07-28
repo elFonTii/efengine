@@ -1,4 +1,6 @@
 #include "efengine/renderer/Environment.h"
+#include <efengine/renderer/ShaderBlocks.h>
+#include <efengine/renderer/UniformBuffer.h>
 #include <efengine/renderer/Texture.h>
 #include <efengine/core/Log.h>
 #include <efengine/core/Assert.h>
@@ -62,7 +64,11 @@ namespace renderer {
 
         shaders.prefilterGGX->Bind();
         env.Bind(0);                                     // el env con sus mips, como samplerCube
-        shaders.prefilterGGX->SetFloat("uEnvFaceSize", static_cast<f32>(desc.faceSize));
+
+        // PassParams del prefiltrado: x = rugosidad del mip, y = resolucion de
+        // cara del env (para el mip bias). Se re-sube por mip.
+        UniformBuffer prefilterUbo(sizeof(PostParamsBlock));
+        prefilterUbo.BindTo(kPassBinding);
 
         for (u32 mip = 0u; mip < desc.prefilterMips; ++mip) {
             const u32 mipSize = desc.prefilterSize >> mip;
@@ -70,7 +76,10 @@ namespace renderer {
                                 ? static_cast<f32>(mip) / static_cast<f32>(desc.prefilterMips - 1u)
                                 : 0.0f;
 
-            shaders.prefilterGGX->SetFloat("uRoughness", roughness);
+            const PostParamsBlock p {
+                glm::vec4(roughness, static_cast<f32>(desc.faceSize), 0.0f, 0.0f) };
+            prefilterUbo.Update(&p, sizeof(p));
+
             prefiltered.BindImage(0, mip, efecom::ImageAccess::WriteOnly,
                                   efecom::TextureFormat::RGBA16F);
 

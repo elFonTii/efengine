@@ -1,6 +1,7 @@
 #pragma once
 #include <efengine/core/Types.h>
 #include <efengine/renderer/Texture.h>
+#include <efengine/renderer/RenderTarget.h>
 
 /* https://learnopengl.com/Advanced-OpenGL/Framebuffers */
 /* https://wikis.khronos.org/opengl/Framebuffer */
@@ -14,8 +15,9 @@ namespace renderer {
             Framebuffer& operator=(const Framebuffer&) = delete;
             Framebuffer(Framebuffer&& other) noexcept;
             Framebuffer& operator=(Framebuffer&& other) noexcept;
-            void            Bind() const;
-            void            Unbind() const;
+            // A donde escribe un pase que dibuja a este FBO. Se copia por valor.
+            RenderTarget    Target() const;
+            void            Bind() const;   // azucar de Target().Bind()
             void            Resize(u32 width, u32 height);
             const Texture&  ColorTexture() const;
             u32             width() const;

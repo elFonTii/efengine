@@ -44,13 +44,81 @@ namespace efecom {
     };
     void Clear(ClearMask mask);
 
-    void SetDepthTest(bool enabled);
+    // ── Estado de rasterizacion ────────────────────────────────────────────
+    // Todo el estado que en Vulkan es inmutable dentro de un pipeline object va
+    // junto en un struct. Cada pase declara el suyo entero: nadie "restaura" nada,
+    // porque restaurar depende de saber cual era el default y eso se rompe en
+    // silencio cuando el default cambia.
+    enum class DepthFunc   { Never, Less, Equal, LessEqual, Greater, NotEqual, GreaterEqual, Always };
+    enum class CullMode    { None, Back, Front };
+    enum class FrontFace   { CounterClockwise, Clockwise };
+    enum class BlendFactor { Zero, One, SrcAlpha, OneMinusSrcAlpha, DstAlpha, OneMinusDstAlpha,
+                             SrcColor, OneMinusSrcColor, DstColor, OneMinusDstColor };
+    enum class BlendOp     { Add, Subtract, ReverseSubtract, Min, Max };
+
+    struct PipelineState {
+        bool        depthTest   = true;
+        bool        depthWrite  = true;
+        DepthFunc   depthFunc   = DepthFunc::Less;
+        CullMode    cullMode    = CullMode::Back;
+        FrontFace   frontFace   = FrontFace::CounterClockwise;
+        bool        blendEnable = false;
+        BlendFactor srcColor    = BlendFactor::SrcAlpha;
+        BlendFactor dstColor    = BlendFactor::OneMinusSrcAlpha;
+        BlendFactor srcAlpha    = BlendFactor::One;
+        BlendFactor dstAlpha    = BlendFactor::OneMinusSrcAlpha;
+        BlendOp     colorOp     = BlendOp::Add;
+        BlendOp     alphaOp     = BlendOp::Add;
+        bool        colorWrite[4] = { true, true, true, true };
+    };
+
+    // Comparacion campo por campo. El backend la usa para emitir solo las llamadas
+    // gl* de lo que cambio; olvidarse un campo aca es un bug de estado invisible.
+    inline bool operator==(const PipelineState& a, const PipelineState& b) {
+        return a.depthTest   == b.depthTest
+            && a.depthWrite  == b.depthWrite
+            && a.depthFunc   == b.depthFunc
+            && a.cullMode    == b.cullMode
+            && a.frontFace   == b.frontFace
+            && a.blendEnable == b.blendEnable
+            && a.srcColor    == b.srcColor
+            && a.dstColor    == b.dstColor
+            && a.srcAlpha    == b.srcAlpha
+            && a.dstAlpha    == b.dstAlpha
+            && a.colorOp     == b.colorOp
+            && a.alphaOp     == b.alphaOp
+            && a.colorWrite[0] == b.colorWrite[0]
+            && a.colorWrite[1] == b.colorWrite[1]
+            && a.colorWrite[2] == b.colorWrite[2]
+            && a.colorWrite[3] == b.colorWrite[3];
+    }
+    inline bool operator!=(const PipelineState& a, const PipelineState& b) { return !(a == b); }
+
+    void ApplyPipelineState(const PipelineState& state);
+
+    // Invalida el cache del backend: la proxima ApplyPipelineState reemite TODO.
+    // Obligatorio cuando algo externo toca el estado de GL a espaldas del RHI
+    // (el backend de ImGui lo hace en cada Render).
+    void ResetPipelineStateCache();
 
     // ── Buffers (VBO / EBO) ────────────────────────────────────────────────
     // Buffer estático: crea y sube los datos de una vez. Sirve tanto para
     // vértices como para índices (el uso lo decide el vertex array).
     u32  CreateBuffer(const void* data, usize size);
     void DestroyBuffer(u32 buffer);
+
+    // Buffer de uniforms de contenido dinamico (se reescribe por frame o por draw).
+    // DestroyBuffer sirve para liberarlo, igual que un VBO.
+    u32  CreateUniformBuffer(usize size);
+    void UpdateBuffer(u32 buffer, const void* data, usize size, usize offset);
+
+    // Engancha el buffer entero a un indice de binding de uniform block. El
+    // binding es estado GLOBAL, no por programa: alcanza con hacerlo una vez.
+    //
+    // Camino de upgrade Vulkan-friendly cuando el volumen de draws lo pida:
+    // BindUniformBufferRange(buffer, binding, offset, size) sobre un ring buffer
+    // de un frame, con offsets dinamicos. Se agrega aca sin tocar ni un shader.
+    void BindUniformBuffer(u32 buffer, u32 bindingIndex);
 
     // ── Vertex arrays ──────────────────────────────────────────────────────
     // Modelo de binding points (estilo DSA): el buffer se engancha a un
@@ -78,14 +146,8 @@ namespace efecom {
     void BindProgram(u32 program);  // 0 = desbindear
 
     // Uniforms: operan sobre el programa actualmente bindeado.
-    // GetUniformLocation devuelve -1 si el uniform no existe (fue optimizado).
-    i32  GetUniformLocation(u32 program, const char* name);
-    void SetUniformInt(i32 location, i32 value);
-    void SetUniformFloat(i32 location, f32 value);
-    void SetUniformVec3(i32 location, const f32* values3);   // 3 floats
-    void SetUniformMat4(i32 location, const f32* values16);  // 16 floats, column-major
 
-    // ── Texturas 2D ────────────────────────────────────────────────────────
+    // Texturas 2D
     // El formato interno determina también el layout de los pixeles de origen:
     // los formatos de 8 bits suben bytes, los flotantes/depth suben floats.
     enum class TextureFormat {
@@ -114,11 +176,6 @@ namespace efecom {
     void DestroyTexture(u32 texture);            // también libera cubemaps
     void BindTexture2D(u32 texture, u32 unit);   // unidad de textura para samplers
 
-    // Textura 2D de storage INMUTABLE (glTextureStorage2D, estilo DSA). Es lo que
-    // pide image load/store y el camino al que apunta el refactor DSA. No sube
-    // pixeles: el contenido lo escribe un compute. Filtro/wrap por default en
-    // Linear + ClampToEdge, que es lo que necesita una LUT (con Repeat aparece un
-    // halo en los bordes al muestrear en rasante).
     struct Texture2DStorageDesc {
         u32           width     = 0;
         u32           height    = 0;
@@ -131,21 +188,20 @@ namespace efecom {
     };
     u32 CreateTexture2DStorage(const Texture2DStorageDesc& desc);
 
-    // ── Cubemaps ───────────────────────────────────────────────────────────
+    // Cubemaps
     // Storage inmutable de 6 caras cuadradas con mipCount niveles.
-    // Filtro trilinear + clamp en las 3 dimensiones (lo que pide IBL).
     u32  CreateCubemap(u32 size, TextureFormat format, u32 mipCount);
     void BindTextureUnit(u32 texture, u32 unit); // bind directo (cualquier tipo de textura)
     void GenerateTextureMipmaps(u32 texture);
 
-    // Imagen de shader (imageStore en compute): bindea todas las capas del nivel.
+    // Imagen de shader (imageStore en compute)
     enum class ImageAccess { ReadOnly, WriteOnly, ReadWrite };
     void BindImageLayered(u32 unit, u32 texture, u32 level, ImageAccess access, TextureFormat format);
 
-    // Imagen de shader no-layered (image2D): bindea UN nivel de una textura 2D.
+    // Imagen de shader bindea UN nivel de una textura 2D.
     void BindImage2D(u32 unit, u32 texture, u32 level, ImageAccess access, TextureFormat format);
 
-    // ── Compute ────────────────────────────────────────────────────────────
+    // Compute
     void DispatchCompute(u32 groupsX, u32 groupsY, u32 groupsZ);
 
     enum class Barrier : u32 {
@@ -154,25 +210,26 @@ namespace efecom {
     };
     void IssueMemoryBarrier(Barrier bits);
 
-    // ── Framebuffers ───────────────────────────────────────────────────────
+    // Framebuffers
     u32  CreateFramebuffer();
     void DestroyFramebuffer(u32 framebuffer);
-    void BindFramebuffer(u32 framebuffer);       // 0 = backbuffer
+    u32  GetPresentTarget();
+    void SetPresentExtent(u32 width, u32 height);
+    void GetPresentExtent(u32& outWidth, u32& outHeight);
+    void BindRenderTarget(u32 target, u32 width, u32 height);
     void FramebufferColorTexture(u32 framebuffer, u32 texture);
     void FramebufferDepthTexture(u32 framebuffer, u32 texture);
     void FramebufferDisableColor(u32 framebuffer); // FBO solo-profundidad (shadow maps)
     bool FramebufferComplete(u32 framebuffer);
-
-    // Renderbuffer de profundidad (24 bits) para FBOs que no muestrean depth.
     u32  CreateDepthRenderbuffer(u32 width, u32 height);
     void DestroyRenderbuffer(u32 renderbuffer);
     void FramebufferDepthRenderbuffer(u32 framebuffer, u32 renderbuffer);
 
-    // ── Draw (triángulos; índices u32) ─────────────────────────────────────
+    // Draw (triángulos; índices u32)
     void DrawIndexed(u32 indexCount);
     void DrawArrays(u32 vertexCount);
 
-    // ── Operadores de bits para las máscaras ───────────────────────────────
+    // Operadores de bits para las máscaras
     inline constexpr ClearMask operator|(ClearMask a, ClearMask b) {
         return static_cast<ClearMask>(static_cast<u32>(a) | static_cast<u32>(b));
     }

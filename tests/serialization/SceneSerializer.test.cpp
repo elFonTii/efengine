@@ -5,6 +5,8 @@
 #include <efengine/resources/ResourceManager.h>
 #include <efengine/scene/SceneGraph.h>
 #include <efengine/scene/Node.h>
+#include <efengine/renderer/MaterialDef.h>
+#include <efengine/renderer/Material.h>
 #include <memory>
 #include <vector>
 
@@ -297,6 +299,46 @@ TEST_CASE("EfeSceneSerializer: grafo con solo la raiz round-trip") {
     CHECK(destino.IsValid(destino.Root()));
     CHECK(destino.Get(destino.Root()).children.empty());
     CHECK(destino.PrimarySun().IsNull());
+}
+
+TEST_CASE("EfeSceneSerializer: doubleSided del MaterialDef llega al MaterialRecord") {
+    scene::SceneGraph grafo;
+    grafo.CreateNode("root");
+
+    resources::SceneAssets assets;
+    renderer::MaterialDef def;
+    def.name        = "vidrio";
+    def.shaderName  = "pbr";
+    def.doubleSided = true;
+    // Material headless: Extract solo lee el DEF, nunca toca el Material.
+    assets.AddMaterial(def, renderer::Material(nullptr));
+
+    resources::ResourceManager rm;
+    const SceneRegistry reg = armarRegistry();
+
+    SceneDocument doc;
+    REQUIRE(SceneSerializer::Extract(grafo, assets, rm, reg, doc));
+    REQUIRE(doc.materials.size() == 1u);
+    CHECK(doc.materials[0].doubleSided == 1u);
+}
+
+TEST_CASE("EfeSceneSerializer: un material de una sola cara sale con doubleSided en 0") {
+    scene::SceneGraph grafo;
+    grafo.CreateNode("root");
+
+    resources::SceneAssets assets;
+    renderer::MaterialDef def;
+    def.name       = "pared";
+    def.shaderName = "pbr";
+    assets.AddMaterial(def, renderer::Material(nullptr));
+
+    resources::ResourceManager rm;
+    const SceneRegistry reg = armarRegistry();
+
+    SceneDocument doc;
+    REQUIRE(SceneSerializer::Extract(grafo, assets, rm, reg, doc));
+    REQUIRE(doc.materials.size() == 1u);
+    CHECK(doc.materials[0].doubleSided == 0u);
 }
 
 TEST_CASE("EfeSceneAssets: indices, lookup inverso y Clear") {

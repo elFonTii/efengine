@@ -18,18 +18,16 @@ namespace renderer {
 
     void FxaaPass::Resize(u32 width, u32 height) {} 
 
-    void FxaaPass::Apply(const Texture& input, const Framebuffer* target) {
-        if (target != null) {
-            target->Bind();
-        } else {
-            efecom::BindFramebuffer(0);
-            m_renderer.SetViewport(input.width(), input.height());
-        }
+    void FxaaPass::Apply(const Texture& input, const RenderTarget& target) {
+        target.Bind();
+
+        const PostParamsBlock params {
+            glm::vec4(m_settings.enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f) };
+        m_paramsUbo.Update(&params, sizeof(params));
+        m_paramsUbo.BindTo(kPassBinding);
 
         m_shader->Bind();
         input.Bind(0);
-        m_shader->SetInt("uScreenTexture", 0);
-        m_shader->SetInt("uEnabled", m_settings.enabled ? 1 : 0);
         m_renderer.Draw(m_quad, *m_shader);
     }
 }

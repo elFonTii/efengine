@@ -9,7 +9,7 @@
 
 namespace efengine {
 namespace renderer {
-    struct PassRoute { bool toBackbuffer; u32 scratch; };
+    struct PassRoute { bool toPresent; u32 scratch; };
     inline PassRoute postChainTarget(u32 index, u32 count) {
         return { index + 1 == count, index & 1u};
     }

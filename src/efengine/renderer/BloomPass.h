@@ -2,6 +2,8 @@
 #include <efengine/renderer/IPostPass.h>
 #include <efengine/renderer/Framebuffer.h>
 #include <efengine/core/Types.h>
+#include <efengine/renderer/ShaderBlocks.h>
+#include <efengine/renderer/UniformBuffer.h>
 
 namespace efengine {
 namespace renderer {
@@ -24,7 +26,7 @@ namespace renderer {
 
             BloomSettings& settings() { return m_settings; }
 
-            void Apply(const Texture& input, const Framebuffer* target) override;
+            void Apply(const Texture& input, const RenderTarget& target) override;
             void Resize(u32 width, u32 height) override;
 
             private:
@@ -36,6 +38,8 @@ namespace renderer {
                 Framebuffer  m_fboA;
                 Framebuffer  m_fboB;
                 BloomSettings m_settings;
+                // Un solo UBO para las tres etapas: se re-sube antes de cada draw.
+                UniformBuffer m_paramsUbo { sizeof(PostParamsBlock) };
     };
 }
 }

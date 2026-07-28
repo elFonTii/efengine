@@ -25,14 +25,18 @@ namespace renderer {
         m_fboB.Resize(std::max(1u,width/2), std::max(1u,height/2));
     }
 
-void BloomPass::Apply(const Texture& input, const Framebuffer* target) {
+void BloomPass::Apply(const Texture& input, const RenderTarget& target) {
+    m_paramsUbo.BindTo(kPassBinding);
+
     // brightpass: escena full-res -> m_fboA (1/2 res)
     m_fboA.Bind();
+    {
+        const PostParamsBlock p {
+            glm::vec4(m_settings.threshold, m_settings.knee, 0.0f, 0.0f) };
+        m_paramsUbo.Update(&p, sizeof(p));
+    }
     m_brightpass->Bind();
     input.Bind(0);
-    m_brightpass->SetInt("uScene", 0);
-    m_brightpass->SetFloat("uThreshold", m_settings.threshold);
-    m_brightpass->SetFloat("uKnee", m_settings.knee);
     m_renderer.Draw(m_quad, *m_brightpass);
 
     // ── 2) Blur separable ping-pong: 2*N pasadas
@@ -43,10 +47,13 @@ void BloomPass::Apply(const Texture& input, const Framebuffer* target) {
 
     for (i32 i = 0; i < passes; ++i) {
         dst->Bind();
+        {
+            const PostParamsBlock p {
+                glm::vec4(horizontal ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f) };
+            m_paramsUbo.Update(&p, sizeof(p));
+        }
         m_blur->Bind();
         src->ColorTexture().Bind(0);
-        m_blur->SetInt("uImage", 0);
-        m_blur->SetInt("uHorizontal", horizontal ? 1 : 0);   // uniform bool como int
         m_renderer.Draw(m_quad, *m_blur);
 
         std::swap(src, dst);
@@ -54,18 +61,14 @@ void BloomPass::Apply(const Texture& input, const Framebuffer* target) {
     }
 
     // Composite aditivo: escena full-res + blur (1/2 res, upscale LINEAR) sale al target
-    if (target != null) {
-        target->Bind();
-    } else {
-        efecom::BindFramebuffer(0);
-        m_renderer.SetViewport(input.width(), input.height());
+    target.Bind();
+    {
+        const PostParamsBlock p { glm::vec4(m_settings.intensity, 0.0f, 0.0f, 0.0f) };
+        m_paramsUbo.Update(&p, sizeof(p));
     }
     m_composite->Bind();
     input.Bind(0);
     src->ColorTexture().Bind(1);
-    m_composite->SetInt("uScene", 0);
-    m_composite->SetInt("uBloom", 1);
-    m_composite->SetFloat("uIntensity", m_settings.intensity);
     m_renderer.Draw(m_quad, *m_composite);
 }
 }

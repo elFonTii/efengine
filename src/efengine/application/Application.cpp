@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include <efecom/RHI.h>
+
 #include <efengine/core/Log.h>
 #include <efengine/scene/SceneGraph.h>
 #include <efengine/scene/Camera.h>
@@ -86,6 +88,9 @@ namespace application {
         // este frame) y antes de que nadie lea el input.
         m_input.NewFrame(m_window);
         m_debugUI.NewFrame();
+        // ImGui_ImplOpenGL3_RenderDrawData del frame anterior piso blend, cull y
+        // depth a espaldas del RHI: el cache del backend quedo mintiendo.
+        efecom::ResetPipelineStateCache();
     }
 
     void Application::EndFrame() {
@@ -96,7 +101,13 @@ namespace application {
     void Application::RenderScene(scene::SceneGraph& scene, const scene::Camera& camera) {
         const u32 w = m_window.GetWidth();
         const u32 h = m_window.GetHeight();
-        if(w != 0 && h != 0) { m_sceneFB.Resize(w, h); m_postChain.Resize(w, h); }
+        if(w != 0 && h != 0) {
+            m_sceneFB.Resize(w, h);
+            m_postChain.Resize(w, h);
+            // El backbuffer sigue al framebuffer de la ventana. Sin esto,
+            // RenderTarget::Present() fijaria el viewport del tamano viejo.
+            efecom::SetPresentExtent(w, h);
+        }
 
         // Recalcula world-transforms y junta las listas de render una vez por frame.
         // Los dos pases de abajo (sombra y forward) leen el mismo resultado.
@@ -133,7 +144,7 @@ namespace application {
                               ibl);
 
          if (m_environment) {
-            m_skyboxPass.Draw(m_environment->env(), camera.ViewMatrix(), camera.ProjectionMatrix());
+            m_skyboxPass.Draw(m_environment->env());
          }
 
         for(const scene::RenderItem& item : scene.Renderables()) {
@@ -141,7 +152,7 @@ namespace application {
             m_renderer.Submit(*item.model, *item.materials, item.world);
         }
 
-        m_sceneFB.Unbind();
+        // Ya no hay "desbindear": el post chain declara su propio destino por pase.
         m_tonemapPass.SetExposure(camera.Exposure());
         m_postChain.Run(m_sceneFB.ColorTexture());
     }

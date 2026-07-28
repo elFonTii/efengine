@@ -48,14 +48,11 @@ namespace renderer {
         return *this;
     }
 
-    void Framebuffer::Bind() const {
-        efecom::BindFramebuffer(m_id);
-        efecom::SetViewport(0, 0, m_width, m_height);
+    RenderTarget Framebuffer::Target() const {
+        return RenderTarget(m_id, m_width, m_height);
     }
 
-    void Framebuffer::Unbind() const {
-        efecom::BindFramebuffer(0);
-    }
+    void Framebuffer::Bind() const { Target().Bind(); }
 
     const Texture& Framebuffer::ColorTexture() const {
         return m_color;

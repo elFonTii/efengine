@@ -41,14 +41,11 @@ namespace renderer {
         return *this;
     }
 
-    void ShadowMap::Bind() const {
-        efecom::BindFramebuffer(m_id);
-        efecom::SetViewport(0, 0, m_resolution, m_resolution);
+    RenderTarget ShadowMap::Target() const {
+        return RenderTarget(m_id, m_resolution, m_resolution);
     }
 
-    void ShadowMap::Unbind() const {
-        efecom::BindFramebuffer(0);
-    }
+    void ShadowMap::Bind() const { Target().Bind(); }
 
 }
 }

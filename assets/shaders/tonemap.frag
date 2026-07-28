@@ -2,8 +2,11 @@
 in vec2 vUV;
 out vec4 FragColor;
 
-uniform sampler2D uScreenTexture;   // color HDR lineal de la escena (RGBA16F)
-uniform float     uExposure;        // exposición lineal (1.0 = neutra)
+layout(binding = 0) uniform sampler2D uScreenTexture;   // color HDR lineal de la escena (RGBA16F)
+
+layout(std140, binding = 4) uniform PassParams {
+    vec4 uParams;   // x = exposicion lineal (1.0 = neutra)
+};
 
 // ACES filmic tone mapping — aproximación de Narkowicz.
 // https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
@@ -21,7 +24,7 @@ vec3 ACESFilmic(vec3 x) {
 void main() {
     vec3 hdr = texture(uScreenTexture, vUV).rgb;
 
-    hdr *= uExposure;               // exposición (multiplicador lineal)
+    hdr *= uParams.x;               // exposición (multiplicador lineal)
     vec3 ldr = ACESFilmic(hdr);     // HDR → LDR (tone mapping)
     ldr = pow(ldr, vec3(1.0 / 2.2)); // gamma: lineal → sRGB (una sola vez, acá)
 

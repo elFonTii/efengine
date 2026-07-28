@@ -17,7 +17,7 @@ namespace renderer {
         EF_ASSERT(ok, "efecom::Initialize failed: could not load graphics API functions");
 
         efecom::SetViewport(0, 0, window.GetWidth(), window.GetHeight()); // Si lo inicializo en Window el contexto de opengl no está activo todavía "access violation -1073741819"
-        efecom::SetDepthTest(true); // Test de profundidad que descarta fragmentos ocultos (las tapas traseras de una forma no tapen las delanteras)
+        efecom::SetPresentExtent(window.GetWidth(), window.GetHeight());
         log_gpu_info();
     }
 

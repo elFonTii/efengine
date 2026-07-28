@@ -2,6 +2,8 @@
 #include <efengine/core/Types.h>
 #include <efengine/renderer/ShadowMap.h>
 #include <efengine/renderer/DirectionalLight.h>
+#include <efengine/renderer/ShaderBlocks.h>
+#include <efengine/renderer/UniformBuffer.h>
 #include <glm/glm.hpp>
 
 namespace efengine {
@@ -41,6 +43,8 @@ namespace renderer {
             ShadowMap      m_shadowMap;
             ShadowSettings m_settings;
             glm::mat4      m_lightSpaceMatrix { 1.0f };
+            // PassParams (binding 4) propio: este pase corre antes de BeginScene.
+            UniformBuffer  m_passUbo { sizeof(ShadowPassBlock) };
     };
 
 }

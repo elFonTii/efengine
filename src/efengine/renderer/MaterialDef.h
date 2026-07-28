@@ -50,6 +50,11 @@ namespace renderer {
         glm::vec3 emissiveTint      = glm::vec3(1.0f);   // blanco = no tiñe el mapa
         f32       emissiveIntensity = 0.0f;              // 0 = sin emision
         f32       normalStrength    = 1.0f;              // 1 = el mapa tal cual
+
+        // v3 del formato. false = se cullea la cara de atras (lo de siempre);
+        // true = se dibujan las dos caras. Para planos, cortinas y mallas de una
+        // sola cara cuyo winding no aguanta el culling.
+        bool      doubleSided       = false;
     };
 
 }
