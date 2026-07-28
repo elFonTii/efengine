@@ -146,12 +146,6 @@ namespace efecom {
     void BindProgram(u32 program);  // 0 = desbindear
 
     // Uniforms: operan sobre el programa actualmente bindeado.
-    // GetUniformLocation devuelve -1 si el uniform no existe (fue optimizado).
-    i32  GetUniformLocation(u32 program, const char* name);
-    void SetUniformInt(i32 location, i32 value);
-    void SetUniformFloat(i32 location, f32 value);
-    void SetUniformVec3(i32 location, const f32* values3);   // 3 floats
-    void SetUniformMat4(i32 location, const f32* values16);  // 16 floats, column-major
 
     // Texturas 2D
     // El formato interno determina también el layout de los pixeles de origen:

@@ -309,14 +309,7 @@ namespace efecom {
     void DestroyProgram(u32 program) { glDeleteProgram(program); }
     void BindProgram(u32 program)    { glUseProgram(program); }
 
-    i32 GetUniformLocation(u32 program, const char* name) {
-        return glGetUniformLocation(program, name);
-    }
 
-    void SetUniformInt(i32 location, i32 value)          { glUniform1i(location, value); }
-    void SetUniformFloat(i32 location, f32 value)        { glUniform1f(location, value); }
-    void SetUniformVec3(i32 location, const f32* values3)  { glUniform3fv(location, 1, values3); }
-    void SetUniformMat4(i32 location, const f32* values16) { glUniformMatrix4fv(location, 1, GL_FALSE, values16); }
 
     // ── Texturas 2D ────────────────────────────────────────────────────────
     u32 CreateTexture2D(const Texture2DDesc& desc, const void* pixels) {

@@ -25,10 +25,12 @@ namespace renderer {
     void TonemapPass::Apply(const Texture& input, const RenderTarget& target){
         target.Bind();   // bindea Y fija el viewport
 
+        const PostParamsBlock params { glm::vec4(m_exposure, 0.0f, 0.0f, 0.0f) };
+        m_paramsUbo.Update(&params, sizeof(params));
+        m_paramsUbo.BindTo(kPassBinding);
+
         m_shader->Bind();
-        input.Bind(0);
-        m_shader->SetInt("uScreenTexture", 0);
-        m_shader->SetFloat("uExposure", m_exposure);
+        input.Bind(0);   // el sampler ya sabe su unidad por layout(binding = 0)
         m_renderer.Draw(m_quad, *m_shader);
     }
 }

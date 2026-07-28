@@ -1,6 +1,8 @@
 #pragma once
 #include <efengine/renderer/IPostPass.h>
 #include <efengine/core/Types.h>
+#include <efengine/renderer/ShaderBlocks.h>
+#include <efengine/renderer/UniformBuffer.h>
 
 namespace efengine {
 namespace renderer {
@@ -22,6 +24,7 @@ namespace renderer {
                 VertexArray& m_quad;
                 Shader*      m_shader;
                 f32          m_exposure = 1.0f;
+                UniformBuffer m_paramsUbo { sizeof(PostParamsBlock) };
     };
 }
 }
