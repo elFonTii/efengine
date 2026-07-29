@@ -39,6 +39,7 @@ add_executable(efengine_tests
     efenet/State.test.cpp
     efenet/Simulation.test.cpp
     efenet/Protocol.test.cpp
+    efenet/Prediction.test.cpp
 )
 
 # Include path raíz: los tests consumen el motor como <efengine/...>.
