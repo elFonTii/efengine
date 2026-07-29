@@ -15,6 +15,8 @@ target_sources(efenet PRIVATE
     Transport.cpp
     World.cpp
     Server.cpp
+    NetSim.cpp
+    Client.cpp
 )
 
 target_include_directories(efenet PUBLIC ${CMAKE_SOURCE_DIR}/src)
