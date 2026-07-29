@@ -16,6 +16,8 @@
 #include <efengine/renderer/Environment.h>
 #include <efengine/renderer/SkyboxPass.h>
 #include <efengine/renderer/ShadowPass.h>
+#include <efengine/renderer/DdgiPass.h>
+#include <efengine/renderer/DdgiDebugPass.h>
 #include <optional>
 
 namespace efengine {
@@ -38,6 +40,7 @@ namespace application {
             renderer::BloomPass& GetBloomPass() { return m_bloomPass; }
             renderer::FxaaPass& GetFxaaPass() { return m_fxaaPass; }
             renderer::ShadowPass& GetShadowPass() { return m_shadowPass; }
+            std::optional<renderer::DdgiPass>& GetDdgiPass() { return m_ddgiPass; }
 
             // FRAME API
             bool Running() const { return !m_window.ShouldClose(); }
@@ -79,6 +82,9 @@ namespace application {
             std::optional<renderer::Environment> m_environment;
             renderer::SkyboxPass m_skyboxPass;
             renderer::ShadowPass m_shadowPass;
+            // Vacios si falto algun shader de DDGI: el frame sigue con IBL puro.
+            std::optional<renderer::DdgiPass>      m_ddgiPass;
+            std::optional<renderer::DdgiDebugPass> m_ddgiDebug;
 
     };
 

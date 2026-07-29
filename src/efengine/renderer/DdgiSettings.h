@@ -29,8 +29,11 @@ namespace renderer {
         f32 chebyshevSharpness = 3.0f;
 
         // -- Debug --
-        bool debugProbes = false;
-        u32  debugMode   = 0u;      // 0=irradiancia, 1=media de distancia, 2=target de captura
+        // TEMPORAL hasta la tarea 15 (panel de ImGui): el volcado del target de
+        // captura arranca prendido porque es la unica forma de verificar la
+        // captura mientras no hay UI que lo encienda.
+        bool debugProbes = true;
+        u32  debugMode   = 2u;      // 0=irradiancia, 1=media de distancia, 2=target de captura
         f32  debugRadius = 0.12f;   // metros
     };
 

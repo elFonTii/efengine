@@ -47,6 +47,12 @@ namespace renderer {
             // porque ShadowPass tambien dibuja por objeto y necesita el mismo bloque.
             void SetObjectMatrix(const glm::mat4& model) const;
 
+            // Sube un bloque Frame arbitrario (binding 0). Publico porque la
+            // captura de probes de DDGI lo re-sube seis veces por probe, con la
+            // view/proj de cada cara. Por eso ese pase corre ANTES de BeginScene:
+            // si corriera despues, pisaria la camara.
+            void SetFrameBlock(const FrameBlock& block) const;
+
         private:
             // Un UBO por frecuencia de actualizacion. El de material vive aca y no
             // en Material a proposito: Material se construye headless en los tests

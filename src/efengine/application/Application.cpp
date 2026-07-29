@@ -76,6 +76,26 @@ namespace application {
             EF_LOG_ERROR("Application: no se pudo cargar algún compute de IBL (equirect/irradiance/prefilter/brdf)");
         }
 
+        // DDGI. Si falta cualquier shader, m_ddgiPass queda vacio y el frame
+        // sigue con IBL puro: un fallo de carga no rompe el render.
+        renderer::DdgiPass::Shaders ddgiShaders;
+        ddgiShaders.capture = m_resources.GetShader("ddgi_capture",
+                                  "assets/shaders/pbr.vert", "assets/shaders/ddgi/capture.frag");
+        ddgiShaders.captureSky = m_resources.GetShader("ddgi_capture_sky",
+                                  "assets/shaders/skybox.vert", "assets/shaders/ddgi/capture_sky.frag");
+        ddgiShaders.blendIrradiance = m_resources.GetComputeShader("ddgi_blend_irradiance",
+                                  "assets/shaders/ddgi/blend_irradiance.comp");
+        ddgiShaders.blendDistance = m_resources.GetComputeShader("ddgi_blend_distance",
+                                  "assets/shaders/ddgi/blend_distance.comp");
+
+        m_ddgiPass = renderer::DdgiPass::Create(m_renderer, m_fullscreenQuad, ddgiShaders);
+        if (!m_ddgiPass) EF_LOG_ERROR("Application: no se pudo crear el DdgiPass");
+
+        if (renderer::Shader* blit = m_resources.GetShader("ddgi_debug_blit",
+                "assets/shaders/screen.vert", "assets/shaders/ddgi/debug_blit.frag")) {
+            m_ddgiDebug.emplace(m_renderer, m_fullscreenQuad, blit);
+        }
+
         m_window.SetEventListener(&m_input);
 
         EF_LOG_INFO("Application inicializada");
@@ -137,12 +157,19 @@ namespace application {
             ibl.maxLod      = m_environment->prefilterMaxLod();
         }
 
+        // --- DDGI: captura de probes + blend. Antes de BeginScene porque sube su
+        // --- propio FrameBlock por cara, y despues del ShadowPass porque la
+        // --- captura sombrea con la matriz y el depth del sol.
+        renderer::DdgiContext ddgiCtx;
+        if (m_ddgiPass) {
+            m_ddgiPass->Update(scene, shadowCtx, ibl,
+                               m_environment ? &m_environment->env() : null);
+            ddgiCtx = m_ddgiPass->Context();
+        }
+
         // Al Framebuffer de escena
         m_sceneFB.Bind();
         m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
-        // DDGI todavia no existe: contexto vacio -> params1.x = 0 -> pbr.frag
-        // usa la irradiancia del IBL, igual que antes de esta tarea.
-        const renderer::DdgiContext ddgiCtx {};
         m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.PointLights(), scene.Sun(), shadowCtx,
                               ibl, ddgiCtx);
 
@@ -153,6 +180,13 @@ namespace application {
         for(const scene::RenderItem& item : scene.Renderables()) {
             if(!item.model) { EF_LOG_WARNING("Se intenta renderizar un item sin modelo"); continue; }
             m_renderer.Submit(*item.model, *item.materials, item.world);
+        }
+
+        // El volcado del target de captura va sobre la imagen HDR de la escena,
+        // antes del post: es un instrumento de debug, no parte de la imagen.
+        if (m_ddgiPass && m_ddgiDebug && m_ddgiPass->settings().debugProbes
+            && m_ddgiPass->settings().debugMode == 2u) {
+            m_ddgiDebug->DrawCaptureBlit(m_ddgiPass->captureTarget(), false);
         }
 
         // Ya no hay "desbindear": el post chain declara su propio destino por pase.

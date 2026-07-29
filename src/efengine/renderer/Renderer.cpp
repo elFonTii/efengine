@@ -88,6 +88,10 @@ namespace renderer {
         m_ddgiUbo.Update(&ddgiBlock, sizeof(ddgiBlock));
     }
 
+    void Renderer::SetFrameBlock(const FrameBlock& block) const {
+        m_frameUbo.Update(&block, sizeof(block));
+    }
+
     void Renderer::SetObjectMatrix(const glm::mat4& model) const {
         const ObjectBlock block { model };
         m_objectUbo.Update(&block, sizeof(block));
