@@ -184,6 +184,7 @@ endif()
 # SUBDIRECTORIOS
 add_subdirectory(src)
 add_subdirectory(sandbox)
+add_subdirectory(netdemo)
 
 # TESTS (doctest + CTest)
 if(EFENGINE_BUILD_TESTS)
