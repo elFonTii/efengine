@@ -38,6 +38,15 @@ namespace renderer {
     static_assert(sizeof(ShadowPassBlock) == 64u, "ShadowPassBlock: tamano std140 roto");
     static_assert(sizeof(PostParamsBlock) == 16u, "PostParamsBlock: tamano std140 roto");
 
+    static_assert(sizeof(DdgiBlock) == 112u, "DdgiBlock: tamano std140 inesperado");
+    static_assert(offsetof(DdgiBlock, gridOrigin)  ==  0u, "DdgiBlock: offset de gridOrigin");
+    static_assert(offsetof(DdgiBlock, gridSpacing) == 16u, "DdgiBlock: offset de gridSpacing");
+    static_assert(offsetof(DdgiBlock, gridCounts)  == 32u, "DdgiBlock: offset de gridCounts");
+    static_assert(offsetof(DdgiBlock, atlasLayout) == 48u, "DdgiBlock: offset de atlasLayout");
+    static_assert(offsetof(DdgiBlock, updateRange) == 64u, "DdgiBlock: offset de updateRange");
+    static_assert(offsetof(DdgiBlock, params0)     == 80u, "DdgiBlock: offset de params0");
+    static_assert(offsetof(DdgiBlock, params1)     == 96u, "DdgiBlock: offset de params1");
+
     // El array del bloque tiene que tener exactamente los slots que el motor cree.
     static_assert(Renderer::kMaxLights == 4u,
                   "LightsBlock: los arrays son de 4; sincronizar con kMaxLights y con MAX_LIGHTS del shader");
@@ -85,6 +94,33 @@ namespace renderer {
         b.dirColor     = glm::vec4(sun.color, 0.0f);
         b.counts       = glm::ivec4(static_cast<i32>(count), 0, 0, 0);
 
+        return b;
+    }
+
+    DdgiBlock MakeDdgiBlock(const DdgiGrid& grid, const DdgiSettings& settings,
+                            UpdateRange range, bool atlasValid) {
+        // Se sanea aca y no en el caller: este es el ultimo punto antes de que
+        // los valores lleguen al shader, donde un cero se vuelve NaN silencioso.
+        const DdgiGrid g = SanitizeGrid(grid);
+
+        const glm::ivec2 tiles = AtlasTileCount(g);
+        const i32 total = static_cast<i32>(ProbeCount(g));
+
+        DdgiBlock b {};
+        b.gridOrigin  = glm::vec4(g.origin,  0.0f);
+        b.gridSpacing = glm::vec4(g.spacing, 0.0f);
+        b.gridCounts  = glm::ivec4(g.counts, total);
+        b.atlasLayout = glm::ivec4(tiles.x, tiles.y,
+                                   static_cast<i32>(kIrradianceTile),
+                                   static_cast<i32>(kDistanceTile));
+        b.updateRange = glm::ivec4(static_cast<i32>(range.first),
+                                   static_cast<i32>(range.count),
+                                   static_cast<i32>(kProbeFaceSize),
+                                   static_cast<i32>(settings.probesPerFrame));
+        b.params0 = glm::vec4(settings.hysteresis, settings.intensity,
+                              settings.normalBias, settings.viewBias);
+        b.params1 = glm::vec4((settings.enabled && atlasValid) ? 1.0f : 0.0f,
+                              settings.chebyshevSharpness, 0.0f, 0.0f);
         return b;
     }
 

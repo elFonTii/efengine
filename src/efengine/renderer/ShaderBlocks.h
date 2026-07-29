@@ -5,6 +5,7 @@
 #include <efengine/renderer/DirectionalLight.h>
 #include <efengine/renderer/ShadowContext.h>
 #include <efengine/renderer/IblContext.h>
+#include <efengine/renderer/DdgiSettings.h>
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -20,6 +21,11 @@ namespace renderer {
     inline constexpr u32 kObjectBinding   = 2u;   // 1x por render item
     inline constexpr u32 kMaterialBinding = 3u;   // 1x por bind de material
     inline constexpr u32 kPassBinding     = 4u;   // 1x por invocacion de pase
+    inline constexpr u32 kDdgiBinding     = 5u;   // 1x por frame — solo lo declaran los shaders de DDGI
+
+    // Unidades de sampler de los atlas de DDGI. 0-7 material, 8 sombra, 9/10/11 IBL.
+    inline constexpr u32 kIrradianceAtlasUnit = 12u;
+    inline constexpr u32 kDistanceAtlasUnit   = 13u;
 
     // ── Mirrors C++ de los bloques std140 ──────────────────────────────────
     // Regla de std140 que gobierna todo esto: un vec3 ocupa igual 16 bytes, y un
@@ -70,6 +76,19 @@ namespace renderer {
         glm::vec4 params;
     };
 
+    // Constantes de DDGI del frame (binding 5). Bloque propio en vez de extender
+    // FrameBlock: extender Frame obliga a tocar los cuatro shaders que lo
+    // declaran (skybox, tonemap, fxaa, shadow) sin que ninguno use el dato.
+    struct alignas(16) DdgiBlock {
+        glm::vec4  gridOrigin;    // .xyz
+        glm::vec4  gridSpacing;   // .xyz
+        glm::ivec4 gridCounts;    // .xyz = probes por eje, .w = total
+        glm::ivec4 atlasLayout;   // x=cols, y=rows, z=irrTile(8), w=distTile(16)
+        glm::ivec4 updateRange;   // x=firstProbe, y=count, z=faceSize, w=probesPerFrame
+        glm::vec4  params0;       // hysteresis, intensity, normalBias, viewBias
+        glm::vec4  params1;       // enabled, chebyshevSharpness, _, _
+    };
+
     // ── Funciones puras que arman los bloques ──────────────────────────────
     // No tocan la GPU: son las que vuelven testeable headless lo que antes era
     // una tira de glUniform*.
@@ -81,6 +100,15 @@ namespace renderer {
     // Recorta a Renderer::kMaxLights sin desbordar. Los slots sobrantes quedan en cero.
     LightsBlock MakeLightsBlock(const std::vector<PointLight>& lights,
                                 const DirectionalLight& sun);
+
+    // maxDistance NO viaja en el bloque: solo el C++ lo usa, para el far plane de
+    // la proyeccion de captura. Meterlo seria un campo muerto.
+    //
+    // atlasValid apaga params1.x aunque settings.enabled este en true: es el caso
+    // "no hay DdgiPass" (fallo de shader), donde pbr.frag tiene que caer a IBL
+    // puro en vez de samplear una unidad de textura sin contenido.
+    DdgiBlock MakeDdgiBlock(const DdgiGrid& grid, const DdgiSettings& settings,
+                            UpdateRange range, bool atlasValid);
 
 }
 }
