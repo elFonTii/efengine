@@ -140,8 +140,11 @@ namespace application {
         // Al Framebuffer de escena
         m_sceneFB.Bind();
         m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
+        // DDGI todavia no existe: contexto vacio -> params1.x = 0 -> pbr.frag
+        // usa la irradiancia del IBL, igual que antes de esta tarea.
+        const renderer::DdgiContext ddgiCtx {};
         m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.PointLights(), scene.Sun(), shadowCtx,
-                              ibl);
+                              ibl, ddgiCtx);
 
          if (m_environment) {
             m_skyboxPass.Draw(m_environment->env());
