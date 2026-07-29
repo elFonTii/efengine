@@ -21,6 +21,7 @@ add_executable(efengine_tests
     renderer/ShaderBlocks.test.cpp
     renderer/MaterialBlock.test.cpp
     resources/FileIO.test.cpp
+    resources/ShaderPreprocessor.test.cpp
     resources/ResourceManager.test.cpp
     resources/SceneAssets.test.cpp
     scene/NodeHandle.test.cpp
