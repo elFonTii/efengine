@@ -1,9 +1,8 @@
 #include <efenet/Version.h>
+#include <efenet/Types.h>
 
 namespace efenet {
 
-    // El literal se reemplaza por kProtocolVersion en la Task 3, cuando exista
-    // efenet/Types.h.
-    u16 ProtocolVersion() { return 1u; }
+    u16 ProtocolVersion() { return kProtocolVersion; }
 
 }
