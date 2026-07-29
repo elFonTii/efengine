@@ -26,6 +26,7 @@ target_link_libraries(efengine PUBLIC
     efengine_renderer
     efengine_resources
     efengine_scene
+    efengine_binary
     efengine_serialization
     efengine_application
 )
