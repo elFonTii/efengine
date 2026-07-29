@@ -107,6 +107,11 @@ if(EFENGINE_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
 endif()
 
+# El CMakeLists de ENet 1.3.18 expone sus headers con include_directories(), que
+# es a nivel de directorio y NO se propaga a los consumidores. Sin esta línea,
+# efenet no encuentra <enet/enet.h>.
+target_include_directories(enet PUBLIC ${enet_SOURCE_DIR}/include)
+
 # Opciones de assimp: build mínimo. Deben fijarse ANTES de MakeAvailable(assimp).
 # Solo el importador FBX; sin exportadores, tests, tools ni samples.
 # BUILD_SHARED_LIBS OFF => assimp estático: no hay DLL que copiar junto al .exe.
