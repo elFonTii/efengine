@@ -79,6 +79,14 @@ FetchContent_Declare(
     GIT_TAG v1.91.5-docking
 )
 
+# ENet - Transporte UDP con conexiones, timeouts y canales confiables/no
+# confiables. efenet lo usa para no reimplementar handshake ni reliability.
+FetchContent_Declare(
+    enet
+    GIT_REPOSITORY https://github.com/lsalzman/enet.git
+    GIT_TAG v1.3.18
+)
+
 # Opciones de GLFW: no compilar sus docs/tests/examples.
 # GLFW crea un target 'docs' propio si encuentra Doxygen, que colisiona con el
 # nuestro. Apagarlos evita la colisión y acelera el build.
@@ -94,7 +102,7 @@ set(DOCTEST_WITH_MAIN_IN_STATIC_LIB OFF CACHE BOOL "" FORCE)
 option(EFENGINE_BUILD_TESTS "Compilar los tests unitarios de efengine" ON)
 
 # Registrar librerías
-FetchContent_MakeAvailable(glfw glad glm stb)
+FetchContent_MakeAvailable(glfw glad glm stb enet)
 if(EFENGINE_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
 endif()
