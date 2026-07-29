@@ -11,6 +11,7 @@ target_sources(efenet PRIVATE
     Simulation.cpp
     Protocol.cpp
     Prediction.cpp
+    SnapshotBuffer.cpp
 )
 
 target_include_directories(efenet PUBLIC ${CMAKE_SOURCE_DIR}/src)
