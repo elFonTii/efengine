@@ -1,8 +1,39 @@
 #include "ResourceManager.h"
 #include <efengine/resources/ModelLoader.h>
 #include <efengine/resources/FileIO.h>
+#include <efengine/resources/ShaderPreprocessor.h>
 #include <efengine/core/Assert.h>
+#include <efengine/core/Log.h>
 #include <utility>
+
+namespace {
+
+    // Resolver de includes: los paths son relativos a assets/shaders/, asi que
+    // un shader escribe #include "common/cubeface.glsl" sin importar en que
+    // subcarpeta viva el.
+    efengine::resources::IncludeResolver ShaderIncludeResolver() {
+        return [](const std::string& path) -> std::optional<std::string> {
+            const std::string full = "assets/shaders/" + path;
+            return efengine::resources::FileIO::ReadText(full.c_str());
+        };
+    }
+
+    // Lee un shader y le resuelve los includes. nullopt si falla cualquiera de
+    // las dos cosas: el error concreto ya lo logueo quien fallo.
+    std::optional<std::string> ReadShaderWithIncludes(const char* path) {
+        const std::optional<std::string> raw = efengine::resources::FileIO::ReadText(path);
+        if (!raw) return std::nullopt;
+
+        std::optional<std::string> spliced =
+            efengine::resources::SpliceIncludes(*raw, ShaderIncludeResolver());
+        if (!spliced) {
+            EF_LOG_ERROR("ResourceManager: fallo el preprocesado de includes de '%s'", path);
+            return std::nullopt;
+        }
+        return spliced;
+    }
+
+}
 
 namespace efengine {
 namespace resources {
@@ -57,8 +88,8 @@ namespace resources {
             return &it->second;
         } else {
             // cargar vertex y fragment
-            auto vertex = FileIO::ReadText(vertPath);
-            auto fragment = FileIO::ReadText(fragPath);
+            auto vertex = ReadShaderWithIncludes(vertPath);
+            auto fragment = ReadShaderWithIncludes(fragPath);
             if(!vertex || !fragment) return null;
 
             // crear shader
@@ -81,7 +112,7 @@ namespace resources {
             return &it->second;
         } else {
             // cargar vertex y fragment
-            auto compute = FileIO::ReadText(computePath);
+            auto compute = ReadShaderWithIncludes(computePath);
             if(!compute) return null;
 
             // crear compute shader
