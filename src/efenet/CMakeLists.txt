@@ -6,7 +6,7 @@
 # módulos acá adentro, no compila.
 add_library(efenet STATIC)
 
-target_sources(efenet PRIVATE Version.cpp Simulation.cpp)
+target_sources(efenet PRIVATE Version.cpp Simulation.cpp Protocol.cpp)
 
 target_include_directories(efenet PUBLIC ${CMAKE_SOURCE_DIR}/src)
 

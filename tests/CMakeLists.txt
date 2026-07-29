@@ -38,6 +38,7 @@ add_executable(efengine_tests
     serialization/SceneSerializer.test.cpp
     efenet/State.test.cpp
     efenet/Simulation.test.cpp
+    efenet/Protocol.test.cpp
 )
 
 # Include path raíz: los tests consumen el motor como <efengine/...>.
