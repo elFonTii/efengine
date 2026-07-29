@@ -53,6 +53,9 @@ layout(binding = 9)  uniform samplerCube uIrradianceMap;
 layout(binding = 10) uniform samplerCube uPrefilterMap;
 layout(binding = 11) uniform sampler2D   uBrdfLUT;
 
+// Bloque de DDGI (binding 5), samplers 12/13, y toda su matematica.
+#include "ddgi/common.glsl"
+
 // Espeja renderer::TextureSlot: un bit por slot en uMapMask.x.
 const uint SLOT_ALBEDO    = 0u;
 const uint SLOT_NORMAL    = 1u;
@@ -252,18 +255,37 @@ void main() {
     vec3 F  = FresnelSchlickRoughness(NdotV, F0, roughness);
     vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);   // los metales no tienen difuso
 
-    vec3 ambient = vec3(0.0);
-    if (uIblParams.x > 0.5) {
-        vec3 diffuseIBL = kD * texture(uIrradianceMap, N).rgb * albedo;
+    // --- Luz indirecta ---
+    // La difusa y la especular se separan porque solo la difusa la reemplaza
+    // DDGI. Antes las dos vivian dentro de un solo if de IBL; ahora la difusa
+    // tiene que poder venir de DDGI aunque no haya entorno IBL cargado.
 
-        // El vector reflejado indexa el prefiltrado; la rugosidad elige el mip.
-        vec3 R          = reflect(-V, N);
+    // Difusa: DDGI reemplaza al IBL adentro del volumen. NO se suma -- sumar
+    // contaria la misma luz dos veces y lavaria todo. El fade sobre la celda del
+    // borde evita la costura dura donde el volumen termina y queda solo el IBL.
+    vec3 iblIrr = (uIblParams.x > 0.5)
+                ? texture(uIrradianceMap, N).rgb * uIblParams.y
+                : vec3(0.0);
+
+    vec3 indirectDiffuse = iblIrr;
+    if (DdgiEnabled()) {
+        float fade = DdgiVolumeFade(vFragPos);
+        if (fade > 0.0) {
+            vec3 ddgiIrr = SampleDdgiIrradiance(vFragPos, N, V) * uDdgiParams0.y;
+            indirectDiffuse = mix(iblIrr, ddgiIrr, fade);
+        }
+    }
+
+    // Especular: sigue siendo IBL sin cambios. Eso lo completa SSR (ciclo 3).
+    vec3 specularIBL = vec3(0.0);
+    if (uIblParams.x > 0.5) {
+        vec3 R           = reflect(-V, N);
         vec3 prefiltered = textureLod(uPrefilterMap, R, roughness * uIblParams.z).rgb;
         vec2 ab          = texture(uBrdfLUT, vec2(NdotV, roughness)).rg;
-        vec3 specularIBL = prefiltered * (F * ab.x + ab.y);
-
-        ambient = (diffuseIBL + specularIBL) * ao * uIblParams.y;
+        specularIBL = prefiltered * (F * ab.x + ab.y) * uIblParams.y;
     }
+
+    vec3 ambient = (kD * indirectDiffuse * albedo + specularIBL) * ao;
 
     // --- Emision propia: no la toca el AO, ni la sombra, ni la intensidad de IBL ---
     // Sale en HDR lineal, así que florece con bloom recién cuando la intensidad
