@@ -41,6 +41,7 @@ add_executable(efengine_tests
     efenet/Protocol.test.cpp
     efenet/Prediction.test.cpp
     efenet/SnapshotBuffer.test.cpp
+    efenet/World.test.cpp
 )
 
 # Include path raíz: los tests consumen el motor como <efengine/...>.
