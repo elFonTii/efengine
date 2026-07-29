@@ -51,6 +51,33 @@ efengine/
 
 ---
 
+## efenet (PoC de red multijugador)
+
+Capa de red cliente-servidor **authoritative** sobre ENet. Vive en `src/efenet/`
+como librería hermana de `efengine`: linkea solo `efengine_core`,
+`efengine_math`, `efengine_binary` y ENet — **nunca** renderer ni scene, y ese
+invariante de build es lo que garantiza que el servidor sea headless.
+
+- **`efenet_server`** — servidor headless, simula a 60 Hz y difunde snapshots a
+  20 Hz. No linkea OpenGL (verificable con `dumpbin /dependents`).
+- **`efenet_client`** — ventana y render, con el render loop y el network loop
+  (paso fijo de 60 Hz) separados en el mismo hilo.
+
+Compensación de latencia: predicción del lado del cliente, reconciliación por
+replay de inputs, interpolación de los remotos 100 ms en el pasado, y
+extrapolación con tope de 250 ms.
+
+El panel de ImGui trae un simulador de latencia/jitter/pérdida y un switch por
+técnica: apagarlas de a una muestra qué aporta cada una.
+
+```powershell
+.\build\bin\Debug\efenet_server.exe
+.\build\bin\Debug\efenet_client.exe            # localhost
+.\build\bin\Debug\efenet_client.exe 192.168.1.5  # otra maquina
+```
+
+---
+
 ## División de trabajo
 
 Este proyecto se desarrolla en pareja: una persona y un agente.
