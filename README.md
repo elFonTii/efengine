@@ -11,6 +11,10 @@ Motor gráfico en **C++17 / OpenGL 4.5 Core**, construido desde cero como proyec
 - **Tests:** doctest + CTest
 
 ---
+### 2026-30-07
+IBL + DDGI
+<img width="1916" height="1026" alt="image" src="https://github.com/user-attachments/assets/e50cc748-67d5-40ce-b03f-daafa469b616" />
+
 ### 2026-26-07
 <img width="1919" height="1031" alt="image" src="https://github.com/user-attachments/assets/5144fd21-405d-4fd4-ac80-02e6f254d224" />
 
