@@ -172,7 +172,8 @@ TEST_CASE("Layout std140: los offsets de DdgiBlock son los calculados a mano") {
     CHECK(offsetof(DdgiBlock, updateRange) == 64u);
     CHECK(offsetof(DdgiBlock, params0)     == 80u);
     CHECK(offsetof(DdgiBlock, params1)     == 96u);
-    CHECK(sizeof(DdgiBlock) == 112u);
+    CHECK(offsetof(DdgiBlock, params2)     == 112u);
+    CHECK(sizeof(DdgiBlock) == 128u);
     CHECK(sizeof(DdgiBlock) % 16u == 0u);
 }
 
@@ -261,4 +262,37 @@ TEST_CASE("MakeDdgiBlock: la grilla se sanea antes de empaquetar") {
 
     CHECK(b.gridCounts.x == 1);
     CHECK(b.gridSpacing.x > 0.0f);
+}
+
+TEST_CASE("MakeDdgiBlock: params2 lleva maxDistance y los dos umbrales de backface") {
+    DdgiGrid grid;
+    grid.origin  = glm::vec3(0.0f);
+    grid.spacing = glm::vec3(1.0f);
+    grid.counts  = glm::ivec3(2, 2, 2);
+
+    DdgiSettings s;
+    s.maxDistance       = 12.5f;
+    s.backfaceFadeStart = 0.2f;
+    s.backfaceFadeEnd   = 0.4f;
+
+    const DdgiBlock b = MakeDdgiBlock(grid, s, UpdateRange{}, true);
+
+    CHECK(b.params2.x == doctest::Approx(12.5f));
+    CHECK(b.params2.y == doctest::Approx(0.2f));
+    CHECK(b.params2.z == doctest::Approx(0.4f));
+    CHECK(b.params2.w == doctest::Approx(0.0f));
+}
+
+TEST_CASE("DdgiSettings: los umbrales de backface arrancan con start < end") {
+    const DdgiSettings s;
+    CHECK(s.backfaceFadeStart == doctest::Approx(0.15f));
+    CHECK(s.backfaceFadeEnd   == doctest::Approx(0.30f));
+    CHECK(s.backfaceFadeStart < s.backfaceFadeEnd);
+}
+
+TEST_CASE("Layout std140: DdgiBlock sigue siendo multiplo de 16 con params2") {
+    CHECK(sizeof(DdgiBlock) % 16u == 0u);
+    CHECK(offsetof(DdgiBlock, params0) == 80u);
+    CHECK(offsetof(DdgiBlock, params1) == 96u);
+    CHECK(offsetof(DdgiBlock, params2) == 112u);
 }

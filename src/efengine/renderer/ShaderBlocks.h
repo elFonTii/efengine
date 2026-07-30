@@ -87,6 +87,7 @@ namespace renderer {
         glm::ivec4 updateRange;   // x=firstProbe, y=count, z=faceSize, w=probesPerFrame
         glm::vec4  params0;       // hysteresis, intensity, normalBias, viewBias
         glm::vec4  params1;       // enabled, chebyshevSharpness, _, _
+        glm::vec4  params2;       // maxDistance, backfaceFadeStart, backfaceFadeEnd, _
     };
 
     // ── Funciones puras que arman los bloques ──────────────────────────────
@@ -101,8 +102,10 @@ namespace renderer {
     LightsBlock MakeLightsBlock(const std::vector<PointLight>& lights,
                                 const DirectionalLight& sun);
 
-    // maxDistance NO viaja en el bloque: solo el C++ lo usa, para el far plane de
-    // la proyeccion de captura. Meterlo seria un campo muerto.
+    // maxDistance SI viaja en el bloque (params2.x). Ademas del far plane de la
+    // captura, es el techo con el que blend_distance.comp recorta las distancias
+    // y con el que debug_probe.frag las normaliza: antes cada uno tenia su propia
+    // constante 4*spacing y el slider del panel no movia ninguna de las dos.
     //
     // atlasValid apaga params1.x aunque settings.enabled este en true: es el caso
     // "no hay DdgiPass" (fallo de shader), donde pbr.frag tiene que caer a IBL

@@ -38,7 +38,7 @@ namespace renderer {
     static_assert(sizeof(ShadowPassBlock) == 64u, "ShadowPassBlock: tamano std140 roto");
     static_assert(sizeof(PostParamsBlock) == 16u, "PostParamsBlock: tamano std140 roto");
 
-    static_assert(sizeof(DdgiBlock) == 112u, "DdgiBlock: tamano std140 inesperado");
+    static_assert(sizeof(DdgiBlock) == 128u, "DdgiBlock: tamano std140 inesperado");
     static_assert(offsetof(DdgiBlock, gridOrigin)  ==  0u, "DdgiBlock: offset de gridOrigin");
     static_assert(offsetof(DdgiBlock, gridSpacing) == 16u, "DdgiBlock: offset de gridSpacing");
     static_assert(offsetof(DdgiBlock, gridCounts)  == 32u, "DdgiBlock: offset de gridCounts");
@@ -46,6 +46,7 @@ namespace renderer {
     static_assert(offsetof(DdgiBlock, updateRange) == 64u, "DdgiBlock: offset de updateRange");
     static_assert(offsetof(DdgiBlock, params0)     == 80u, "DdgiBlock: offset de params0");
     static_assert(offsetof(DdgiBlock, params1)     == 96u, "DdgiBlock: offset de params1");
+    static_assert(offsetof(DdgiBlock, params2)     == 112u, "DdgiBlock: offset de params2");
 
     // El array del bloque tiene que tener exactamente los slots que el motor cree.
     static_assert(Renderer::kMaxLights == 4u,
@@ -121,6 +122,9 @@ namespace renderer {
                               settings.normalBias, settings.viewBias);
         b.params1 = glm::vec4((settings.enabled && atlasValid) ? 1.0f : 0.0f,
                               settings.chebyshevSharpness, 0.0f, 0.0f);
+        b.params2 = glm::vec4(settings.maxDistance,
+                              settings.backfaceFadeStart,
+                              settings.backfaceFadeEnd, 0.0f);
         return b;
     }
 
