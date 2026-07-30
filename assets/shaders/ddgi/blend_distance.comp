@@ -1,0 +1,91 @@
+#version 450 core
+// Integra el target de captura al atlas de momentos de distancia.
+//
+// Guarda media y media^2 de la distancia por direccion. De estos dos numeros
+// sale la varianza, y de la varianza el test de Chebyshev que mata el light
+// leaking. Este mapa ES el invento clave de DDGI sobre los sistemas de probes
+// anteriores.
+//
+// Tile mas grande que el de irradiancia: la visibilidad tiene bordes duros y
+// necesita mas resolucion angular que una senal difusa.
+layout(local_size_x = 18, local_size_y = 18, local_size_z = 1) in;   // kDistanceTile + 2
+
+layout(binding = 0) uniform sampler2D uCapture;
+layout(rg16f, binding = 0) uniform image2D uDistanceAtlas;
+
+#include "ddgi/common.glsl"
+
+void main() {
+    int slot = int(gl_WorkGroupID.x);
+    if (slot >= uDdgiRange.y) return;
+
+    int total = uDdgiCounts.w;
+    int probe = (uDdgiRange.x + slot) % total;
+
+    int tile     = uDdgiAtlas.w;                  // interior, 16
+    int bordered = tile + 2 * kDdgiBorder;        // 18
+
+    ivec2 local = ivec2(gl_LocalInvocationID.xy);
+
+    // Mismo espejo de borde que blend_irradiance.comp.
+    ivec2 inner = local - ivec2(kDdgiBorder);
+    if (inner.x < 0 || inner.x >= tile || inner.y < 0 || inner.y >= tile) {
+        if (inner.x < 0)          { inner.x = 0;        inner.y = tile - 1 - inner.y; }
+        else if (inner.x >= tile) { inner.x = tile - 1; inner.y = tile - 1 - inner.y; }
+        if (inner.y < 0)          { inner.y = 0;        inner.x = tile - 1 - inner.x; }
+        else if (inner.y >= tile) { inner.y = tile - 1; inner.x = tile - 1 - inner.x; }
+        inner = clamp(inner, ivec2(0), ivec2(tile - 1));
+    }
+
+    vec2 oct    = (vec2(inner) + 0.5) / float(tile) * 2.0 - 1.0;
+    vec3 dirOct = OctDecode(oct);
+
+    int faceSize = uDdgiRange.z;
+
+    // El exponente concentra el lobulo: para visibilidad conviene mucho mas
+    // angosto que el coseno de la irradiancia, porque un borde de oclusion es
+    // una discontinuidad y promediarla ancha la difumina y reintroduce leaking.
+    const float kSharpness = 50.0;
+
+    float suma      = 0.0;
+    float suma2     = 0.0;
+    float sumaPesos = 0.0;
+
+    for (int face = 0; face < 6; ++face) {
+        for (int y = 0; y < faceSize; ++y) {
+            for (int x = 0; x < faceSize; ++x) {
+                vec2 ndc = (vec2(x, y) + 0.5) / float(faceSize) * 2.0 - 1.0;
+                vec3 dirCap = dirForFace(uint(face), ndc);
+
+                float coseno = dot(dirCap, dirOct);
+                if (coseno <= 0.0) continue;
+
+                float r2 = 1.0 + ndc.x * ndc.x + ndc.y * ndc.y;
+                float solidAngle = 1.0 / (r2 * sqrt(r2));
+
+                ivec2 capTexel = ivec2(face * faceSize + x, slot * faceSize + y);
+                float dist = texelFetch(uCapture, capTexel, 0).a;
+
+                // El cielo y lo que no pega nada vienen con 1e4. Se recorta al
+                // rango util: mas alla de unos pocos spacings, "lejos" es lejos
+                // y guardar 1e4 solo destruye la precision del half-float.
+                float maxDist = 4.0 * max(max(uDdgiSpacing.x, uDdgiSpacing.y), uDdgiSpacing.z);
+                dist = min(dist, maxDist);
+
+                float peso = pow(coseno, kSharpness) * solidAngle;
+                suma      += dist * peso;
+                suma2     += dist * dist * peso;
+                sumaPesos += peso;
+            }
+        }
+    }
+
+    vec2 capturado = (sumaPesos > 0.0) ? vec2(suma, suma2) / sumaPesos : vec2(0.0);
+
+    ivec2 dst = DdgiTileOrigin(probe, bordered) + local;
+    vec2  previo = imageLoad(uDistanceAtlas, dst).rg;
+
+    vec2 resultado = mix(capturado, previo, uDdgiParams0.x);
+
+    imageStore(uDistanceAtlas, dst, vec4(resultado, 0.0, 0.0));
+}

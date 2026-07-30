@@ -85,6 +85,8 @@ namespace application {
             // Vacios si falto algun shader de DDGI: el frame sigue con IBL puro.
             std::optional<renderer::DdgiPass>      m_ddgiPass;
             std::optional<renderer::DdgiDebugPass> m_ddgiDebug;
+            // Cache del ResourceManager: la esfera del volcado de probes.
+            const renderer::Model* m_ddgiProbeMesh = null;
 
     };
 

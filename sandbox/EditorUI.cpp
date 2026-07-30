@@ -117,6 +117,8 @@ namespace {
         }
 
         if (ImGui::BeginMenu("Ventanas")) {
+            ImGui::MenuItem("UI",               nullptr, &st.showUI);
+            ImGui::Separator();
             ImGui::MenuItem("Jerarquia",        nullptr, &st.showHierarchy);
             ImGui::MenuItem("Inspector",        nullptr, &st.showInspector);
             ImGui::MenuItem("Materiales",       nullptr, &st.showMaterials);
@@ -391,9 +393,9 @@ void FocusSelection(EditorContext& ctx) {
 void DrawEditor(EditorContext& ctx) {
     ctx.state.stats.Push(ctx.app.DeltaTime());
 
-    // La barra va primero: el dockspace se ancla al area de trabajo, que es lo
-    // que queda del viewport despues de descontarla.
     drawMainMenuBar(ctx);
+
+    if (!ctx.state.showUI) return;
 
     // Y el dockspace antes que los paneles: cada Begin() de abajo consulta en que
     // nodo esta dockeado, y ese nodo tiene que existir ya.

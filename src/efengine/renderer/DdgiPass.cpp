@@ -178,10 +178,6 @@ namespace renderer {
     void DdgiPass::CaptureProbe(const scene::SceneGraph& scene, const ShadowContext& shadow,
                                 const IblContext& ibl, const Cubemap* env,
                                 u32 probeIndex, u32 slot) {
-        // La escena todavia no se dibuja en la captura: eso es la tarea 9. Por
-        // ahora solo el cielo, que es lo que hace verificable el layout de tiles.
-        (void)scene;
-
         const glm::vec3 center = ProbeWorldPosition(m_atlasGrid, probeIndex);
 
         // 90 grados y aspect 1: las 6 caras cubren la esfera exacta y sin solape.
@@ -209,6 +205,15 @@ namespace renderer {
                 env->Bind(0);
                 m_renderer.Draw(m_quad, *m_shaders.captureSky);
             }
+
+            // La escena con el shader de captura. Submit sigue subiendo el
+            // MaterialBlock y bindeando texturas: la captura necesita el albedo
+            // de cada material, pero un solo programa. Submit aplica
+            // OpaqueState() por malla, asi que el estado del skybox no sobrevive.
+            for (const scene::RenderItem& item : scene.Renderables()) {
+                if (item.model == null || item.materials == null) continue;
+                m_renderer.Submit(*item.model, *item.materials, item.world, m_shaders.capture);
+            }
         }
     }
 
@@ -230,6 +235,12 @@ namespace renderer {
         if (m_range.nextCursor <= m_cursor && m_cursor != 0u) m_sweepsDone += 1u;
         m_cursor = m_range.nextCursor;
 
+        // El shadow map a su unidad fija (la misma 8 que usa BeginScene). Hay que
+        // bindearlo aca porque este pase corre ANTES de BeginScene, que es quien
+        // normalmente lo hace: sin esto, la primera captura sombrearia contra una
+        // unidad sin contenido y saldria todo en sombra.
+        if (shadow.map != null) shadow.map->Bind(8);
+
         efecom::BindRenderTarget(m_captureFbo, kCaptureWidth, kCaptureHeight);
         efecom::SetClearColor(0.0f, 0.0f, 0.0f, kFarDistance);
         efecom::Clear(efecom::ClearMask::ColorDepth);
@@ -238,6 +249,41 @@ namespace renderer {
             const u32 probe = (m_range.first + slot) % total;
             CaptureProbe(scene, shadow, ibl, env, probe, slot);
         }
+
+        // El blend. La captura escribio por rasterizacion y el compute la lee por
+        // sampler: GL sincroniza eso solo, sin IssueMemoryBarrier. El barrier SI
+        // hace falta despues de los imageStore, antes de que pbr.frag samplee.
+        const bool primerBarrido = (m_sweepsDone == 0u);
+
+        // Hasta completar el primer barrido se fuerza hysteresis 0: la primera
+        // escritura de cada probe SOBREESCRIBE en vez de mezclar. Sin esto, el
+        // negro del clear inicial tardaria cientos de frames en salir con
+        // hysteresis 0.97.
+        DdgiSettings blendSettings = m_settings;
+        if (primerBarrido) blendSettings.hysteresis = 0.0f;
+
+        const DdgiBlock block = MakeDdgiBlock(m_atlasGrid, blendSettings, m_range, true);
+        m_renderer.SetDdgiBlock(block);
+
+        m_shaders.blendIrradiance->Bind();
+        m_capture.Bind(0);
+        m_irradiance.BindImage(0, 0, efecom::ImageAccess::ReadWrite,
+                               efecom::TextureFormat::RGBA16F);
+        efecom::DispatchCompute(m_range.count, 1u, 1u);
+
+        // El segundo blend comparte el DdgiBlock que ya se subio: no hay que
+        // re-subirlo. Escribe otra imagen, asi que tampoco necesita barrier
+        // entre los dos dispatches.
+        m_shaders.blendDistance->Bind();
+        m_capture.Bind(0);
+        m_distance.BindImage(0, 0, efecom::ImageAccess::ReadWrite,
+                             efecom::TextureFormat::RG16F);
+        efecom::DispatchCompute(m_range.count, 1u, 1u);
+
+        efecom::IssueMemoryBarrier(efecom::Barrier::ShaderImageAccess
+                                 | efecom::Barrier::TextureFetch);
+
+        m_blendedOnce = true;
     }
 
     DdgiContext DdgiPass::Context() const {

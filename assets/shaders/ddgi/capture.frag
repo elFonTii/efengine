@@ -1,0 +1,119 @@
+#version 450 core
+// Sombreado de la captura de probes. Difuso PURO: sin Cook-Torrance, sin GGX,
+// sin normal map, sin POM. No es una copia degradada de pbr.frag -- es un
+// modelo de sombreado distinto, el unico que la irradiancia difusa usa. A
+// 16x16 por cara, el detalle sub-texel se promedia igual.
+//
+// Escribe radiancia en rgb y DISTANCIA en el alfa: de ahi sale el test de
+// Chebyshev que mata el light leaking.
+//
+// Reusa pbr.vert verbatim, asi que recibe las mismas varyings.
+
+in vec3 vFragPos;
+in vec2 vUV;
+in mat3 vTBN;
+
+out vec4 FragColor;
+
+#define MAX_LIGHTS 4
+
+layout(std140, binding = 0) uniform Frame {
+    mat4 uView;
+    mat4 uProjection;
+    mat4 uLightSpaceMatrix;
+    mat4 uInvViewProjRot;
+    vec4 uViewPos;        // .xyz = CENTRO DEL PROBE en este pase, no la camara
+    vec4 uShadowParams;   // x=enabled, y=biasMin, z=biasMax
+    vec4 uIblParams;
+};
+
+layout(std140, binding = 1) uniform Lights {
+    vec4  uLightPositions[MAX_LIGHTS];
+    vec4  uLightColors[MAX_LIGHTS];
+    vec4  uLightDir;
+    vec4  uDirLightColor;
+    ivec4 uLightCounts;
+};
+
+layout(std140, binding = 3) uniform MaterialParams {
+    vec4  uAlbedoTint;
+    vec4  uEmissiveTint;
+    vec4  uScalars0;      // metallic, roughness, aoStrength, heightScale
+    vec4  uScalars1;      // alphaCutoff, emissiveIntensity, normalStrength, _
+    uvec4 uMapMask;
+};
+
+layout(binding = 0) uniform sampler2D uAlbedoMap;
+layout(binding = 6) uniform sampler2D uOpacityMap;
+layout(binding = 7) uniform sampler2D uEmissiveMap;
+layout(binding = 8) uniform sampler2D uShadowMap;
+
+#include "ddgi/common.glsl"
+
+const uint SLOT_ALBEDO   = 0u;
+const uint SLOT_OPACITY  = 6u;
+const uint SLOT_EMISSIVE = 7u;
+
+bool hasMap(uint slot) { return (uMapMask.x & (1u << slot)) != 0u; }
+
+// Misma logica que ShadowFactor de pbr.frag: PCF 3x3 con bias slope-scaled.
+float ShadowFactor(vec3 N, vec3 L) {
+    vec4 lp   = uLightSpaceMatrix * vec4(vFragPos, 1.0);
+    vec3 proj = lp.xyz / lp.w;
+    proj      = proj * 0.5 + 0.5;
+    if (proj.z > 1.0) return 0.0;
+
+    float bias   = max(uShadowParams.z * (1.0 - dot(N, L)), uShadowParams.y);
+    float shadow = 0.0;
+    vec2  texel  = 1.0 / vec2(textureSize(uShadowMap, 0));
+    for (int x = -1; x <= 1; ++x) {
+        for (int y = -1; y <= 1; ++y) {
+            float closest = texture(uShadowMap, proj.xy + vec2(x, y) * texel).r;
+            shadow += (proj.z - bias > closest) ? 1.0 : 0.0;
+        }
+    }
+    return shadow / 9.0;
+}
+
+void main() {
+    float alpha = hasMap(SLOT_OPACITY) ? texture(uOpacityMap, vUV).r : 1.0;
+    if (alpha < uScalars1.x) discard;
+
+    vec3 albedo = hasMap(SLOT_ALBEDO)
+                ? texture(uAlbedoMap, vUV).rgb * uAlbedoTint.rgb
+                : uAlbedoTint.rgb;
+
+    // Normal geometrica: el normal map es detalle de alta frecuencia que la
+    // irradiancia difusa promedia igual.
+    vec3 N = normalize(vTBN[2]);
+    if (!gl_FrontFacing) N = -N;
+
+    // uViewPos es el centro del probe en este pase.
+    float dist = length(uViewPos.xyz - vFragPos);
+
+    // --- Luz directa, Lambert puro ---
+    vec3 direct = vec3(0.0);
+    for (int i = 0; i < uLightCounts.x; ++i) {
+        vec3  d   = uLightPositions[i].xyz - vFragPos;
+        float dd  = max(dot(d, d), 0.0001);
+        vec3  L   = d / sqrt(dd);
+        direct += albedo / kDdgiPI * max(dot(N, L), 0.0) * uLightColors[i].rgb / dd;
+    }
+    {
+        vec3  Ld     = normalize(-uLightDir.xyz);
+        float shadow = (uShadowParams.x > 0.5) ? ShadowFactor(N, Ld) : 0.0;
+        direct += (1.0 - shadow) * albedo / kDdgiPI * max(dot(N, Ld), 0.0)
+                * uDirLightColor.rgb;
+    }
+
+    // --- El rebote: irradiancia del atlas del FRAME ANTERIOR ---
+    // De aca salen los rebotes infinitos, gratis: la captura corre antes del
+    // blend de este frame, asi que lee lo que el blend anterior dejo. kD = 1
+    // porque es difuso puro. La tarea 14 enciende esta linea.
+    vec3 bounce = vec3(0.0);
+
+    vec3 emissive = (hasMap(SLOT_EMISSIVE) ? texture(uEmissiveMap, vUV).rgb : vec3(1.0))
+                  * uEmissiveTint.rgb * uScalars1.y;
+
+    FragColor = vec4(direct + bounce + emissive, dist);
+}

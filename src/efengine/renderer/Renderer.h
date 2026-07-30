@@ -53,6 +53,12 @@ namespace renderer {
             // si corriera despues, pisaria la camara.
             void SetFrameBlock(const FrameBlock& block) const;
 
+            // Sube un bloque Ddgi arbitrario (binding 5). Publico porque los
+            // blends de DDGI corren antes de BeginScene y necesitan el bloque con
+            // SU updateRange y su hysteresis forzada del primer barrido, que no
+            // son los que el frame le va a dar despues a pbr.frag.
+            void SetDdgiBlock(const DdgiBlock& block) const;
+
         private:
             // Un UBO por frecuencia de actualizacion. El de material vive aca y no
             // en Material a proposito: Material se construye headless en los tests

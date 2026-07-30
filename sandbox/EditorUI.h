@@ -32,6 +32,7 @@ namespace sandbox {
         bool animateSun   = false;
         u32  spawnCounter = 0;
 
+        bool showUI        = false;
         bool showHierarchy = true;
         bool showInspector = true;
         bool showMaterials = true;

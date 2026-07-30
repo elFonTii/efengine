@@ -91,9 +91,24 @@ namespace application {
         m_ddgiPass = renderer::DdgiPass::Create(m_renderer, m_fullscreenQuad, ddgiShaders);
         if (!m_ddgiPass) EF_LOG_ERROR("Application: no se pudo crear el DdgiPass");
 
-        if (renderer::Shader* blit = m_resources.GetShader("ddgi_debug_blit",
-                "assets/shaders/screen.vert", "assets/shaders/ddgi/debug_blit.frag")) {
-            m_ddgiDebug.emplace(m_renderer, m_fullscreenQuad, blit);
+        renderer::Shader* ddgiBlit = m_resources.GetShader("ddgi_debug_blit",
+                "assets/shaders/screen.vert", "assets/shaders/ddgi/debug_blit.frag");
+        renderer::Shader* ddgiProbe = m_resources.GetShader("ddgi_debug_probe",
+                "assets/shaders/ddgi/debug_probe.vert", "assets/shaders/ddgi/debug_probe.frag");
+        if (ddgiBlit && ddgiProbe) {
+            m_ddgiDebug.emplace(m_renderer, m_fullscreenQuad, ddgiBlit, ddgiProbe);
+        } else {
+            EF_LOG_ERROR("Application: no se pudo crear el DdgiDebugPass");
+        }
+
+        // La esfera del volcado de probes. Si no carga, el modo de esferas se
+        // saltea; el resto del debug de DDGI sigue funcionando.
+        m_ddgiProbeMesh = m_resources.GetModel("assets/models/sphere.fbx");
+        if (m_ddgiProbeMesh != null) {
+            // El .fbx no viene unitario; DrawProbes divide por esto para que
+            // debugRadius sea de verdad un radio en metros.
+            const glm::vec3 e = m_ddgiProbeMesh->bounds().Extents();
+            EF_LOG_INFO("Application: sphere.fbx semi-extents (%.3f, %.3f, %.3f)", e.x, e.y, e.z);
         }
 
         m_window.SetEventListener(&m_input);
@@ -184,9 +199,13 @@ namespace application {
 
         // El volcado del target de captura va sobre la imagen HDR de la escena,
         // antes del post: es un instrumento de debug, no parte de la imagen.
-        if (m_ddgiPass && m_ddgiDebug && m_ddgiPass->settings().debugProbes
-            && m_ddgiPass->settings().debugMode == 2u) {
-            m_ddgiDebug->DrawCaptureBlit(m_ddgiPass->captureTarget(), false);
+        if (m_ddgiPass && m_ddgiDebug && m_ddgiPass->settings().debugProbes) {
+            const renderer::DdgiSettings& ds = m_ddgiPass->settings();
+            if (ds.debugMode == 2u) {
+                m_ddgiDebug->DrawCaptureBlit(m_ddgiPass->captureTarget(), false);
+            } else if (m_ddgiProbeMesh != null) {
+                m_ddgiDebug->DrawProbes(ds.grid, ds, *m_ddgiProbeMesh);
+            }
         }
 
         // Ya no hay "desbindear": el post chain declara su propio destino por pase.
