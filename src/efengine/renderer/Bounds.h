@@ -37,5 +37,13 @@ namespace renderer {
 
     AABB ComputeBounds(const std::vector<Vertex>& vertices);
 
+    // Suma un item a una AABB de mundo que se esta acumulando: transforma 'local'
+    // por 'world' y la mergea sobre 'acc'.
+    //
+    // Un 'local' invalido se ignora, y ese chequeo es el motivo de que la funcion
+    // exista: Transformed() sobre AABB::Empty() opera con +inf y -inf y devuelve
+    // NaN, que se propaga por todos los Merge posteriores.
+    AABB AccumulateBounds(const AABB& acc, const AABB& local, const glm::mat4& world);
+
 }
 }

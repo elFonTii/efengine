@@ -1,11 +1,17 @@
 #include "EditorUI.h"
 
 #include "AuthoringUI.h"
+#include "TestScene.h"
+#include "SunGizmo.h"
 
 #include <efengine/application/Application.h>
 #include <efengine/renderer/BloomPass.h>
 #include <efengine/renderer/FxaaPass.h>
 #include <efengine/renderer/ShadowPass.h>
+#include <efengine/renderer/DdgiPass.h>
+#include <efengine/renderer/DdgiSettings.h>
+#include <efengine/renderer/DdgiVolume.h>
+#include <efengine/renderer/Bounds.h>
 #include <efengine/resources/SceneAssets.h>
 #include <efengine/renderer/Model.h>
 #include <efengine/scene/Camera.h>
@@ -24,6 +30,7 @@
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <typeinfo>
 #include <vector>
 
@@ -100,6 +107,10 @@ namespace {
                 if (serialization::SceneSerializer::Load(kScenePath, ctx.scene, ctx.assets, ctx.rm, ctx.registry)) {
                     RefreshHandles(ctx);
                 }
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Sala de Cornell")) {
+                BuildCornellScene(ctx);   // hace Clear de escena y assets, y RefreshHandles
             }
             ImGui::Separator();
             // MenuItem con bool* devuelve true en el frame en que cambia, igual que Checkbox:
@@ -250,6 +261,124 @@ namespace {
         ImGui::End();
     }
 
+    void drawDdgiSection(EditorContext& ctx) {
+        if (!ImGui::CollapsingHeader("DDGI (iluminacion indirecta)")) return;
+
+        std::optional<renderer::DdgiPass>& opt = ctx.app.GetDdgiPass();
+        if (!opt.has_value()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+                               "DdgiPass no disponible: fallo la carga de shaders.");
+            ImGui::TextWrapped("La escena esta usando IBL puro. Mira la consola.");
+            return;
+        }
+        renderer::DdgiPass&     pass = *opt;
+        renderer::DdgiSettings& s    = pass.settings();
+
+        // -- Lo primero que hay que mirar cuando "no se ve la GI" --------------
+        if (pass.atlasValid()) {
+            ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "pbr.frag recibe los atlas: SI");
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "pbr.frag recibe los atlas: NO");
+            ImGui::TextWrapped("Hasta que corra un blend, DDGI aporta cero y la imagen es IBL puro.");
+        }
+
+        ImGui::Checkbox("Habilitado", &s.enabled);
+
+        // -- Grilla ------------------------------------------------------------
+        ImGui::SeparatorText("Grilla");
+        bool gridChanged = false;
+        gridChanged |= ImGui::DragFloat3("Origen",        &s.grid.origin.x,  0.1f);
+        gridChanged |= ImGui::DragFloat3("Espaciado",     &s.grid.spacing.x, 0.05f, 0.05f, 10.0f);
+        gridChanged |= ImGui::DragInt3  ("Probes por eje", &s.grid.counts.x, 1.0f,
+                                         1, renderer::kMaxProbesPerAxis);
+        ImGui::Text("Total: %u probes", renderer::ProbeCount(s.grid));
+
+        // Encajar la grilla a la escena resuelve de un click la clase entera de
+        // bug "la grilla no cubre la sala", que es con la que arranco este ciclo.
+        if (ImGui::Button("Encajar grilla a la escena")) {
+            const renderer::AABB& b = ctx.scene.WorldBounds();
+            if (b.Valid()) {
+                // Un 10% de margen hacia adentro: un probe DENTRO de una pared
+                // captura su interior y contamina a sus vecinos por el peso
+                // trilineal.
+                const glm::vec3 ext    = b.Extents() * 0.9f;
+                const glm::vec3 minPos = b.Center() - ext;
+                const glm::ivec3 n     = s.grid.counts;
+                s.grid.origin  = minPos;
+                s.grid.spacing = glm::vec3(
+                    n.x > 1 ? (2.0f * ext.x) / f32(n.x - 1) : 1.0f,
+                    n.y > 1 ? (2.0f * ext.y) / f32(n.y - 1) : 1.0f,
+                    n.z > 1 ? (2.0f * ext.z) / f32(n.z - 1) : 1.0f);
+                gridChanged = true;
+            }
+        }
+        if (gridChanged) {
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f),
+                               "Cambiar la grilla realoca los atlas y reinicia el barrido.");
+        }
+
+        // -- Update ------------------------------------------------------------
+        ImGui::SeparatorText("Update");
+        int perFrame = static_cast<int>(s.probesPerFrame);
+        if (ImGui::SliderInt("Probes por frame", &perFrame, 0,
+                             static_cast<int>(renderer::kMaxProbesPerFrame))) {
+            s.probesPerFrame = static_cast<u32>(perFrame);
+        }
+        ImGui::SliderFloat("Histeresis", &s.hysteresis, 0.0f, 0.995f, "%.3f");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Cuanto del valor viejo se conserva. ESTO es el denoise\n"
+                              "temporal de DDGI: no hace falta un denoiser aparte.\n"
+                              "Mas alto = mas estable y mas lento en reaccionar.");
+        }
+        ImGui::Checkbox("Congelar (freeze)", &s.freeze);
+        ImGui::SameLine();
+        if (ImGui::Button("Reset")) pass.Reset();
+
+        const u32 total = renderer::ProbeCount(s.grid);
+        const u32 framesPorBarrido = (s.probesPerFrame > 0u)
+                                   ? (total + s.probesPerFrame - 1u) / s.probesPerFrame
+                                   : 0u;
+        ImGui::Text("Cursor: %u / %u   Barridos: %u", pass.cursor(), total, pass.sweepsDone());
+        ImGui::Text("Frames por barrido: %u", framesPorBarrido);
+        ImGui::Text("Pase (CPU): %.3f ms", pass.lastMs());
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Tiempo de CPU emitiendo las llamadas, no de GPU\n"
+                              "ejecutandolas. Sirve para detectar que el round-robin\n"
+                              "se fue de escala, no como profiler.");
+        }
+
+        // -- Sampleo -----------------------------------------------------------
+        ImGui::SeparatorText("Sampleo");
+        ImGui::SliderFloat("Intensidad", &s.intensity, 0.0f, 4.0f);
+        ImGui::SliderFloat("Normal bias", &s.normalBias, 0.0f, 1.0f, "%.3f m");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Sube si la luz atraviesa las paredes.\n"
+                              "Baja si los rincones tienen una banda oscura.");
+        }
+        ImGui::SliderFloat("View bias", &s.viewBias, 0.0f, 1.0f, "%.3f m");
+        ImGui::SliderFloat("Chebyshev sharpness", &s.chebyshevSharpness, 1.0f, 16.0f);
+
+        // El rango sale de la escena, no de un numero fijo: con un tope de 100 m
+        // fijo, abrir el panel con maxDistance en 200 lo clamparia en silencio y
+        // cambiaria el far plane de la captura sin que nadie toque nada.
+        const renderer::AABB& bounds = ctx.scene.WorldBounds();
+        const f32 topeDist = bounds.Valid() ? glm::max(4.0f * bounds.Radius(), 10.0f) : 200.0f;
+        ImGui::SliderFloat("Distancia max (captura)", &s.maxDistance, 1.0f, topeDist, "%.1f m");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Far plane de la captura de probes. Muy alto tira la\n"
+                              "precision del depth; muy bajo deja la captura vacia.");
+        }
+
+        // -- Debug -------------------------------------------------------------
+        ImGui::SeparatorText("Debug");
+        ImGui::Checkbox("Mostrar probes", &s.debugProbes);
+        const char* modos[] = { "Irradiancia", "Media de distancia", "Target de captura",
+                                "Target de captura (distancia)" };
+        int modo = static_cast<int>(s.debugMode);
+        if (ImGui::Combo("Modo", &modo, modos, 4)) s.debugMode = static_cast<u32>(modo);
+        ImGui::SliderFloat("Radio de esfera", &s.debugRadius, 0.02f, 0.5f, "%.3f m");
+    }
+
     void drawRenderPanel(EditorContext& ctx) {
         EditorState& st = ctx.state;
 
@@ -310,6 +439,8 @@ namespace {
             ImGui::SliderFloat("Bias Min",       &sh.biasMin,       0.0f,  0.01f, "%.4f");
             ImGui::SliderFloat("Bias Max",       &sh.biasMax,       0.0f,  0.02f, "%.4f");
         }
+
+        drawDdgiSection(ctx);
 
         ImGui::End();
     }
@@ -410,6 +541,8 @@ void DrawEditor(EditorContext& ctx) {
     if (ctx.state.showMaterials) DrawMaterialsPanel(ctx);
     if (ctx.state.showRender)    drawRenderPanel(ctx);
     if (ctx.state.showStats)     drawStatsOverlay(ctx, dockId);
+
+    DrawSunGizmo(ctx, dockId);
 }
 
 } // namespace sandbox

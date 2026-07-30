@@ -33,6 +33,17 @@ namespace efecom {
     };
     DeviceInfo GetDeviceInfo();
 
+    // ── Diagnostico ─────────────────────────────────────────────────────────
+    // El backend emite mensajes del driver (glDebugMessageCallback) por aca.
+    // efecom no puede incluir el Log de efengine, asi que el motor instala un
+    // sink y los mensajes terminan en el mismo log que todo lo demas.
+    //
+    // Sin sink instalado los mensajes van a stderr, igual que EFCOM_ASSERT.
+    enum class MessageSeverity { Info, Warning, Error };
+    using MessageSink = void (*)(MessageSeverity severity, const char* message);
+
+    void SetMessageSink(MessageSink sink);
+
     // ── Estado global del pipeline ──────────────────────────────────────────
     void SetViewport(u32 x, u32 y, u32 width, u32 height);
     void SetClearColor(f32 r, f32 g, f32 b, f32 a);
@@ -43,6 +54,14 @@ namespace efecom {
         ColorDepth = Color | Depth,
     };
     void Clear(ClearMask mask);
+
+    // Limpia un framebuffer SIN bindearlo y sin tocar el viewport. Existe para
+    // los clears fuera de banda (limpiar un atlas, inicializar un target): con
+    // BindRenderTarget habria que restaurar el viewport a mano y nadie lo hace.
+    //
+    // Igual que Clear, fuerza las mascaras de escritura: glClearNamedFramebuffer*
+    // esta sujeto a los writemasks y al scissor, no los ignora.
+    void ClearFramebuffer(u32 framebuffer, ClearMask mask);
 
     // ── Estado de rasterizacion ────────────────────────────────────────────
     // Todo el estado que en Vulkan es inmutable dentro de un pipeline object va

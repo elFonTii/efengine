@@ -15,6 +15,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
+#include <chrono>
 #include <utility>
 
 namespace efengine {
@@ -65,7 +66,7 @@ namespace renderer {
         const u32 rbo = efecom::CreateDepthRenderbuffer(kCaptureWidth, kCaptureHeight);
         efecom::FramebufferDepthRenderbuffer(fbo, rbo);
 
-        EF_ASSERT(efecom::FramebufferComplete(fbo), "DdgiPass: FBO de captura incompleto");
+        EF_GPU_CHECK(efecom::FramebufferComplete(fbo), "DdgiPass: FBO de captura incompleto");
 
         EF_LOG_INFO("DdgiPass: %u probes, atlas irradiancia %dx%d, distancia %dx%d, captura %ux%u",
                     ProbeCount(grid), irrSize.x, irrSize.y, distSize.x, distSize.y,
@@ -124,16 +125,18 @@ namespace renderer {
     }
 
     void DdgiPass::ClearAtlas(const Texture& atlas) {
-        // El storage inmutable arranca con contenido INDEFINIDO. Se limpia con un
-        // FBO temporal, que es la unica forma de "clear image" que da el RHI
-        // actual sin agregarle nada.
+        // El storage inmutable arranca con contenido INDEFINIDO, y un mix con
+        // hysteresis 0.97 propagaria esa basura para siempre.
+        //
+        // ClearFramebuffer no bindea, asi que a diferencia de la version vieja
+        // esto no pisa el render target ni el viewport del caller. Importa
+        // porque el boton "Reset" del panel lo dispara a mitad de frame.
         const u32 fbo = efecom::CreateFramebuffer();
         if (fbo == 0u) return;
 
         efecom::FramebufferColorTexture(fbo, atlas.id());
-        efecom::BindRenderTarget(fbo, atlas.width(), atlas.height());
-        efecom::SetClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-        efecom::Clear(efecom::ClearMask::Color);
+        EF_GPU_CHECK(efecom::FramebufferComplete(fbo), "DdgiPass::ClearAtlas: FBO temporal incompleto");
+        efecom::ClearFramebuffer(fbo, efecom::ClearMask::Color);
         efecom::DestroyFramebuffer(fbo);
     }
 
@@ -217,8 +220,24 @@ namespace renderer {
         }
     }
 
+    namespace {
+        // Mide hasta el fin del scope. Con dos returns tempranos en Update, un
+        // par de time_point sueltos dejaria m_lastMs con el valor del ultimo
+        // frame que si llego al final.
+        struct ScopedMs {
+            f32* out;
+            std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+            ~ScopedMs() {
+                *out = std::chrono::duration<f32, std::milli>(
+                           std::chrono::steady_clock::now() - t0).count();
+            }
+        };
+    }
+
     void DdgiPass::Update(const scene::SceneGraph& scene, const ShadowContext& shadow,
                           const IblContext& ibl, const Cubemap* env) {
+        const ScopedMs medicion { &m_lastMs };
+
         EnsureAtlasSize();
 
         const u32 total = ProbeCount(m_atlasGrid);

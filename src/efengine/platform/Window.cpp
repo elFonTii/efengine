@@ -24,7 +24,11 @@ namespace platform {
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        
+#ifdef _DEBUG
+        // Sin este hint el driver puede no emitir nada por glDebugMessageCallback.
+        glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+#endif
+
 
         m_handle = glfwCreateWindow(m_width, m_height, props.title, null, null);
         EF_ASSERT(m_handle != null, "Failed to create GLFW window");

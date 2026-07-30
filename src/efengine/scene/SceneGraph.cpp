@@ -140,8 +140,16 @@ namespace scene {
         // Sin el clear las listas se duplicarian en cada frame.
         m_renderables.clear();
         m_pointLights.clear();
+        m_worldBounds = renderer::AABB::Empty();
 
         updateNode(m_root, glm::mat4(1.0f), false);
+
+        // La caja de la escena sale de la lista que updateNode acaba de armar, no
+        // de recorrer el grafo otra vez.
+        for (const RenderItem& item : m_renderables) {
+            if (item.model == null) continue;
+            m_worldBounds = renderer::AccumulateBounds(m_worldBounds, item.model->bounds(), item.world);
+        }
 
         // Sol: direccion desde el world del nodo primario; color desde su adjunto.
         if (IsValid(m_primarySun)) {

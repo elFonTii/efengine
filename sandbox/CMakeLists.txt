@@ -6,6 +6,8 @@ add_executable(sandbox
     EditorUI.cpp
     AssetCatalog.cpp
     AuthoringUI.cpp
+    TestScene.cpp
+    SunGizmo.cpp
 )
 
 # Linkeamos contra el motor.

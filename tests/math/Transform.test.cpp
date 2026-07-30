@@ -4,6 +4,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <cmath>
+
 using namespace efengine;
 
 /*
@@ -87,4 +89,49 @@ TEST_CASE("Transform::Matrix compone los angulos de Euler en el orden Y * X * Z"
     // Yaw primero, después pitch: R = Ry * Rx * Rz, y acá Rz es la identidad.
     // Con position y scale por default, Matrix() se reduce a R.
     CheckMat4Equal(t.Matrix(), Ry * Rx);
+}
+
+TEST_CASE("EulerFromForward: -Z da rotacion nula") {
+    const glm::vec3 e = math::EulerFromForward(glm::vec3(0.0f, 0.0f, -1.0f));
+    CHECK(e.x == doctest::Approx(0.0f));
+    CHECK(e.y == doctest::Approx(0.0f));
+    CHECK(e.z == doctest::Approx(0.0f));
+}
+
+TEST_CASE("EulerFromForward: ida y vuelta contra Transform::Matrix") {
+    // El contrato real no son los angulos, es que aplicar la rotacion resultante
+    // al -Z local devuelva la direccion de entrada. Es literalmente lo que hace
+    // SceneGraph::UpdateWorldTransforms para sacar la direccion del sol.
+    const glm::vec3 dir = glm::normalize(glm::vec3(0.30f, -0.62f, 0.72f));
+
+    math::Transform t;
+    t.rotation = math::EulerFromForward(dir);
+
+    const glm::vec3 fwd = glm::normalize(
+        glm::vec3(t.Matrix() * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)));
+
+    CHECK(fwd.x == doctest::Approx(dir.x).epsilon(0.0001));
+    CHECK(fwd.y == doctest::Approx(dir.y).epsilon(0.0001));
+    CHECK(fwd.z == doctest::Approx(dir.z).epsilon(0.0001));
+}
+
+TEST_CASE("EulerFromForward: un sol vertical no produce NaN") {
+    // Mirando derecho para abajo cos(pitch) = 0, que es la division por cero de
+    // la formula si se la escribe con sin/cos en vez de con atan2.
+    math::Transform t;
+    t.rotation = math::EulerFromForward(glm::vec3(0.0f, -1.0f, 0.0f));
+
+    const glm::vec3 fwd = glm::normalize(
+        glm::vec3(t.Matrix() * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)));
+
+    CHECK(fwd.y == doctest::Approx(-1.0f).epsilon(0.0001));
+    CHECK(std::isnan(t.rotation.x) == false);
+    CHECK(std::isnan(t.rotation.y) == false);
+}
+
+TEST_CASE("EulerFromForward: un vector nulo cae en cero") {
+    const glm::vec3 e = math::EulerFromForward(glm::vec3(0.0f));
+    CHECK(e.x == doctest::Approx(0.0f));
+    CHECK(e.y == doctest::Approx(0.0f));
+    CHECK(e.z == doctest::Approx(0.0f));
 }

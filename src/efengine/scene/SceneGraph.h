@@ -2,6 +2,7 @@
 #include <efengine/scene/Node.h>
 #include <efengine/renderer/PointLight.h>
 #include <efengine/renderer/DirectionalLight.h>
+#include <efengine/renderer/Bounds.h>
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -71,6 +72,12 @@ namespace scene {
             const std::vector<renderer::PointLight>& PointLights() const { return m_pointLights; }
             const renderer::DirectionalLight&        Sun()         const { return m_sun; }
 
+            // AABB de mundo de todo lo renderizable, recalculada por
+            // UpdateWorldTransforms. Invalida (Valid() == false) si la escena no
+            // tiene mallas: el caller tiene que chequearlo antes de usar
+            // Center() o Radius().
+            const renderer::AABB& WorldBounds() const { return m_worldBounds; }
+
         private:
             struct Slot {
                 Node node;
@@ -93,6 +100,7 @@ namespace scene {
             std::vector<RenderItem>           m_renderables;
             std::vector<renderer::PointLight> m_pointLights;
             renderer::DirectionalLight        m_sun { glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };
+            renderer::AABB                    m_worldBounds = renderer::AABB::Empty();
     };
 }
 }

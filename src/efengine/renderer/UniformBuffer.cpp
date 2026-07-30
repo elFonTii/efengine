@@ -31,7 +31,7 @@ namespace renderer {
     }
 
     void UniformBuffer::Update(const void* data, usize size, usize offset) const {
-        EF_ASSERT(offset + size <= m_size, "UniformBuffer::Update: se pasa del tamano reservado");
+        EF_GPU_CHECK(offset + size <= m_size, "UniformBuffer::Update: se pasa del tamano reservado");
         efecom::UpdateBuffer(m_id, data, size, offset);
     }
 

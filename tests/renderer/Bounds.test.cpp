@@ -116,3 +116,65 @@ TEST_CASE("AABB::Transformed: la escala escala los extents") {
     CHECK(t.Extents().y == doctest::Approx(3.0f));
     CHECK(t.Extents().z == doctest::Approx(4.0f));
 }
+
+TEST_CASE("AccumulateBounds: sobre un acumulador vacio da el local transformado") {
+    AABB local;
+    local.min = glm::vec3(-1.0f);
+    local.max = glm::vec3( 1.0f);
+
+    const glm::mat4 world = glm::translate(glm::mat4(1.0f), glm::vec3(5.0f, 0.0f, 0.0f));
+    const AABB out = renderer::AccumulateBounds(AABB::Empty(), local, world);
+
+    CHECK(out.min.x == doctest::Approx(4.0f));
+    CHECK(out.max.x == doctest::Approx(6.0f));
+    CHECK(out.min.y == doctest::Approx(-1.0f));
+    CHECK(out.max.y == doctest::Approx( 1.0f));
+}
+
+TEST_CASE("AccumulateBounds: dos items dan la union") {
+    AABB unidad;
+    unidad.min = glm::vec3(-1.0f);
+    unidad.max = glm::vec3( 1.0f);
+
+    AABB acc = AABB::Empty();
+    acc = renderer::AccumulateBounds(acc, unidad, glm::translate(glm::mat4(1.0f), glm::vec3(-5.0f, 0.0f, 0.0f)));
+    acc = renderer::AccumulateBounds(acc, unidad, glm::translate(glm::mat4(1.0f), glm::vec3( 5.0f, 0.0f, 0.0f)));
+
+    CHECK(acc.min.x == doctest::Approx(-6.0f));
+    CHECK(acc.max.x == doctest::Approx( 6.0f));
+}
+
+TEST_CASE("AccumulateBounds: un local invalido se ignora") {
+    // Transformed() sobre una AABB vacia da NaN (sus esquinas son +inf y -inf).
+    // Si esto no se filtra, un solo Model sin vertices envenena la caja entera y
+    // el gizmo del sol y el encaje de la grilla dejan de funcionar.
+    AABB unidad;
+    unidad.min = glm::vec3(-1.0f);
+    unidad.max = glm::vec3( 1.0f);
+
+    AABB acc = renderer::AccumulateBounds(AABB::Empty(), unidad, glm::mat4(1.0f));
+    acc = renderer::AccumulateBounds(acc, AABB::Empty(), glm::mat4(1.0f));
+
+    CHECK(acc.min.x == doctest::Approx(-1.0f));
+    CHECK(acc.max.x == doctest::Approx( 1.0f));
+    CHECK(std::isnan(acc.min.x) == false);
+    CHECK(std::isnan(acc.max.x) == false);
+}
+
+TEST_CASE("AccumulateBounds: acumulador vacio y local vacio sigue vacio") {
+    const AABB out = renderer::AccumulateBounds(AABB::Empty(), AABB::Empty(), glm::mat4(1.0f));
+    CHECK_FALSE(out.Valid());
+}
+
+TEST_CASE("AccumulateBounds: rotar 45 grados agranda la caja") {
+    AABB unidad;
+    unidad.min = glm::vec3(-1.0f);
+    unidad.max = glm::vec3( 1.0f);
+
+    const glm::mat4 rot = glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    const AABB out = renderer::AccumulateBounds(AABB::Empty(), unidad, rot);
+
+    // Una caja de lado 2 rotada 45 grados en Y tiene medio-ancho sqrt(2) en X y Z.
+    CHECK(out.max.x == doctest::Approx(std::sqrt(2.0f)).epsilon(0.001));
+    CHECK(out.max.y == doctest::Approx(1.0f).epsilon(0.001));
+}

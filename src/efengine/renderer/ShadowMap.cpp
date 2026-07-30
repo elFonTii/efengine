@@ -18,7 +18,7 @@ namespace renderer {
         // Sin color attachment: no dibujamos ni leemos color.
         efecom::FramebufferDisableColor(m_id);
 
-        EF_ASSERT(efecom::FramebufferComplete(m_id),
+        EF_GPU_CHECK(efecom::FramebufferComplete(m_id),
                   "ShadowMap: framebuffer incompleto");
     }
 

@@ -1,8 +1,10 @@
 #include "EditorUI.h"
+#include "TestScene.h"
 
 #include <efengine/application/Application.h>
 #include <efengine/renderer/Model.h>
 #include <efengine/renderer/Mesh.h>
+#include <efengine/renderer/BoxMesh.h>
 #include <efengine/renderer/Vertex.h>
 #include <efengine/resources/SceneAssets.h>
 #include <efengine/serialization/SceneSerializer.h>
@@ -58,6 +60,16 @@ namespace {
         p.Serialize(r);
         if (!r.Ok()) return nullptr;
         return std::make_unique<renderer::Model>(makePlane(p.halfSize, p.tiles));
+    }
+
+    // La sala de Cornell y sus bloques son cajas generadas: TestScene las pide
+    // por este nombre. Los params ya viven en renderer::BoxParams, asi que aca
+    // no hay struct propio como en el plano.
+    std::unique_ptr<renderer::Model> generarCaja(serialization::BinaryReader& r) {
+        renderer::BoxParams p;
+        p.Serialize(r);
+        if (!r.Ok()) return nullptr;
+        return std::make_unique<renderer::Model>(renderer::MakeBoxModel(p));
     }
 
     // BEHAVIORS
@@ -145,15 +157,10 @@ int main() {
     registry.behaviors.Register<OrbitarXZ>("OrbitarXZ");
     registry.behaviors.Register<RotarSolY>("RotarSolY");
     registry.meshes.Register("sandbox.plane", &generarPlano);
+    registry.meshes.Register("sandbox.box",   &generarCaja);
 
     resources::SceneAssets assets; // Dueño de los materiales y de las mallas generadas de la escena.
     scene::SceneGraph scene;
-
-    if (!serialization::SceneSerializer::Load("assets/scenes/sandbox.efe",
-                                              scene, assets, rm, registry)) {
-        EF_LOG_ERROR("No se pudo cargar assets/scenes/sandbox.efe");
-        return 1;
-    }
 
     scene::Camera cam;
     cam.SetAspect(app.GetWindow().GetAspectRatio());
@@ -164,7 +171,11 @@ int main() {
     // El estado de la UI vive aca (el loop es el dueno); el editor solo lo usa.
     sandbox::EditorState editorState;
     sandbox::EditorContext editor { app, scene, cam, controller, assets, rm, registry, editorState };
-    sandbox::RefreshHandles(editor);
+    // La escena de arranque es la sala de Cornell, no el .efe: la sala de 200 m
+    // de sandbox.efe no sirve para validar iluminacion indirecta. Cargar el .efe
+    // sigue disponible desde el menu "Escena". Volver al arranque viejo es
+    // cambiar esta linea por el SceneSerializer::Load de siempre.
+    sandbox::BuildCornellScene(editor);   // ya llama a RefreshHandles
 
     while (app.Running()) {
         app.BeginFrame();

@@ -201,8 +201,10 @@ namespace application {
         // antes del post: es un instrumento de debug, no parte de la imagen.
         if (m_ddgiPass && m_ddgiDebug && m_ddgiPass->settings().debugProbes) {
             const renderer::DdgiSettings& ds = m_ddgiPass->settings();
-            if (ds.debugMode == 2u) {
-                m_ddgiDebug->DrawCaptureBlit(m_ddgiPass->captureTarget(), false);
+            // Modo 3 = el mismo volcado pero mirando el alfa: sin esto la
+            // distancia capturada no es verificable desde el panel.
+            if (ds.debugMode >= 2u) {
+                m_ddgiDebug->DrawCaptureBlit(m_ddgiPass->captureTarget(), ds.debugMode == 3u);
             } else if (m_ddgiProbeMesh != null) {
                 m_ddgiDebug->DrawProbes(ds.grid, ds, *m_ddgiProbeMesh);
             }

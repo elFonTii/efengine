@@ -19,7 +19,7 @@ namespace renderer {
         m_depthRbo = efecom::CreateDepthRenderbuffer(width, height); // reserva buffer 24bits
         efecom::FramebufferDepthRenderbuffer(m_id, m_depthRbo); // -3
 
-        EF_ASSERT(efecom::FramebufferComplete(m_id), "Framebuffer incompleto"); // -4
+        EF_GPU_CHECK(efecom::FramebufferComplete(m_id), "Framebuffer incompleto"); // -4
     }
 
     Framebuffer::~Framebuffer() {

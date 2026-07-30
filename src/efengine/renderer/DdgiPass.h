@@ -64,6 +64,12 @@ namespace renderer {
             u32  cursor()     const { return m_cursor; }
             f32  lastMs()     const { return m_lastMs; }
 
+            // Si esto es false, Context() no entrega los atlas y pbr.frag esta
+            // cayendo a IBL puro: DDGI aporta exactamente cero. Es el primer
+            // dato a mirar cuando "no se ve la GI", porque todos los demas
+            // controles del panel se ven normales igual.
+            bool atlasValid() const { return m_blendedOnce; }
+
             // Vuelve el atlas a "sin datos": el proximo barrido escribe con
             // hysteresis 0 y lo reconstruye de cero.
             void Reset();
