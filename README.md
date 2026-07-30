@@ -1,6 +1,6 @@
 # efengine
 
-Es un motor gráfico forward renderer en **C++17 / OpenGL 4.5 Core**,  construido desde cero como proyecto de aprendizaje y a largo plazo. Compila sin excepciones, se prohiben los `new`/`delete` crudos y patrón RAII en todos los subsistemas. robustez y escalabilidad y iluminación global en tiempo real con técnicas actuales. efengine pretende ser un motor con un alto impacto visual, no de alto rendimiento.
+Es un motor gráfico forward renderer en **C++17 / OpenGL 4.5 Core**,  construido desde cero como proyecto de aprendizaje y a largo plazo. Compila sin excepciones, se prohiben los `new`/`delete` crudos y patrón RAII en todos los subsistemas. robustez y escalabilidad son los pilares. efengine pretende ser un motor con un alto impacto visual implementando e innovando en técnicas de iluminación global. efengine NO pretende ser un motor de alto rendimiento.
 
 - **Ventanas e input:** GLFW 3.4
 - **Loader GL:** GLAD 2 (generado en build time, `gl:core=4.5`)
