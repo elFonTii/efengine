@@ -80,6 +80,18 @@ void BuildCornellScene(EditorContext& ctx) {
     ctx.scene.Clear();
     ctx.assets.Clear();
 
+    // El IBL casi apagado, y va ACA y no en el default de SceneGraph a proposito.
+    //
+    // El entorno que carga Application es un cielo abierto (citrus_orchard). En
+    // una caja cerrada eso es un termino ambiente que no sabe que las paredes
+    // existen: llena la sala con luz que no atravesó nada y tapa exactamente el
+    // hueco que DDGI tiene que llenar. Con esto en 1.0 no se puede juzgar la GI,
+    // porque el cielo la enmascara.
+    //
+    // No se baja el default global de SceneGraph: 1.0 es el valor neutro y
+    // correcto para una escena de exterior. Esto es una decision DE ESTA ESCENA.
+    ctx.scene.iblIntensity = 0.014f;
+
     // -- Materiales ------------------------------------------------------------
     const u32 blanco = materialPlano(ctx, "caja_blanca", glm::vec3(0.85f, 0.85f, 0.85f), 0.55f);
     const u32 rojo   = materialPlano(ctx, "caja_roja",   glm::vec3(0.70f, 0.06f, 0.06f), 0.55f);

@@ -29,23 +29,34 @@ namespace renderer {
                         glm::ivec3(5, 4, 5) };
 
         // -- Update --
-        u32  probesPerFrame = 8u;      // se clampea a [0, kMaxProbesPerFrame]
+        u32  probesPerFrame = 10u;     // se clampea a [0, kMaxProbesPerFrame]
         bool freeze         = false;   // congela el round-robin; el sampleo sigue
-        f32  hysteresis     = 0.97f;   // cuanto del valor viejo se conserva
+
+        // Cuanto del valor viejo se conserva. 0.4 y no el 0.97 de la referencia:
+        // con 256 probes a 10 por frame un barrido tarda 26 frames, asi que 0.97
+        // tardaba varios segundos en reaccionar a mover el sol -- que es
+        // exactamente lo que uno hace mientras tunea. El precio es mas ruido
+        // temporal, aceptable con la grilla y el conteo de esta escena.
+        f32  hysteresis     = 0.4f;
 
         // -- Sampleo --
-        f32 intensity          = 1.0f;
+        f32 intensity          = 1.1f;
         f32 normalBias         = 0.25f;   // metros
         f32 viewBias           = 0.1f;    // metros
         // Far plane de la captura y techo de las distancias en el shader; viaja
         // en params2.x al UBO. Ademas de la proyeccion de captura, lo usan
         // blend_distance.comp para recortar distancias y debug_probe.frag para
         // normalizarlas: antes cada uno tenia su propia constante 4*spacing y
-        // el slider del panel no movia ninguna de las dos. La diagonal de la
-        // sala es 12 m, asi que 15 deja margen sin desperdiciar precision de
-        // depth: el valor viejo de 200 m era de la sala de 200 m de sandbox.efe.
-        f32 maxDistance        = 15.0f;
-        f32 chebyshevSharpness = 3.0f;
+        // el slider del panel no movia ninguna de las dos.
+        //
+        // 7 m esta DEBAJO de la diagonal de 12 m de la sala, y es a proposito:
+        // un probe pegado a una pared no llega a capturar la de enfrente (8 m).
+        // Recorta rebote lejano a cambio de concentrar la precision de depth
+        // donde el Chebyshev decide, que es cerca. Valor medido en pantalla, no
+        // derivado; si aparece luz faltante en las paredes opuestas, este es el
+        // primer numero a subir.
+        f32 maxDistance        = 7.0f;
+        f32 chebyshevSharpness = 3.6f;
 
         // -- Clasificacion de probes --
         // Fraccion de texels de backface a partir de la cual un probe empieza a
