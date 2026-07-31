@@ -28,12 +28,13 @@ namespace renderer {
 
     static_assert(sizeof(ObjectBlock) == 64u, "ObjectBlock: tamano std140 roto");
 
-    static_assert(sizeof(MaterialBlock) == 80u, "MaterialBlock: tamano std140 roto");
+    static_assert(sizeof(MaterialBlock) == 96u, "MaterialBlock: tamano std140 roto");
     static_assert(offsetof(MaterialBlock, albedoTint)   ==  0u, "MaterialBlock.albedoTint");
     static_assert(offsetof(MaterialBlock, emissiveTint) == 16u, "MaterialBlock.emissiveTint");
     static_assert(offsetof(MaterialBlock, scalars0)     == 32u, "MaterialBlock.scalars0");
     static_assert(offsetof(MaterialBlock, scalars1)     == 48u, "MaterialBlock.scalars1");
     static_assert(offsetof(MaterialBlock, mapMask)      == 64u, "MaterialBlock.mapMask");
+    static_assert(offsetof(MaterialBlock, uvTransform)  == 80u, "MaterialBlock.uvTransform");
 
     static_assert(sizeof(ShadowPassBlock) == 64u, "ShadowPassBlock: tamano std140 roto");
     static_assert(sizeof(PostParamsBlock) == 16u, "PostParamsBlock: tamano std140 roto");

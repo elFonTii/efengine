@@ -49,7 +49,8 @@ TEST_CASE("Layout std140: los offsets de MaterialBlock son los calculados a mano
     CHECK(offsetof(MaterialBlock, scalars0)     == 32u);
     CHECK(offsetof(MaterialBlock, scalars1)     == 48u);
     CHECK(offsetof(MaterialBlock, mapMask)      == 64u);
-    CHECK(sizeof(MaterialBlock) == 80u);
+    CHECK(offsetof(MaterialBlock, uvTransform)  == 80u);   // v4: el tiling de UV
+    CHECK(sizeof(MaterialBlock) == 96u);
     CHECK(sizeof(ObjectBlock)   == 64u);
 }
 

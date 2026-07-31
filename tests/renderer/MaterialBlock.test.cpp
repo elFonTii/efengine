@@ -106,3 +106,26 @@ TEST_CASE("ToBlock: los defaults de Material son los que espera el shader") {
     CHECK(b.scalars1.y   == doctest::Approx(0.0f));   // emissiveIntensity: apagada
     CHECK(b.scalars1.z   == doctest::Approx(1.0f));   // normalStrength: el mapa tal cual
 }
+
+TEST_CASE("ToBlock: uvTransform = (tiling.x, tiling.y, offset.x, offset.y)") {
+    Material m(nullptr);
+    m.uvTiling = glm::vec2(4.0f, 2.0f);
+    m.uvOffset = glm::vec2(0.5f, 0.25f);
+
+    const MaterialBlock b = m.ToBlock();
+    CHECK(b.uvTransform.x == doctest::Approx(4.0f));
+    CHECK(b.uvTransform.y == doctest::Approx(2.0f));
+    CHECK(b.uvTransform.z == doctest::Approx(0.5f));
+    CHECK(b.uvTransform.w == doctest::Approx(0.25f));
+}
+
+TEST_CASE("ToBlock: el default de uvTransform es la identidad") {
+    // Si este test cambia, TODA escena guardada se ve distinta sin que nadie
+    // haya tocado un material: (1,1)/(0,0) es exactamente "la UV de la malla
+    // tal cual", que es lo que hacia el shader antes de que existiera el tiling.
+    const MaterialBlock b = Material(nullptr).ToBlock();
+    CHECK(b.uvTransform.x == doctest::Approx(1.0f));
+    CHECK(b.uvTransform.y == doctest::Approx(1.0f));
+    CHECK(b.uvTransform.z == doctest::Approx(0.0f));
+    CHECK(b.uvTransform.w == doctest::Approx(0.0f));
+}

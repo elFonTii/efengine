@@ -52,6 +52,7 @@ namespace renderer {
         b.emissiveTint = glm::vec4(emissiveTint, 0.0f);
         b.scalars0     = glm::vec4(metallic, roughness, aoStrength, heightScale);
         b.scalars1     = glm::vec4(alphaCutoff, emissiveIntensity, normalStrength, 0.0f);
+        b.uvTransform  = glm::vec4(uvTiling, uvOffset);
 
         const u32 mask = bitSiEsta(m_albedo,    TextureSlot::Albedo)
                        | bitSiEsta(m_normal,    TextureSlot::Normal)

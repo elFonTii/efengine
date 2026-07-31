@@ -62,6 +62,10 @@ namespace renderer {
         glm::vec4  scalars0;        // metallic, roughness, aoStrength, heightScale
         glm::vec4  scalars1;        // alphaCutoff, emissiveIntensity, normalStrength, _
         glm::uvec4 mapMask;         // x = bitmask indexado por TextureSlot
+        // Transformacion de la UV comun a los 8 mapas: uv = vUV * xy + zw.
+        // Va al final y no en un hueco porque no hay hueco: lo unico libre era
+        // scalars1.w, un solo float, y hacen falta cuatro.
+        glm::vec4  uvTransform;     // xy = tiling (repeticiones), zw = offset
     };
 
     // PassParams (binding 4) del pase de sombra: corre ANTES de BeginScene, asi
