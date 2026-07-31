@@ -267,13 +267,23 @@ void main() {
                 ? texture(uIrradianceMap, N).rgb * uIblParams.y
                 : vec3(0.0);
 
+    // ddgiFade y ddgiIrr se hoistean fuera del if porque los modos de debug del
+    // final los leen. Recalcularlos alla abajo es la forma exacta de que el
+    // debug y la imagen se desincronicen y el instrumento mienta.
+    float ddgiFade = 0.0;
+    vec3  ddgiIrr  = vec3(0.0);
+
     vec3 indirectDiffuse = iblIrr;
     if (DdgiEnabled()) {
-        float fade = DdgiVolumeFade(vFragPos);
-        if (fade > 0.0) {
-            vec3 ddgiIrr = SampleDdgiIrradiance(vFragPos, N, V) * uDdgiParams0.y;
-            indirectDiffuse = mix(iblIrr, ddgiIrr, fade);
+        ddgiFade = DdgiVolumeFade(vFragPos);
+
+        // Con fade 0 el sampleo se saltea: son 8 taps de irradiancia y 8 de
+        // distancia que no van a ningun lado. La excepcion es el modo que existe
+        // justamente para ver lo que el fade descarta.
+        if (ddgiFade > 0.0 || DdgiDebugView() == kDdgiViewDdgiNoFade) {
+            ddgiIrr = SampleDdgiIrradiance(vFragPos, N, V) * uDdgiParams0.y;
         }
+        if (ddgiFade > 0.0) indirectDiffuse = mix(iblIrr, ddgiIrr, ddgiFade);
     }
 
     // Especular: sigue siendo IBL sin cambios. Eso lo completa SSR (ciclo 3).
@@ -285,7 +295,11 @@ void main() {
         specularIBL = prefiltered * (F * ab.x + ab.y) * uIblParams.y;
     }
 
-    vec3 ambient = (kD * indirectDiffuse * albedo + specularIBL) * ao;
+    // Separado del especular para que el modo de debug pueda mostrar EXACTAMENTE
+    // lo que la indirecta difusa le suma al pixel, sin reconstruirlo aparte.
+    // Algebraicamente es la misma suma de antes.
+    vec3 indirectApplied = kD * indirectDiffuse * albedo * ao;
+    vec3 ambient         = indirectApplied + specularIBL * ao;
 
     // --- Emision propia: no la toca el AO, ni la sombra, ni la intensidad de IBL ---
     // Sale en HDR lineal, así que florece con bloom recién cuando la intensidad
@@ -294,6 +308,23 @@ void main() {
                   * uEmissiveTint.rgb * uScalars1.y;
 
     vec3 color = ambient + Lo + emissive;
+
+    // --- Modos de debug de vista ---
+    // Escriben UN termino en lugar de la suma. Salen por el mismo camino HDR, o
+    // sea que bloom y ACES los tocan igual: son CUALITATIVOS -- responden "este
+    // termino aporta algo o aporta cero", no dan un numero. Con el threshold de
+    // bloom en 1.0 y estos valores casi siempre por debajo, el unico que llega a
+    // florecer es el de luz directa.
+    switch (DdgiDebugView()) {
+        case kDdgiViewIndirect:        color = indirectDiffuse; break;
+        case kDdgiViewIndirectApplied: color = indirectApplied; break;
+        case kDdgiViewDirect:          color = Lo;              break;
+        case kDdgiViewDdgiNoFade:      color = ddgiIrr;         break;
+        case kDdgiViewFade:            color = vec3(ddgiFade);  break;
+        case kDdgiViewAlbedo:          color = albedo;          break;
+        case kDdgiViewNormal:          color = N * 0.5 + 0.5;   break;
+        default: break;   // kDdgiViewOff: la imagen final
+    }
 
     // Radiancia lineal HDR sin tonemapear: el tone mapping + gamma ahora ocurren
     // una sola vez en el present pass (assets/shaders/tonemap.frag), Ciclo 1 HDR.

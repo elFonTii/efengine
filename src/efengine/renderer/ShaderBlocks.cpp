@@ -120,8 +120,12 @@ namespace renderer {
                                    static_cast<i32>(settings.probesPerFrame));
         b.params0 = glm::vec4(settings.hysteresis, settings.intensity,
                               settings.normalBias, settings.viewBias);
+        // params1.z lleva el modo de debug de vista. Va aca y no en FrameBlock
+        // por lo que explica el comentario de DdgiBlock en el header: extender
+        // Frame obliga a tocar siete shaders que no lo usan.
         b.params1 = glm::vec4((settings.enabled && atlasValid) ? 1.0f : 0.0f,
-                              settings.chebyshevSharpness, 0.0f, 0.0f);
+                              settings.chebyshevSharpness,
+                              static_cast<f32>(settings.debugView), 0.0f);
         b.params2 = glm::vec4(settings.maxDistance,
                               settings.backfaceFadeStart,
                               settings.backfaceFadeEnd, 0.0f);

@@ -30,6 +30,24 @@ const float kDdgiPI     = 3.14159265359;
 
 bool DdgiEnabled() { return uDdgiParams1.x > 0.5; }
 
+// -- Modo de debug de vista --------------------------------------------------
+// Viaja en params1.z. Lo consume pbr.frag para escribir UN termino del shading
+// en vez de la suma final. Existe porque DDGI entra como una fraccion de
+// `ambient` y `ambient` se suma al sol: en la imagen final, "DDGI aporta cero"
+// y "DDGI aporta poco" son el mismo pixel.
+//
+// Los valores tienen que coincidir con DdgiSettings::DebugView (C++).
+const int kDdgiViewOff             = 0;
+const int kDdgiViewIndirect        = 1;
+const int kDdgiViewIndirectApplied = 2;
+const int kDdgiViewDirect          = 3;
+const int kDdgiViewDdgiNoFade      = 4;
+const int kDdgiViewFade            = 5;
+const int kDdgiViewAlbedo          = 6;
+const int kDdgiViewNormal          = 7;
+
+int DdgiDebugView() { return int(uDdgiParams1.z + 0.5); }
+
 // -- Mapeo octaedrico --------------------------------------------------------
 // [Cigolle et al. 2014]. Proyecta la esfera al cuadrado [-1,1]^2 con distorsion
 // de area baja y, lo que importa aca, envolviendo sobre si mismo: por eso el

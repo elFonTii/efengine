@@ -371,6 +371,40 @@ namespace {
 
         // -- Debug -------------------------------------------------------------
         ImGui::SeparatorText("Debug");
+
+        // Primero de la seccion a proposito: es el unico control que contesta la
+        // pregunta con la que uno abre este panel, "DDGI esta aportando algo".
+        // El orden espeja DdgiSettings::DebugView.
+        const char* vistas[] = { "Final (normal)",
+                                 "Indirecta (irradiancia)",
+                                 "Indirecta aplicada al pixel",
+                                 "Solo luz directa",
+                                 "DDGI ignorando el fade",
+                                 "Fade del volumen",
+                                 "Albedo",
+                                 "Normal" };
+        int vista = static_cast<int>(s.debugView);
+        if (ImGui::Combo("Vista", &vista, vistas, IM_ARRAYSIZE(vistas))) {
+            s.debugView = static_cast<u32>(vista);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Que termino escribe pbr.frag en vez de la imagen final.\n\n"
+                "'Indirecta aplicada' es lo que la indirecta le suma al pixel.\n"
+                "OJO: ahi adentro el IBL y DDGI van MEZCLADOS por el fade, asi\n"
+                "que no ver negro no prueba que DDGI aporte. Para leerlo, primero\n"
+                "Render > Iluminacion > Intensidad IBL a 0: lo que quede es DDGI.\n\n"
+                "Y para saber por que: compara 'DDGI ignorando el fade' con\n"
+                "'Fade del volumen'. Si el primero tiene color y el segundo esta\n"
+                "negro, la GI se calcula bien y la tira el fade -- la grilla no\n"
+                "cubre esa superficie con el margen que el fade pide.\n\n"
+                "Pasan por bloom y ACES: son cualitativos, no numeros.");
+        }
+        if (s.debugView != renderer::DdgiSettings::kDebugOff) {
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f),
+                               "Vista de debug activa: la imagen NO es la final.");
+        }
+
         ImGui::Checkbox("Mostrar probes", &s.debugProbes);
         const char* modos[] = { "Irradiancia", "Media de distancia", "Target de captura",
                                 "Target de captura (distancia)" };

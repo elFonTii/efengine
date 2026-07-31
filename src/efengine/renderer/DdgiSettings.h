@@ -57,6 +57,32 @@ namespace renderer {
         f32 backfaceFadeEnd   = 0.30f;
 
         // -- Debug --
+
+        // Que termino del shading escribe pbr.frag en vez de la imagen final.
+        //
+        // NO es cosmetico. DDGI entra al pixel como kD * irradiancia * albedo *
+        // ao, adentro de `ambient`, y `ambient` se suma al sol en la misma
+        // linea. En la imagen final "DDGI aporta cero" y "DDGI aporta poco" son
+        // el mismo pixel: no hay forma de distinguirlos mirando. Este enum es la
+        // que hay.
+        //
+        // Viaja en params1.z del bloque DDGI y no en FrameBlock porque extender
+        // Frame obliga a tocar los siete shaders que lo declaran (ver el
+        // comentario de DdgiBlock en ShaderBlocks.h) sin que ninguno lo use.
+        // Los valores tienen que coincidir con las constantes kDdgiView* de
+        // ddgi/common.glsl y con el orden del combo en EditorUI.cpp.
+        enum DebugView : u32 {
+            kDebugOff             = 0u,   // imagen final
+            kDebugIndirect        = 1u,   // irradiancia indirecta cruda (DDGI o IBL)
+            kDebugIndirectApplied = 2u,   // lo que esa irradiancia le suma al pixel
+            kDebugDirect          = 3u,   // solo luz directa (sol + puntuales)
+            kDebugDdgiNoFade      = 4u,   // DDGI ignorando DdgiVolumeFade
+            kDebugFade            = 5u,   // el propio fade, en gris
+            kDebugAlbedo          = 6u,
+            kDebugNormal          = 7u,
+        };
+        u32 debugView = kDebugOff;
+
         // Ya hay panel (menu Render > DDGI): el debug arranca apagado.
         bool debugProbes = false;
         u32  debugMode   = 0u;      // 0=irradiancia, 1=media de distancia, 2=target de captura
