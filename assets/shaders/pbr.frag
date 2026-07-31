@@ -34,6 +34,7 @@ layout(std140, binding = 3) uniform MaterialParams {
     vec4  uScalars0;      // metallic, roughness, aoStrength, heightScale
     vec4  uScalars1;      // alphaCutoff, emissiveIntensity, normalStrength, _
     uvec4 uMapMask;       // x = bitmask indexado por TextureSlot
+    vec4  uUvTransform;   // xy = tiling (repeticiones), zw = offset
 };
 
 // Unidades 0-7: los mapas de material, en el orden de renderer::TextureSlot.
@@ -214,7 +215,13 @@ void main() {
     // viewDirT: dirección hacia la cámara en espacio tangente (mundo→tangente
     // vía transpose(TBN), que es la inversa para una base ortonormal).
     vec3 viewDirT = normalize(transpose(vTBN) * (uViewPos.xyz - vFragPos));
-    vec2 uv = hasMap(SLOT_HEIGHT) ? ParallaxOcclusionMapping(vUV, viewDirT) : vUV;
+    // Tiling del material: la UV de la malla escalada y corrida, comun a los 8
+    // mapas. Se aplica ANTES del POM, asi que el POM camina en el espacio ya
+    // tileado. heightScale NO se compensa a proposito: medido en unidades de UV,
+    // tilear x4 achica la baldosa x4 y el relieve con ella, que es justo lo que
+    // conserva la proporcion del ladrillo en vez de dejarlo plano.
+    vec2 uvBase = vUV * uUvTransform.xy + uUvTransform.zw;
+    vec2 uv = hasMap(SLOT_HEIGHT) ? ParallaxOcclusionMapping(uvBase, viewDirT) : uvBase;
 
     // No se recorta la UV desplazada: el POM solo se usa sobre superficies con
     // material tileable (UV continua + GL_REPEAT), donde el offset envuelve sin

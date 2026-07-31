@@ -41,6 +41,7 @@ layout(std140, binding = 3) uniform MaterialParams {
     vec4  uScalars0;      // metallic, roughness, aoStrength, heightScale
     vec4  uScalars1;      // alphaCutoff, emissiveIntensity, normalStrength, _
     uvec4 uMapMask;
+    vec4  uUvTransform;   // xy = tiling, zw = offset
 };
 
 layout(binding = 0) uniform sampler2D uAlbedoMap;
@@ -83,11 +84,16 @@ float ShadowFactor(vec3 N, vec3 L) {
 }
 
 void main() {
-    float alpha = hasMap(SLOT_OPACITY) ? texture(uOpacityMap, vUV).r : 1.0;
+    // El mismo tiling que pbr.frag, y no es opcional: si la captura samplea el
+    // albedo sin tilear, el color que se hornea en la irradiancia no es el de
+    // ninguna superficie de la escena y el rebote tiñe todo de un color inventado.
+    vec2 uv = vUV * uUvTransform.xy + uUvTransform.zw;
+
+    float alpha = hasMap(SLOT_OPACITY) ? texture(uOpacityMap, uv).r : 1.0;
     if (alpha < uScalars1.x) discard;
 
     vec3 albedo = hasMap(SLOT_ALBEDO)
-                ? texture(uAlbedoMap, vUV).rgb * uAlbedoTint.rgb
+                ? texture(uAlbedoMap, uv).rgb * uAlbedoTint.rgb
                 : uAlbedoTint.rgb;
 
     // Normal geometrica: el normal map es detalle de alta frecuencia que la
@@ -143,7 +149,7 @@ void main() {
                * DdgiVolumeFade(vFragPos);
     }
 
-    vec3 emissive = (hasMap(SLOT_EMISSIVE) ? texture(uEmissiveMap, vUV).rgb : vec3(1.0))
+    vec3 emissive = (hasMap(SLOT_EMISSIVE) ? texture(uEmissiveMap, uv).rgb : vec3(1.0))
                   * uEmissiveTint.rgb * uScalars1.y;
 
     FragColor = vec4(direct + bounce + emissive, dist);
