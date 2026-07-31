@@ -62,7 +62,7 @@ namespace application {
                                      "assets/shaders/ibl/brdf_lut.comp");
         if (eqCS && irrCS && preCS && lutCS) {
             renderer::EnvironmentDesc envDesc;
-            envDesc.hdrPath = "assets/hdr/citrus_orchard_puresky_4k.hdr";   // TODO: serializar en settings de escena
+            envDesc.hdrPath = "assets/hdr/white_studio_06_4k.hdr";   // TODO: serializar en settings de escena
 
             renderer::EnvironmentShaders envShaders;
             envShaders.equirectToCube     = eqCS;
