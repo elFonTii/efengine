@@ -213,9 +213,14 @@ namespace renderer {
             // MaterialBlock y bindeando texturas: la captura necesita el albedo
             // de cada material, pero un solo programa. Submit aplica
             // OpaqueState() por malla, asi que el estado del skybox no sobrevive.
+            //
+            // El estado se fuerza: la captura NECESITA los backfaces. Ver
+            // DdgiCaptureState en PipelineStates.cpp.
+            const efecom::PipelineState estadoCaptura = DdgiCaptureState();
             for (const scene::RenderItem& item : scene.Renderables()) {
                 if (item.model == null || item.materials == null) continue;
-                m_renderer.Submit(*item.model, *item.materials, item.world, m_shaders.capture);
+                m_renderer.Submit(*item.model, *item.materials, item.world,
+                                  m_shaders.capture, &estadoCaptura);
             }
         }
     }

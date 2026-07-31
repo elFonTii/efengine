@@ -19,6 +19,7 @@ layout(std140, binding = 5) uniform Ddgi {
     ivec4 uDdgiRange;       // x=firstProbe, y=count, z=faceSize, w=probesPerFrame
     vec4  uDdgiParams0;     // hysteresis, intensity, normalBias, viewBias
     vec4  uDdgiParams1;     // enabled, chebyshevSharpness, _, _
+    vec4  uDdgiParams2;     // maxDistance, backfaceFadeStart, backfaceFadeEnd, _
 };
 
 layout(binding = 12) uniform sampler2D uDdgiIrradiance;

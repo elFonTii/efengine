@@ -67,10 +67,9 @@ void main() {
                 float dist = texelFetch(uCapture, capTexel, 0).a;
 
                 // El cielo y lo que no pega nada vienen con 1e4. Se recorta al
-                // rango util: mas alla de unos pocos spacings, "lejos" es lejos
-                // y guardar 1e4 solo destruye la precision del half-float.
-                float maxDist = 4.0 * max(max(uDdgiSpacing.x, uDdgiSpacing.y), uDdgiSpacing.z);
-                dist = min(dist, maxDist);
+                // far plane de la captura -- mas alla de eso no se capturo nada,
+                // asi que guardar 1e4 solo destruye la precision del half-float.
+                dist = min(dist, uDdgiParams2.x);
 
                 float peso = pow(coseno, kSharpness) * solidAngle;
                 suma      += dist * peso;

@@ -21,15 +21,16 @@ void main() {
 
     if (uProbeParams.y > 0.5) {
         // Media de distancia, normalizada contra el MISMO techo que usa
-        // blend_distance.comp para recortarla (4 spacings). Normalizar por un
-        // spacing, como decia el plan, satura en blanco todo lo que este a mas de
-        // una celda -- que en un interior es casi todo, y entonces el modo no
+        // blend_distance.comp para recortarla: el far plane de la captura.
+        // Normalizar por un spacing, como decia el plan, satura en blanco
+        // todo lo que este a mas de una celda -- que en un interior es
+        // casi todo, y entonces el modo no
         // distingue "lejos" de "roto".
         vec2  atlasSize = vec2(textureSize(uDdgiDistance, 0));
         float media = texture(uDdgiDistance,
                               DdgiTileUV(probe, oct, uDdgiAtlas.w,
                                          uDdgiAtlas.w + 2 * kDdgiBorder, atlasSize)).r;
-        float escala = 4.0 * max(max(uDdgiSpacing.x, uDdgiSpacing.y), uDdgiSpacing.z);
+        float escala = uDdgiParams2.x;
         FragColor = vec4(vec3(clamp(media / escala, 0.0, 1.0)), 1.0);
     } else {
         vec2 atlasSize = vec2(textureSize(uDdgiIrradiance, 0));

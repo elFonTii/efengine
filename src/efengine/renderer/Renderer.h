@@ -1,5 +1,6 @@
 #pragma once
 
+#include <efecom/RHI.h>
 #include <efengine/core/Types.h>
 #include <efengine/renderer/VertexArray.h>
 #include <efengine/renderer/Model.h>
@@ -41,7 +42,14 @@ namespace renderer {
             // material, pero sigue subiendo el MaterialBlock y bindeando las
             // texturas. Lo usa la captura de probes de DDGI, que necesita el
             // albedo de cada material pero un solo shader difuso.
-            void Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix, const Shader* overrideShader = null);
+            //
+            // overrideState fuerza el estado de rasterizacion e ignora
+            // mat.doubleSided. Va aparte de overrideShader a proposito: dibujar
+            // con otro shader no implica dibujar con otro estado, y acoplarlos
+            // dejaria sin estado a cualquier otro consumidor de overrideShader.
+            void Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix,
+                        const Shader* overrideShader = null,
+                        const efecom::PipelineState* overrideState = null);
 
             // Sube la matriz de modelo al bloque Object (binding 2). Publico
             // porque ShadowPass tambien dibuja por objeto y necesita el mismo bloque.

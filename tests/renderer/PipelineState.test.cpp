@@ -80,3 +80,17 @@ TEST_CASE("El estado opaco cullea la cara de atras; el double-sided no") {
     CHECK(SkyboxState().cullMode     == CullMode::None);
     CHECK(FullscreenState().cullMode == CullMode::None);
 }
+
+TEST_CASE("DdgiCaptureState: no cullea, para que el probe vea las caras internas") {
+    const efecom::PipelineState s = efengine::renderer::DdgiCaptureState();
+    CHECK(s.cullMode == efecom::CullMode::None);
+}
+
+TEST_CASE("DdgiCaptureState: en todo lo demas es OpaqueState") {
+    const efecom::PipelineState captura = efengine::renderer::DdgiCaptureState();
+    const efecom::PipelineState opaco   = efengine::renderer::OpaqueState();
+    CHECK(captura.depthTest   == opaco.depthTest);
+    CHECK(captura.depthWrite  == opaco.depthWrite);
+    CHECK(captura.depthFunc   == opaco.depthFunc);
+    CHECK(captura.blendEnable == opaco.blendEnable);
+}
