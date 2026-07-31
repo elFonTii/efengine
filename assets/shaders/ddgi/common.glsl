@@ -109,10 +109,31 @@ vec2 DdgiTileUV(int probeIndex, vec2 oct, int interiorTile, int borderedTile, ve
 // -- Fade del volumen --------------------------------------------------------
 // 1 adentro, 0 afuera, con una celda de transicion. Evita la costura dura en el
 // borde del volumen, donde DDGI cede a IBL.
+//
+// La transicion va del lado de AFUERA. La version anterior media celdas hasta la
+// cara mas cercana y clampeaba a [0,1], que es la misma intencion aplicada del
+// lado de adentro: valia 0 justo en el borde y recien llegaba a 1 una celda mas
+// adentro. En un interior eso apaga DDGI entero, porque las superficies estan EN
+// el borde por construccion -- la grilla se insetea a proposito para no meter
+// probes dentro de las paredes. Medido en la caja de Cornell de TestScene, las
+// seis caras de la sala daban fade 0 y no recibian nada de GI.
+//
+// Adentro no hace falta atenuar: SampleDdgiIrradiance ya clampea las coords de
+// probe, asi que un punto fuera del volumen extrapola aplanandose en vez de
+// irse al infinito. El fade solo tiene que cubrir el tramo donde esa
+// extrapolacion deja de ser confiable, y ese tramo esta afuera.
 float DdgiVolumeFade(vec3 worldPos) {
     vec3 g = (worldPos - uDdgiOrigin.xyz) / uDdgiSpacing.xyz;
-    vec3 d = min(g, vec3(uDdgiCounts.xyz - 1) - g);   // celdas hasta el borde, por eje
-    return clamp(min(d.x, min(d.y, d.z)), 0.0, 1.0);
+
+    // Cuanto se sale de la caja de probes, en celdas y por eje. Negativo adentro.
+    vec3 fuera = max(-g, g - vec3(uDdgiCounts.xyz - 1));
+
+    // 1 en todo el interior y en el borde exacto; cae a 0 sobre UNA celda hacia
+    // afuera, que es el ancho de banda de la referencia (RTXGI fundea sobre un
+    // probeSpacing). min y no producto: en una esquina manda el eje peor, no el
+    // triple del error.
+    vec3 f = clamp(1.0 - fuera, 0.0, 1.0);
+    return min(f.x, min(f.y, f.z));
 }
 
 // -- Sampleo con Chebyshev ---------------------------------------------------
