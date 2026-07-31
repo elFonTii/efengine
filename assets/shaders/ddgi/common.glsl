@@ -45,6 +45,7 @@ const int kDdgiViewDdgiNoFade      = 4;
 const int kDdgiViewFade            = 5;
 const int kDdgiViewAlbedo          = 6;
 const int kDdgiViewNormal          = 7;
+const int kDdgiViewShadow          = 8;
 
 int DdgiDebugView() { return int(uDdgiParams1.z + 0.5); }
 

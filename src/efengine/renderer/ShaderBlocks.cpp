@@ -66,7 +66,8 @@ namespace renderer {
 
         b.viewPos      = glm::vec4(viewPos, 0.0f);
         b.shadowParams = glm::vec4(shadow.enabled ? 1.0f : 0.0f,
-                                   shadow.biasMin, shadow.biasMax, 0.0f);
+                                   shadow.biasMin, shadow.biasMax,
+                                   shadow.normalOffset);
 
         // Los tres mapas o ninguno: con uno solo faltante el shader tiene que
         // apagar el ambiente entero en vez de muestrear una unidad equivocada.

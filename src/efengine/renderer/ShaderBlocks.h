@@ -40,7 +40,7 @@ namespace renderer {
         glm::mat4 lightSpaceMatrix;
         glm::mat4 invViewProjRot;   // para el skybox: inverse(proj * mat3(view))
         glm::vec4 viewPos;          // .xyz
-        glm::vec4 shadowParams;     // x=enabled, y=biasMin, z=biasMax
+        glm::vec4 shadowParams;     // x=enabled, y=biasMin, z=biasMax, w=normalOffset (m)
         glm::vec4 iblParams;        // x=hasIbl, y=intensity, z=prefilterMaxLod
     };
 

@@ -17,20 +17,31 @@ namespace renderer {
     ShadowPass::ShadowPass(Renderer& renderer, Shader* depthShader, u32 resolution)
         : m_renderer(renderer), m_shader(depthShader), m_shadowMap(resolution) {
         EF_ASSERT(m_shader != null, "ShadowPass: shader de profundidad nulo (fallo al cargar)");
+        // Si no, un ShadowPass construido con otra resolucion se recrearia solo
+        // en el primer Render para volver al default de ShadowSettings.
+        m_settings.resolution = resolution;
     }
 
     const glm::mat4& ShadowPass::Render(const scene::SceneGraph& scene, const DirectionalLight& sun) {
-        m_lightSpaceMatrix = ComputeDirectionalLightMatrix(
-            sun.direction, glm::vec3(0.0f),
-            m_settings.orthoHalfSize, m_settings.distance,
-            m_settings.nearPlane, m_settings.farPlane);
+        // El encuadre sale de la escena, no de sliders. Antes el centro era un
+        // glm::vec3(0) fijo, asi que una sala que no estuviera en el origen se
+        // salia sola de la caja ortografica.
+        //
+        // WorldBounds() lo recalcula UpdateWorldTransforms, que Application ya
+        // corre antes de este pase.
+        m_fit = FitDirectionalLight(sun.direction, scene.WorldBounds(), m_settings.padding);
+
+        // Recrear el FBO es caro, asi que solo cuando el valor cambio de verdad.
+        if (m_settings.resolution != m_shadowMap.resolution() && m_settings.resolution > 0u) {
+            m_shadowMap = ShadowMap(m_settings.resolution);
+        }
 
         m_shadowMap.Bind();
         efecom::ApplyPipelineState(ShadowDepthState());
         efecom::Clear(efecom::ClearMask::Depth);
 
         // Una sola subida por pase: la matriz light-space no cambia entre objetos.
-        const ShadowPassBlock pass { m_lightSpaceMatrix };
+        const ShadowPassBlock pass { m_fit.matrix };
         m_passUbo.Update(&pass, sizeof(pass));
         m_passUbo.BindTo(kPassBinding);
 
@@ -44,7 +55,7 @@ namespace renderer {
             }
         }
 
-        return m_lightSpaceMatrix;
+        return m_fit.matrix;
     }
 
 }

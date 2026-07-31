@@ -16,7 +16,7 @@ layout(std140, binding = 0) uniform Frame {
     mat4 uLightSpaceMatrix;
     mat4 uInvViewProjRot;
     vec4 uViewPos;        // .xyz
-    vec4 uShadowParams;   // x=enabled, y=biasMin, z=biasMax
+    vec4 uShadowParams;   // x=enabled, y=biasMin, z=biasMax, w=normalOffset (m)
     vec4 uIblParams;      // x=hasIbl, y=intensity, z=prefilterMaxLod
 };
 
@@ -132,15 +132,38 @@ vec3 CookTorranceBRDF(vec3 N, vec3 V, vec3 L, vec3 F0, vec3 albedo, float metall
     return (kD * albedo / PI + specular) * NdotL;
 }
 
-// Factor de sombra [0=iluminado, 1=en sombra] con PCF 3×3. N,L en espacio mundo.
-float ShadowFactor(vec3 N, vec3 L) {
-    vec4 lp   = uLightSpaceMatrix * vec4(vFragPos, 1.0);
+// Factor de sombra [0=iluminado, 1=en sombra] con PCF 3×3.
+// Ng es la normal GEOMÉTRICA (no la del normal map: el offset de abajo es un
+// desplazamiento real en el mundo y no tiene que bailar con la textura) y L
+// apunta hacia la luz. Las dos en espacio mundo.
+float ShadowFactor(vec3 Ng, vec3 L) {
+    // Normal-offset bias: en vez de empujar la profundidad HACIA LA LUZ, corre
+    // el punto de muestreo a lo largo de la normal.
+    //
+    // La diferencia se ve justo en las aristas entre paredes. Ahí el oclusor
+    // toca al receptor, la diferencia de profundidad es cero, y cualquier bias
+    // de profundidad los separa e ilumina una banda a lo largo del rincón
+    // (peter-panning). Corrido a lo largo de la normal, en cambio, el punto se
+    // despega de SU propia superficie pero sigue igual de tapado por la pared
+    // vecina, así que la banda no se abre.
+    //
+    // El sin(θ) escala con lo rasante que llega la luz, que es como crece la
+    // huella del texel sobre la superficie: cero de frente (donde tampoco hay
+    // acné), máximo al ras.
+    float NdotL    = dot(Ng, L);
+    float sinTheta = sqrt(clamp(1.0 - NdotL * NdotL, 0.0, 1.0));
+    vec3  muestra  = vFragPos + Ng * (uShadowParams.w * sinTheta);
+
+    vec4 lp   = uLightSpaceMatrix * vec4(muestra, 1.0);
     vec3 proj = lp.xyz / lp.w;          // divide perspectiva (ortho: w=1)
     proj      = proj * 0.5 + 0.5;       // [-1,1] → [0,1]
     if (proj.z > 1.0) return 0.0;       // más allá del far plane → sin sombra
 
-    // Bias slope-scaled: más grande en rasante para matar el acné.
-    float bias   = max(uShadowParams.z * (1.0 - dot(N, L)), uShadowParams.y);
+    // Bias de profundidad slope-scaled: queda como escotilla, en 0 por default.
+    // Su unidad es fracción del rango de profundidad de la luz; como ese rango
+    // y el texel escalan los dos con el radio de la escena, biasMax * (la
+    // resolución del shadow map) da directamente cuántos texels de holgura son.
+    float bias   = max(uShadowParams.z * (1.0 - NdotL), uShadowParams.y);
     float shadow = 0.0;
     vec2  texel  = 1.0 / vec2(textureSize(uShadowMap, 0));
     for (int x = -1; x <= 1; ++x) {
@@ -220,7 +243,10 @@ void main() {
     } else {
         N = normalize(vTBN[2]);
     }
-    if (!gl_FrontFacing) N = -N;
+    // La geométrica se guarda aparte: ShadowFactor la necesita sin perturbar
+    // para correr el punto de muestreo.
+    vec3 Ng = normalize(vTBN[2]);
+    if (!gl_FrontFacing) { N = -N; Ng = -Ng; }
     vec3 V = normalize(uViewPos.xyz - vFragPos);   // del fragmento hacia la cámara
 
     // F0: reflectancia base con incidencia normal. Dieléctricos ≈ 0.04;
@@ -239,9 +265,11 @@ void main() {
     }
 
     // --- Luz direccional (sol): sin atenuación, con sombra PCF ---
+    // 'shadow' vive afuera del bloque porque kDdgiViewShadow lo escribe crudo.
+    float shadow = 0.0;
     {
         vec3  Ld     = normalize(-uLightDir.xyz);
-        float shadow = (uShadowParams.x > 0.5) ? ShadowFactor(N, Ld) : 0.0;
+        shadow = (uShadowParams.x > 0.5) ? ShadowFactor(Ng, Ld) : 0.0;
         Lo += (1.0 - shadow) * CookTorranceBRDF(N, V, Ld, F0, albedo, metallic, roughness) * uDirLightColor.rgb;
     }
 
@@ -323,6 +351,12 @@ void main() {
         case kDdgiViewFade:            color = vec3(ddgiFade);  break;
         case kDdgiViewAlbedo:          color = albedo;          break;
         case kDdgiViewNormal:          color = N * 0.5 + 0.5;   break;
+        // El termino de sombra crudo, sin albedo ni especular encima: blanco =
+        // el sol llega, negro = tapado. Es el unico modo que sirve para medir
+        // una fuga, porque en la imagen final una fuga sobre pared oscura se ve
+        // BLANCA (el lobulo especular no se multiplica por el albedo) y no hay
+        // forma de saber cuanta sombra falta.
+        case kDdgiViewShadow:          color = vec3(1.0 - shadow); break;
         default: break;   // kDdgiViewOff: la imagen final
     }
 

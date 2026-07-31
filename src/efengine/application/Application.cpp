@@ -159,6 +159,14 @@ namespace application {
             shadowCtx.enabled          = true;
             shadowCtx.biasMin          = m_shadowPass.settings().biasMin;
             shadowCtx.biasMax          = m_shadowPass.settings().biasMax;
+
+            // El normal offset se dial en texels pero viaja en metros: el
+            // shader no sabe cuanto mide un texel del shadow map en el mundo, y
+            // eso depende del encuadre que el pase acaba de calcular.
+            const renderer::DirectionalLightFit& fit = m_shadowPass.fit();
+            const f32 texel = 2.0f * fit.orthoHalfSize
+                            / static_cast<f32>(m_shadowPass.resolution());
+            shadowCtx.normalOffset = m_shadowPass.settings().normalOffsetTexels * texel;
         }
 
         // Las 4 piezas del IBL precomputado. Sin Environment quedan en null y el

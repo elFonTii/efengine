@@ -91,6 +91,7 @@ namespace renderer {
             kDebugFade            = 5u,   // el propio fade, en gris
             kDebugAlbedo          = 6u,
             kDebugNormal          = 7u,
+            kDebugShadow          = 8u,   // termino de sombra del sol, crudo
         };
         u32 debugView = kDebugOff;
 

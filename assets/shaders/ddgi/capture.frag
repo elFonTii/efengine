@@ -23,7 +23,7 @@ layout(std140, binding = 0) uniform Frame {
     mat4 uLightSpaceMatrix;
     mat4 uInvViewProjRot;
     vec4 uViewPos;        // .xyz = CENTRO DEL PROBE en este pase, no la camara
-    vec4 uShadowParams;   // x=enabled, y=biasMin, z=biasMax
+    vec4 uShadowParams;   // x=enabled, y=biasMin, z=biasMax, w=normalOffset (m)
     vec4 uIblParams;
 };
 
@@ -56,14 +56,21 @@ const uint SLOT_EMISSIVE = 7u;
 
 bool hasMap(uint slot) { return (uMapMask.x & (1u << slot)) != 0u; }
 
-// Misma logica que ShadowFactor de pbr.frag: PCF 3x3 con bias slope-scaled.
+// Misma logica que ShadowFactor de pbr.frag: PCF 3x3 con normal-offset bias.
+// Tiene que seguir siendo la misma: si el probe ve una banda de luz en el
+// rincon que la vista directa no ve, esa banda se hornea en la irradiancia y
+// sale por todos lados. N aca ya es la geometrica (main la calcula asi).
 float ShadowFactor(vec3 N, vec3 L) {
-    vec4 lp   = uLightSpaceMatrix * vec4(vFragPos, 1.0);
+    float NdotL    = dot(N, L);
+    float sinTheta = sqrt(clamp(1.0 - NdotL * NdotL, 0.0, 1.0));
+    vec3  muestra  = vFragPos + N * (uShadowParams.w * sinTheta);
+
+    vec4 lp   = uLightSpaceMatrix * vec4(muestra, 1.0);
     vec3 proj = lp.xyz / lp.w;
     proj      = proj * 0.5 + 0.5;
     if (proj.z > 1.0) return 0.0;
 
-    float bias   = max(uShadowParams.z * (1.0 - dot(N, L)), uShadowParams.y);
+    float bias   = max(uShadowParams.z * (1.0 - NdotL), uShadowParams.y);
     float shadow = 0.0;
     vec2  texel  = 1.0 / vec2(textureSize(uShadowMap, 0));
     for (int x = -1; x <= 1; ++x) {

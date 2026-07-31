@@ -382,7 +382,8 @@ namespace {
                                  "DDGI ignorando el fade",
                                  "Fade del volumen",
                                  "Albedo",
-                                 "Normal" };
+                                 "Normal",
+                                 "Sombra del sol (cruda)" };
         int vista = static_cast<int>(s.debugView);
         if (ImGui::Combo("Vista", &vista, vistas, IM_ARRAYSIZE(vistas))) {
             s.debugView = static_cast<u32>(vista);
@@ -464,14 +465,55 @@ namespace {
         }
 
         if (ImGui::CollapsingHeader("Sombras", ImGuiTreeNodeFlags_DefaultOpen)) {
-            renderer::ShadowSettings& sh = ctx.app.GetShadowPass().settings();
-            ImGui::Checkbox   ("Habilitadas",    &sh.enabled);
-            ImGui::SliderFloat("Ortho HalfSize", &sh.orthoHalfSize, 5.0f,  200.0f);
-            ImGui::SliderFloat("Distancia Luz",  &sh.distance,      10.0f, 400.0f);
-            ImGui::SliderFloat("Near",           &sh.nearPlane,     0.1f,  50.0f);
-            ImGui::SliderFloat("Far",            &sh.farPlane,      50.0f, 600.0f);
-            ImGui::SliderFloat("Bias Min",       &sh.biasMin,       0.0f,  0.01f, "%.4f");
-            ImGui::SliderFloat("Bias Max",       &sh.biasMax,       0.0f,  0.02f, "%.4f");
+            renderer::ShadowPass&     pase = ctx.app.GetShadowPass();
+            renderer::ShadowSettings& sh   = pase.settings();
+
+            ImGui::Checkbox   ("Habilitadas", &sh.enabled);
+            ImGui::SliderFloat("Margen",      &sh.padding, 0.0f, 10.0f, "%.2f m");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Aire alrededor de la escena. El encuadre de la luz\n"
+                                  "sale de sus bounds; esto es lo unico a mano.\n"
+                                  "Mas margen = texel mas grande = mas acne.");
+            }
+            // Sirve para medir: si un artefacto se afina a la mitad al duplicar
+            // la resolucion, escala con el texel y es del shadow map.
+            const char* resoluciones[] = { "512", "1024", "2048", "4096" };
+            const u32   valores[]      = { 512u,  1024u,  2048u,  4096u  };
+            int resSel = 2;
+            for (int i = 0; i < IM_ARRAYSIZE(valores); ++i)
+                if (valores[i] == sh.resolution) resSel = i;
+            if (ImGui::Combo("Resolucion", &resSel, resoluciones, IM_ARRAYSIZE(resoluciones))) {
+                sh.resolution = valores[resSel];
+            }
+
+            ImGui::SliderFloat("Normal offset", &sh.normalOffsetTexels, 0.0f, 8.0f, "%.1f texels");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("El mecanismo principal. Subilo si hay acne\n"
+                                  "(lineas oscuras en zonas iluminadas).\n"
+                                  "Subirlo NO abre luz en los rincones; el techo\n"
+                                  "es la geometria fina, que empieza a filtrar.");
+            }
+
+            ImGui::SliderFloat("Bias Min", &sh.biasMin, 0.0f, 0.01f, "%.4f");
+            ImGui::SliderFloat("Bias Max", &sh.biasMax, 0.0f, 0.02f, "%.4f");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Escotilla. Empuja la profundidad hacia la luz,\n"
+                                  "asi que cualquier valor > 0 abre una banda de\n"
+                                  "luz en las aristas entre paredes. Dejar en 0.");
+            }
+
+            // Los dos bias son fracciones de profundidad NDC, que no quiere
+            // decir nada solo. Lo que se tunea de verdad es cuantos texels de
+            // holgura son, asi que se muestra la conversion.
+            const renderer::DirectionalLightFit& fit = pase.fit();
+            const f32 texel = (pase.resolution() > 0)
+                            ? 2.0f * fit.orthoHalfSize / static_cast<f32>(pase.resolution())
+                            : 0.0f;
+            ImGui::TextDisabled("Encuadre: half %.1f m | rango %.1f m | texel %.1f mm",
+                                fit.orthoHalfSize, fit.depthRange, texel * 1000.0f);
+            ImGui::TextDisabled("Normal offset = %.1f mm | Bias Max = %.1f mm",
+                                sh.normalOffsetTexels * texel * 1000.0f,
+                                sh.biasMax * fit.depthRange * 1000.0f);
         }
 
         drawDdgiSection(ctx);
