@@ -265,6 +265,20 @@ namespace renderer {
         // unidad sin contenido y saldria todo en sombra.
         if (shadow.map != null) shadow.map->Bind(8);
 
+        // Los dos atlas a sus unidades, por la MISMA razon que el shadow map de
+        // arriba: este pase corre antes de BeginScene, que es quien normalmente
+        // los bindea. Sin esto, el rebote de capture.frag samplea unidades sin
+        // contenido y da negro sin que nada falle ruidosamente.
+        m_irradiance.Bind(kIrradianceAtlasUnit);
+        m_distance.Bind(kDistanceAtlasUnit);
+
+        // El bloque que va a leer la CAPTURA. No alcanza con el que se sube mas
+        // abajo para el blend: ese lleva atlasValid en true siempre, y aca hace
+        // falta lo contrario. En el primer frame el atlas todavia es el negro
+        // del clear, asi que atlasValid = m_blendedOnce apaga DdgiEnabled() y el
+        // rebote vale cero en vez de realimentar basura.
+        m_renderer.SetDdgiBlock(MakeDdgiBlock(m_atlasGrid, m_settings, m_range, m_blendedOnce));
+
         efecom::BindRenderTarget(m_captureFbo, kCaptureWidth, kCaptureHeight);
         efecom::SetClearColor(0.0f, 0.0f, 0.0f, kFarDistance);
         efecom::Clear(efecom::ClearMask::ColorDepth);

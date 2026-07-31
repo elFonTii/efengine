@@ -108,9 +108,33 @@ void main() {
 
     // --- El rebote: irradiancia del atlas del FRAME ANTERIOR ---
     // De aca salen los rebotes infinitos, gratis: la captura corre antes del
-    // blend de este frame, asi que lee lo que el blend anterior dejo. kD = 1
-    // porque es difuso puro. La tarea 14 enciende esta linea.
+    // blend de este frame, asi que lee lo que el blend anterior dejo. Cada
+    // frame apila un rebote sobre el resultado del anterior y la serie converge
+    // sola a la solucion multi-rebote, sin trazar un rayo mas.
+    //
+    // albedo pelado y sin /PI: kD = 1 porque es difuso puro, y el atlas guarda
+    // radiancia media (no irradiancia), asi que E = PI * L y el /PI del BRDF se
+    // cancela. Queda dimensionalmente igual que `direct` de arriba.
+    //
+    // NO se multiplica por la intensidad artistica (params0.y) A PROPOSITO: el
+    // lazo esta realimentado, asi que la ganancia por vuelta seria
+    // albedo * intensidad. Con intensidad > 1 y un albedo alto eso pasa de 1 y
+    // la energia diverge frame a frame hasta saturar. Sin ella la ganancia es
+    // albedo < 1 y converge siempre. La intensidad se aplica una sola vez,
+    // cuando pbr.frag samplea.
     vec3 bounce = vec3(0.0);
+    if (DdgiEnabled()) {
+        // "Hacia el probe" hace de V: en este pase el observador es el centro
+        // del probe y no la camara, y viewBias empuja el punto de muestreo hacia
+        // el. El guard es por el fragmento que cae justo sobre el centro, donde
+        // normalize(0) daria NaN y lo propagaria a todo el atlas via el blend.
+        vec3  hacia = uViewPos.xyz - vFragPos;
+        float dProb = length(hacia);
+        hacia       = (dProb > 1e-5) ? hacia / dProb : N;
+
+        bounce = albedo * SampleDdgiIrradiance(vFragPos, N, hacia)
+               * DdgiVolumeFade(vFragPos);
+    }
 
     vec3 emissive = (hasMap(SLOT_EMISSIVE) ? texture(uEmissiveMap, vUV).rgb : vec3(1.0))
                   * uEmissiveTint.rgb * uScalars1.y;
