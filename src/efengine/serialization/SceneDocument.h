@@ -40,6 +40,11 @@ namespace serialization {
         // v3. u32 y no bool: el tamano de bool no esta garantizado y el formato
         // no puede depender de eso. Mismo patron que los enums ya serializados.
         u32       doubleSided       = 0u;
+
+        // v4. Transformacion de la UV comun a los 8 mapas: uv = vUV * tiling + offset.
+        // El default es la identidad, que es lo que hacia el shader antes de v4.
+        glm::vec2 uvTiling = glm::vec2(1.0f);
+        glm::vec2 uvOffset = glm::vec2(0.0f);
     };
 
     struct MaterialBinding {            // por Array
@@ -99,7 +104,9 @@ namespace serialization {
     //   v1: 4*u32 + count del array + vec3 + 5*f32                    = 52
     //   v2: + vec3 (emissiveTint) + f32 (intensity) + f32 (strength)   = 72
     //   v3: + u32 (doubleSided)                                        = 76
+    //   v4: + vec2 (uvTiling) + vec2 (uvOffset)                        = 92
     inline constexpr usize MinEncodedMaterial(u32 version) {
+        if (version >= 4u) return 92u;
         if (version >= 3u) return 76u;
         return (version >= 2u) ? 72u : 52u;
     }
@@ -148,6 +155,13 @@ namespace serialization {
         // (material de una sola cara), que es el comportamiento de siempre.
         if (ar.Version() >= 3u) {
             ar.Field(m.doubleSided);
+        }
+
+        // v4 al final del record. Leyendo v3 estos campos no se tocan y quedan en
+        // (1,1)/(0,0) — la identidad, o sea la UV de la malla tal cual.
+        if (ar.Version() >= 4u) {
+            ar.Field(m.uvTiling);
+            ar.Field(m.uvOffset);
         }
     }
 
