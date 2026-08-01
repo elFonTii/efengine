@@ -144,6 +144,8 @@ namespace serialization {
             r.emissiveIntensity = def.emissiveIntensity;
             r.normalStrength    = def.normalStrength;
             r.doubleSided       = def.doubleSided ? 1u : 0u;
+            r.uvTiling          = def.uvTiling;
+            r.uvOffset          = def.uvOffset;
             return r;
         }
 
@@ -171,6 +173,8 @@ namespace serialization {
             def.emissiveIntensity = r.emissiveIntensity;
             def.normalStrength    = r.normalStrength;
             def.doubleSided       = (r.doubleSided != 0u);
+            def.uvTiling          = r.uvTiling;
+            def.uvOffset          = r.uvOffset;
             return def;
         }
 
