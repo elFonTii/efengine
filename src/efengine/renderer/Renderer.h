@@ -11,7 +11,7 @@
 #include <efengine/renderer/ShadowContext.h>
 #include <efengine/renderer/IblContext.h>
 #include <efengine/renderer/ShaderBlocks.h>
-#include <efengine/renderer/DdgiContext.h>
+#include <efengine/renderer/SceneLighting.h>
 #include <efengine/renderer/UniformBuffer.h>
 
 #include <glm/glm.hpp>
@@ -36,7 +36,12 @@ namespace renderer {
             void SetViewport(u32 width, u32 height) const; // por el momento para evitar que Application llame gl crudo
             void Draw(const VertexArray& va, const Shader& shader) const;
 
-            void BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, const DirectionalLight& sun, const ShadowContext& shadow, const IblContext& ibl, const DdgiContext& ddgi);
+            // Los cuatro contextos de iluminacion viajan en un solo struct: con
+            // el AO eran nueve parametros, y el proximo sistema habria sumado el
+            // decimo. Ver SceneLighting.h.
+            void BeginScene(const glm::mat4& view, const glm::mat4& projection,
+                            const glm::vec3& viewPos, const std::vector<PointLight>& lights,
+                            const DirectionalLight& sun, const SceneLighting& lighting);
 
             // overrideShader != null dibuja TODO con ese programa en vez del del
             // material, pero sigue subiendo el MaterialBlock y bindeando las
@@ -76,6 +81,7 @@ namespace renderer {
             UniformBuffer m_objectUbo;
             UniformBuffer m_materialUbo;
             UniformBuffer m_ddgiUbo;
+            UniformBuffer m_aoUbo;
     };
 
 }

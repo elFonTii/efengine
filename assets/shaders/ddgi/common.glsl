@@ -142,7 +142,14 @@ float DdgiVolumeFade(vec3 worldPos) {
 // distancia guardadas por probe para estimar la probabilidad de que el punto
 // sea visible desde ese probe. Es lo que mata el light leaking que arruinaba a
 // todos los sistemas de probes anteriores.
-vec3 SampleDdgiIrradiance(vec3 worldPos, vec3 N, vec3 V) {
+// bentN solo manda en la DIRECCION del lookup octaedrico. N sigue mandando en
+// los dos bias y en el rechazo de backfaces, y eso es diseño, no un olvido:
+// empujar el punto de muestreo fuera de la superficie es geometria, no
+// visibilidad -- con el bent normal el punto se correria hacia el interior de
+// la sala en vez de despegarse de la pared. Y el rechazo de backfaces es el
+// test geometrico de "este probe esta detras de la superficie": debilitarlo es
+// debilitar la defensa contra el leaking.
+vec3 SampleDdgiIrradiance(vec3 worldPos, vec3 N, vec3 bentN, vec3 V) {
     // Los dos bias empujan el punto de muestreo fuera de la superficie para que
     // no se auto-ocluya contra su propia geometria.
     vec3 p = worldPos + N * uDdgiParams0.z + V * uDdgiParams0.w;
@@ -199,7 +206,7 @@ vec3 SampleDdgiIrradiance(vec3 worldPos, vec3 N, vec3 V) {
         if (w < 0.0001) continue;
 
         vec3 irr = texture(uDdgiIrradiance,
-                           DdgiTileUV(DdgiProbeIndex(coords), OctEncode(N),
+                           DdgiTileUV(DdgiProbeIndex(coords), OctEncode(bentN),
                                       uDdgiAtlas.z, uDdgiAtlas.z + 2 * kDdgiBorder,
                                       irrAtlasSize)).rgb;
 
@@ -209,4 +216,10 @@ vec3 SampleDdgiIrradiance(vec3 worldPos, vec3 N, vec3 V) {
 
     if (sumaPesos <= 0.0) return vec3(0.0);   // los 8 probes rechazados
     return suma / sumaPesos;
+}
+
+// Wrapper para los consumidores que no tienen bent normal (la debug viz, la
+// captura de probes): sin AO, la direccion del lookup ES la normal.
+vec3 SampleDdgiIrradiance(vec3 worldPos, vec3 N, vec3 V) {
+    return SampleDdgiIrradiance(worldPos, N, N, V);
 }

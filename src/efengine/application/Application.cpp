@@ -111,6 +111,21 @@ namespace application {
             EF_LOG_INFO("Application: sphere.fbx semi-extents (%.3f, %.3f, %.3f)", e.x, e.y, e.z);
         }
 
+        // AO screen-space. Mismo patron de degradacion que DDGI: si falta un
+        // shader, m_aoPass queda vacio y el frame sigue sin oclusion de contacto.
+        renderer::AoPass::Shaders aoShaders;
+        aoShaders.depthNormal = m_resources.GetShader("ao_depth_normal",
+                                    "assets/shaders/ao/depth_normal.vert",
+                                    "assets/shaders/ao/depth_normal.frag");
+        aoShaders.gtao = m_resources.GetShader("ao_gtao",
+                                    "assets/shaders/screen.vert", "assets/shaders/ao/gtao.frag");
+        aoShaders.denoise = m_resources.GetShader("ao_denoise",
+                                    "assets/shaders/screen.vert", "assets/shaders/ao/denoise.frag");
+
+        m_aoPass = renderer::AoPass::Create(m_renderer, m_fullscreenQuad, aoShaders,
+                                            m_window.GetWidth(), m_window.GetHeight());
+        if (!m_aoPass) EF_LOG_ERROR("Application: no se pudo crear el AoPass");
+
         m_window.SetEventListener(&m_input);
 
         EF_LOG_INFO("Application inicializada");
@@ -139,6 +154,7 @@ namespace application {
         if(w != 0 && h != 0) {
             m_sceneFB.Resize(w, h);
             m_postChain.Resize(w, h);
+            if (m_aoPass) m_aoPass->Resize(w, h);
             // El backbuffer sigue al framebuffer de la ventana. Sin esto,
             // RenderTarget::Present() fijaria el viewport del tamano viejo.
             efecom::SetPresentExtent(w, h);
@@ -150,15 +166,17 @@ namespace application {
 
         // 2 cargas:  al FBO de la escena y Backbuffer de Window
 
+        // Los cuatro contextos de iluminacion del frame, en un solo struct.
+        renderer::SceneLighting lighting;
+
         // --- Pre-pase de sombra: profundidad de la escena desde el sol ---
-        renderer::ShadowContext shadowCtx;
         if (m_shadowPass.settings().enabled) {
             m_shadowPass.Render(scene, scene.Sun());
-            shadowCtx.map              = &m_shadowPass.DepthTexture();
-            shadowCtx.lightSpaceMatrix = m_shadowPass.lightSpaceMatrix();
-            shadowCtx.enabled          = true;
-            shadowCtx.biasMin          = m_shadowPass.settings().biasMin;
-            shadowCtx.biasMax          = m_shadowPass.settings().biasMax;
+            lighting.shadow.map              = &m_shadowPass.DepthTexture();
+            lighting.shadow.lightSpaceMatrix = m_shadowPass.lightSpaceMatrix();
+            lighting.shadow.enabled          = true;
+            lighting.shadow.biasMin          = m_shadowPass.settings().biasMin;
+            lighting.shadow.biasMax          = m_shadowPass.settings().biasMax;
 
             // El normal offset se dial en texels pero viaja en metros: el
             // shader no sabe cuanto mide un texel del shadow map en el mundo, y
@@ -166,35 +184,41 @@ namespace application {
             const renderer::DirectionalLightFit& fit = m_shadowPass.fit();
             const f32 texel = 2.0f * fit.orthoHalfSize
                             / static_cast<f32>(m_shadowPass.resolution());
-            shadowCtx.normalOffset = m_shadowPass.settings().normalOffsetTexels * texel;
+            lighting.shadow.normalOffset = m_shadowPass.settings().normalOffsetTexels * texel;
         }
 
         // Las 4 piezas del IBL precomputado. Sin Environment quedan en null y el
         // shader apaga el ambiente entero en vez de samplear una unidad equivocada.
-        renderer::IblContext ibl;
-        ibl.intensity = scene.iblIntensity;
+        lighting.ibl.intensity = scene.iblIntensity;
         if (m_environment) {
-            ibl.irradiance  = &m_environment->irradiance();
-            ibl.prefiltered = &m_environment->prefiltered();
-            ibl.brdfLut     = &m_environment->brdfLut();
-            ibl.maxLod      = m_environment->prefilterMaxLod();
+            lighting.ibl.irradiance  = &m_environment->irradiance();
+            lighting.ibl.prefiltered = &m_environment->prefiltered();
+            lighting.ibl.brdfLut     = &m_environment->brdfLut();
+            lighting.ibl.maxLod      = m_environment->prefilterMaxLod();
         }
 
         // --- DDGI: captura de probes + blend. Antes de BeginScene porque sube su
         // --- propio FrameBlock por cara, y despues del ShadowPass porque la
         // --- captura sombrea con la matriz y el depth del sol.
-        renderer::DdgiContext ddgiCtx;
         if (m_ddgiPass) {
-            m_ddgiPass->Update(scene, shadowCtx, ibl,
+            m_ddgiPass->Update(scene, lighting.shadow, lighting.ibl,
                                m_environment ? &m_environment->env() : null);
-            ddgiCtx = m_ddgiPass->Context();
+            lighting.ddgi = m_ddgiPass->Context();
+        }
+
+        // --- AO screen-space: prepass + kernel. Antes de BeginScene porque sube
+        // --- su propio bloque de binding 4, y porque pbr.frag necesita el
+        // --- resultado YA calculado para modular la indirecta.
+        if (m_aoPass) {
+            m_aoPass->Render(scene, camera.ViewMatrix(), camera.ProjectionMatrix());
+            lighting.ao = m_aoPass->Context();
         }
 
         // Al Framebuffer de escena
         m_sceneFB.Bind();
         m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
-        m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(), scene.PointLights(), scene.Sun(), shadowCtx,
-                              ibl, ddgiCtx);
+        m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(),
+                              scene.PointLights(), scene.Sun(), lighting);
 
          if (m_environment) {
             m_skyboxPass.Draw(m_environment->env());

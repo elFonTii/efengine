@@ -57,6 +57,14 @@ layout(binding = 11) uniform sampler2D   uBrdfLUT;
 // Bloque de DDGI (binding 5), samplers 12/13, y toda su matematica.
 #include "ddgi/common.glsl"
 
+// -- Oclusion ambiental screen-space (binding 6, unidad 14) -------------------
+// Bloque propio y no campos nuevos en Frame: extender Frame obliga a tocar los
+// cuatro shaders que lo declaran sin que ninguno use el dato.
+layout(std140, binding = 6) uniform AoParams {
+    vec4 uAoParams;   // enabled, bentNormal, multiBounce, debugView
+};
+layout(binding = 14) uniform sampler2D uAoTexture;
+
 // Espeja renderer::TextureSlot: un bit por slot en uMapMask.x.
 const uint SLOT_ALBEDO    = 0u;
 const uint SLOT_NORMAL    = 1u;
@@ -113,6 +121,16 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0) {
 vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
     return F0 + (max(vec3(1.0 - roughness), F0) - F0)
               * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+// Multi-rebote de Jimenez: convierte la visibilidad escalar en un factor RGB
+// dependiente del albedo. Sin esto, una pared roja ocluida se oscurece hacia
+// gris sucio en vez de hacia rojo oscuro -- el aspecto "AO como mugre".
+vec3 MultiBounce(float ao, vec3 albedo) {
+    vec3 a =  2.0404 * albedo - 0.3324;
+    vec3 b = -4.7951 * albedo + 0.6417;
+    vec3 c =  2.7552 * albedo + 0.6903;
+    return clamp(ao * (ao * (ao * a + b) + c), vec3(ao), vec3(1.0));
 }
 
 // Cook-Torrance para una luz: devuelve (kD*albedo/PI + specular) * NdotL.
@@ -284,6 +302,21 @@ void main() {
     // El AO solo modula la indirecta, nunca la directa. uAOStrength interpola entre
     // "sin oclusión" (1.0) y el valor del mapa.
     float ao    = hasMap(SLOT_AO) ? mix(1.0, texture(uAOMap, uv).r, uScalars0.z) : 1.0;
+
+    // AO screen-space: el contacto sub-metrico que la grilla de probes no ve.
+    // texelFetch por gl_FragCoord y no texture(uv): el AO sale a resolucion
+    // completa, asi que no hace falta ningun uniform de tamano de pantalla.
+    vec4  aoMuestra = texelFetch(uAoTexture, ivec2(gl_FragCoord.xy), 0);
+    float ssVis     = (uAoParams.x > 0.5) ? clamp(aoMuestra.w, 0.0, 1.0) : 1.0;
+
+    // El bent normal apunta hacia donde el hemisferio esta ABIERTO. Es lo que
+    // hace que el piso pegado a la pared roja consulte la irradiancia hacia el
+    // interior de la sala y no hacia arriba.
+    vec3 bentCrudo = aoMuestra.xyz;
+    vec3 bentN = (uAoParams.y > 0.5 && dot(bentCrudo, bentCrudo) > 1e-8)
+               ? normalize(bentCrudo)
+               : N;
+
     float NdotV = max(dot(N, V), 0.0);
 
     // F con corrección por rugosidad: acá SÍ se usa el resultado, no solo para kD.
@@ -299,7 +332,7 @@ void main() {
     // contaria la misma luz dos veces y lavaria todo. El fade sobre la celda del
     // borde evita la costura dura donde el volumen termina y queda solo el IBL.
     vec3 iblIrr = (uIblParams.x > 0.5)
-                ? texture(uIrradianceMap, N).rgb * uIblParams.y
+                ? texture(uIrradianceMap, bentN).rgb * uIblParams.y
                 : vec3(0.0);
 
     // ddgiFade y ddgiIrr se hoistean fuera del if porque los modos de debug del
@@ -316,7 +349,7 @@ void main() {
         // distancia que no van a ningun lado. La excepcion es el modo que existe
         // justamente para ver lo que el fade descarta.
         if (ddgiFade > 0.0 || DdgiDebugView() == kDdgiViewDdgiNoFade) {
-            ddgiIrr = SampleDdgiIrradiance(vFragPos, N, V) * uDdgiParams0.y;
+            ddgiIrr = SampleDdgiIrradiance(vFragPos, N, bentN, V) * uDdgiParams0.y;
         }
         if (ddgiFade > 0.0) indirectDiffuse = mix(iblIrr, ddgiIrr, ddgiFade);
     }
@@ -333,8 +366,13 @@ void main() {
     // Separado del especular para que el modo de debug pueda mostrar EXACTAMENTE
     // lo que la indirecta difusa le suma al pixel, sin reconstruirlo aparte.
     // Algebraicamente es la misma suma de antes.
-    vec3 indirectApplied = kD * indirectDiffuse * albedo * ao;
-    vec3 ambient         = indirectApplied + specularIBL * ao;
+    // El mapa de AO del material y el GTAO son oclusion a escalas distintas
+    // (micro-detalle horneado vs. contacto de escena): se componen multiplicando.
+    float aoTotal = ao * ssVis;
+    vec3  aoRgb   = (uAoParams.z > 0.5) ? MultiBounce(aoTotal, albedo) : vec3(aoTotal);
+
+    vec3 indirectApplied = kD * indirectDiffuse * albedo * aoRgb;
+    vec3 ambient         = indirectApplied + specularIBL * aoRgb;
 
     // --- Emision propia: no la toca el AO, ni la sombra, ni la intensidad de IBL ---
     // Sale en HDR lineal, así que florece con bloom recién cuando la intensidad
@@ -366,6 +404,14 @@ void main() {
         case kDdgiViewShadow:          color = vec3(1.0 - shadow); break;
         default: break;   // kDdgiViewOff: la imagen final
     }
+
+    // Las vistas del AO corren DESPUES de las de DDGI: si las dos estan activas,
+    // gana AO. Los modos 3 y 4 muestran lo que gtao.frag volco del prepass.
+    int aoVista = int(uAoParams.w + 0.5);
+    if      (aoVista == 1) color = vec3(ssVis);                    // visibilidad
+    else if (aoVista == 2) color = aoMuestra.xyz * 0.5 + 0.5;      // bent normal (world)
+    else if (aoVista == 3) color = aoMuestra.xyz * 0.5 + 0.5;      // normal del prepass (view)
+    else if (aoVista == 4) color = aoMuestra.xyz;                  // viewZ, una banda por metro
 
     // Radiancia lineal HDR sin tonemapear: el tone mapping + gamma ahora ocurren
     // una sola vez en el present pass (assets/shaders/tonemap.frag), Ciclo 1 HDR.

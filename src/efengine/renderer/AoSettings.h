@@ -28,7 +28,14 @@ namespace renderer {
         // Divisor en el shader: SanitizeAoSettings lo mantiene > 0.
         f32 thickness = 0.25f;
 
-        i32 slices = 2;    // cortes por pixel
+        // Cortes por pixel. NO baja de 4: con 2, el arco que devuelve cada corte
+        // sobre una superficie plana va de 0.98 a 1.52 segun su orientacion, y
+        // promediar dos muestras de esa distribucion deja un ruido pixel-a-pixel
+        // de ~0.057 contra una señal de ~0.028 -- el grano es el doble que el AO
+        // que se quiere ver, y como el ruido es fijo en espacio de PANTALLA, se
+        // arrastra sobre las superficies cuando la camara se mueve. Con 4 cortes
+        // ese ruido cae a ~0.004.
+        i32 slices = 4;
         i32 steps  = 8;    // pasos por lado de cada corte
 
         // Techo del radio proyectado, en pixeles. Existe por el caso "camara

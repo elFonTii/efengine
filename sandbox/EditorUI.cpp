@@ -11,6 +11,8 @@
 #include <efengine/renderer/DdgiPass.h>
 #include <efengine/renderer/DdgiSettings.h>
 #include <efengine/renderer/DdgiVolume.h>
+#include <efengine/renderer/AoPass.h>
+#include <efengine/renderer/AoSettings.h>
 #include <efengine/renderer/Bounds.h>
 #include <efengine/resources/SceneAssets.h>
 #include <efengine/renderer/Model.h>
@@ -414,6 +416,91 @@ namespace {
         ImGui::SliderFloat("Radio de esfera", &s.debugRadius, 0.02f, 0.5f, "%.3f m");
     }
 
+    void drawAoSection(EditorContext& ctx) {
+        if (!ImGui::CollapsingHeader("Oclusion ambiental (GTAO)")) return;
+
+        std::optional<renderer::AoPass>& opt = ctx.app.GetAoPass();
+        if (!opt.has_value()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+                               "AoPass no disponible: fallo la carga de shaders.");
+            ImGui::TextWrapped("La escena esta sin oclusion de contacto. Mira la consola.");
+            return;
+        }
+        renderer::AoSettings& s = opt->settings();
+
+        ImGui::Checkbox("Habilitado", &s.enabled);
+
+        ImGui::SliderFloat("Radio", &s.radius, 0.0f, 3.0f, "%.2f m");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "En METROS. Tiene que quedar POR DEBAJO del espaciado de\n"
+                "probes de DDGI: lo que el AO ocluye es exactamente lo que\n"
+                "la grilla no puede ver. Por encima, los dos oscurecen la\n"
+                "misma cosa.\n\n"
+                "Radio 0 = control nulo: la imagen tiene que volver a ser\n"
+                "la de AO apagado.");
+        }
+
+        // El espaciado de DDGI al lado del slider: la regla "radio < espaciado"
+        // no se puede verificar de otra forma desde el panel.
+        std::optional<renderer::DdgiPass>& ddgi = ctx.app.GetDdgiPass();
+        if (ddgi.has_value()) {
+            const glm::vec3& sp = ddgi->settings().grid.spacing;
+            const f32 minSp = glm::min(sp.x, glm::min(sp.y, sp.z));
+            if (s.radius >= minSp) {
+                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f),
+                                   "Radio >= espaciado de probes (%.2f m): doble oscurecimiento.", minSp);
+            } else {
+                ImGui::TextDisabled("espaciado de probes mas chico: %.2f m", minSp);
+            }
+        }
+
+        ImGui::SliderFloat("Intensidad", &s.intensity, 0.0f, 4.0f);
+        ImGui::SliderFloat("Grosor",     &s.thickness, 0.01f, 1.0f);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Que tan rapido se desvanece una muestra lejana.\n"
+                              "Bajarlo hace que un objeto lejano alineado en\n"
+                              "pantalla deje de ocluir a uno cercano.");
+        }
+        ImGui::SliderInt  ("Cortes",     &s.slices, 1, 8);
+        ImGui::SliderInt  ("Pasos",      &s.steps,  1, 32);
+        ImGui::SliderFloat("Techo de radio", &s.maxScreenRadius, 8.0f, 512.0f, "%.0f px");
+
+        ImGui::SeparatorText("Aplicacion");
+        ImGui::Checkbox("Bent normal",  &s.bentNormal);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Orienta el lookup de irradiancia (IBL y DDGI) hacia\n"
+                              "donde el hemisferio esta abierto. En un rincon de\n"
+                              "Cornell cambia la DIRECCION del color bleeding.");
+        }
+        ImGui::Checkbox("Multi-rebote", &s.multiBounce);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("El AO se tiñe con el albedo en vez de oscurecer a gris.\n"
+                              "Sobre la pared roja la diferencia es directa.");
+        }
+        ImGui::Checkbox("Blur", &s.blur);
+
+        ImGui::SeparatorText("Debug");
+        const char* vistas[] = { "Final (normal)",
+                                 "Visibilidad",
+                                 "Bent normal (world)",
+                                 "Normal del prepass (view)",
+                                 "Profundidad (1 banda = 1 m)" };
+        int vista = static_cast<int>(s.debugView);
+        if (ImGui::Combo("Vista AO", &vista, vistas, IM_ARRAYSIZE(vistas))) {
+            s.debugView = static_cast<u32>(vista);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Las dos ultimas vuelcan el prepass y saltean el blur.\n"
+                              "Si esta vista y la de DDGI estan las dos activas,\n"
+                              "gana esta.");
+        }
+        if (s.debugView != 0u) {
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f),
+                               "Vista de debug activa: la imagen NO es la final.");
+        }
+    }
+
     void drawRenderPanel(EditorContext& ctx) {
         EditorState& st = ctx.state;
 
@@ -517,6 +604,7 @@ namespace {
         }
 
         drawDdgiSection(ctx);
+        drawAoSection(ctx);
 
         ImGui::End();
     }

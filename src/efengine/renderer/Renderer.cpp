@@ -8,6 +8,7 @@
 #include <efengine/renderer/Cubemap.h>
 #include <efengine/renderer/PipelineStates.h>
 #include <efengine/renderer/DdgiSettings.h>
+#include <efengine/renderer/AoMath.h>
 
 namespace efengine {
 namespace renderer {
@@ -17,7 +18,8 @@ namespace renderer {
         , m_lightsUbo(sizeof(LightsBlock))
         , m_objectUbo(sizeof(ObjectBlock))
         , m_materialUbo(sizeof(MaterialBlock))
-        , m_ddgiUbo(sizeof(DdgiBlock)) {
+        , m_ddgiUbo(sizeof(DdgiBlock))
+        , m_aoUbo(sizeof(AoBlock)) {
         // glBindBufferBase es estado GLOBAL, no por programa: alcanza engancharlos
         // una vez aca. Por eso desaparecio el set m_frameShaders, que existia solo
         // para no re-setear los mismos uniforms en cada programa del frame.
@@ -26,6 +28,7 @@ namespace renderer {
         m_objectUbo.BindTo(kObjectBinding);
         m_materialUbo.BindTo(kMaterialBinding);
         m_ddgiUbo.BindTo(kDdgiBinding);
+        m_aoUbo.BindTo(kAoBinding);
     }
 
     void Renderer::Clear(f32 r, f32 g, f32 b, f32 a) const {
@@ -52,7 +55,13 @@ namespace renderer {
         // objeto para no perder los uniforms, que con UBOs ni siquiera aplica.
     }
 
-    void Renderer::BeginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const std::vector<PointLight>& lights, const DirectionalLight& sun, const ShadowContext& shadow, const IblContext& ibl, const DdgiContext& ddgi) {
+    void Renderer::BeginScene(const glm::mat4& view, const glm::mat4& projection,
+                              const glm::vec3& viewPos, const std::vector<PointLight>& lights,
+                              const DirectionalLight& sun, const SceneLighting& lighting) {
+        const ShadowContext& shadow = lighting.shadow;
+        const IblContext&    ibl    = lighting.ibl;
+        const DdgiContext&   ddgi   = lighting.ddgi;
+
         if (lights.size() > kMaxLights) {
             EF_LOG_WARNING("Se intentan agregar más luces de las que el shader soporta.");
         }
@@ -86,6 +95,12 @@ namespace renderer {
         const DdgiSettings& ds = atlasValid ? *ddgi.settings : defaults;
         const DdgiBlock ddgiBlock = MakeDdgiBlock(ds.grid, ds, ddgi.range, atlasValid);
         m_ddgiUbo.Update(&ddgiBlock, sizeof(ddgiBlock));
+
+        // El AO a su unidad fija. Si no hay textura, MakeAoBlock apaga el bloque
+        // y pbr.frag ni la samplea.
+        if (lighting.ao.texture != null) lighting.ao.texture->Bind(kAoTextureUnit);
+        const AoBlock aoBlock = MakeAoBlock(lighting.ao);
+        m_aoUbo.Update(&aoBlock, sizeof(aoBlock));
     }
 
     void Renderer::SetFrameBlock(const FrameBlock& block) const {

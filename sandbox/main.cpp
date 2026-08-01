@@ -175,7 +175,8 @@ int main() {
     // de sandbox.efe no sirve para validar iluminacion indirecta. Cargar el .efe
     // sigue disponible desde el menu "Escena". Volver al arranque viejo es
     // cambiar esta linea por el SceneSerializer::Load de siempre.
-    sandbox::BuildCornellScene(editor);   // ya llama a RefreshHandles
+    sandbox::BuildCornellScene(editor);   // ya llama a RefreshHandles}
+    //sandbox::RefreshHandles(editor);
 
     while (app.Running()) {
         app.BeginFrame();
