@@ -350,6 +350,15 @@ void DrawMaterialsPanel(EditorContext& ctx) {
     changed |= ImGui::SliderFloat("Normal str", &def.normalStrength, 0.0f, 2.0f);
     changed |= ImGui::Checkbox("Doble cara", &def.doubleSided);
 
+    ImGui::SeparatorText("UV");
+    // DragFloat2 y no SliderFloat2: el rango util del tiling no tiene techo
+    // natural — una pared de 200 m con una textura de 1 m quiere 200, y un
+    // slider acotado mentiria. El minimo en 0.01 evita el 0, que colapsaria
+    // toda la malla a un solo texel, y los negativos.
+    changed |= ImGui::DragFloat2("Tiling", glm::value_ptr(def.uvTiling), 0.01f, 0.01f, 128.0f);
+    // El offset va sin limites: envuelve por GL_REPEAT, cualquier valor sirve.
+    changed |= ImGui::DragFloat2("Offset", glm::value_ptr(def.uvOffset), 0.01f);
+
     ImGui::SeparatorText("Emision");
     changed |= ImGui::ColorEdit3 ("Emis tint", glm::value_ptr(def.emissiveTint));
     // Rango HDR: para que el bloom lo agarre, la emision tiene que pasar el
