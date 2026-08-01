@@ -49,6 +49,19 @@ namespace renderer {
     static_assert(offsetof(DdgiBlock, params1)     == 96u, "DdgiBlock: offset de params1");
     static_assert(offsetof(DdgiBlock, params2)     == 112u, "DdgiBlock: offset de params2");
 
+    static_assert(sizeof(AoPrepassBlock) == 128u, "AoPrepassBlock: tamano std140 roto");
+    static_assert(offsetof(AoPrepassBlock, view)       ==  0u, "AoPrepassBlock.view");
+    static_assert(offsetof(AoPrepassBlock, projection) == 64u, "AoPrepassBlock.projection");
+
+    static_assert(sizeof(AoPassBlock) == 128u, "AoPassBlock: tamano std140 roto");
+    static_assert(offsetof(AoPassBlock, viewToWorld) ==   0u, "AoPassBlock.viewToWorld");
+    static_assert(offsetof(AoPassBlock, projInfo)    ==  64u, "AoPassBlock.projInfo");
+    static_assert(offsetof(AoPassBlock, params0)     ==  80u, "AoPassBlock.params0");
+    static_assert(offsetof(AoPassBlock, params1)     ==  96u, "AoPassBlock.params1");
+    static_assert(offsetof(AoPassBlock, counts)      == 112u, "AoPassBlock.counts");
+
+    static_assert(sizeof(AoBlock) == 16u, "AoBlock: tamano std140 roto");
+
     // El array del bloque tiene que tener exactamente los slots que el motor cree.
     static_assert(Renderer::kMaxLights == 4u,
                   "LightsBlock: los arrays son de 4; sincronizar con kMaxLights y con MAX_LIGHTS del shader");

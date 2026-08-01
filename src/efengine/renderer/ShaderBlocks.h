@@ -22,10 +22,14 @@ namespace renderer {
     inline constexpr u32 kMaterialBinding = 3u;   // 1x por bind de material
     inline constexpr u32 kPassBinding     = 4u;   // 1x por invocacion de pase
     inline constexpr u32 kDdgiBinding     = 5u;   // 1x por frame — solo lo declaran los shaders de DDGI
+    inline constexpr u32 kAoBinding       = 6u;   // 1x por frame — solo lo declara pbr.frag
 
     // Unidades de sampler de los atlas de DDGI. 0-7 material, 8 sombra, 9/10/11 IBL.
     inline constexpr u32 kIrradianceAtlasUnit = 12u;
     inline constexpr u32 kDistanceAtlasUnit   = 13u;
+
+    // Unidad del AO screen-space, atrás de los dos atlas de DDGI.
+    inline constexpr u32 kAoTextureUnit       = 14u;
 
     // ── Mirrors C++ de los bloques std140 ──────────────────────────────────
     // Regla de std140 que gobierna todo esto: un vec3 ocupa igual 16 bytes, y un
@@ -92,6 +96,30 @@ namespace renderer {
         glm::vec4  params0;       // hysteresis, intensity, normalBias, viewBias
         glm::vec4  params1;       // enabled, chebyshevSharpness, _, _
         glm::vec4  params2;       // maxDistance, backfaceFadeStart, backfaceFadeEnd, _
+    };
+
+    // PassParams (binding 4) del prepass de profundidad+normales del AO. Corre
+    // ANTES de BeginScene, asi que no puede leer el bloque Frame — la misma
+    // restriccion y la misma solucion que ShadowPassBlock.
+    struct alignas(16) AoPrepassBlock {
+        glm::mat4 view;
+        glm::mat4 projection;
+    };
+
+    // PassParams (binding 4) de gtao.frag y denoise.frag.
+    struct alignas(16) AoPassBlock {
+        glm::mat4  viewToWorld;   // inverse(view): emite el bent normal en world space
+        glm::vec4  projInfo;      // xy = reconstruccion view-space, zw = 1/resolucion
+        glm::vec4  params0;       // radius (m), thickness, intensity, maxScreenRadius (px)
+        glm::vec4  params1;       // projScale (px por metro a 1 m), _, _, _
+        glm::ivec4 counts;        // x=slices, y=steps, z=direccion del blur (0=H,1=V), w=debugView
+    };
+
+    // Constantes de AO del frame (binding 6). Bloque propio y no campos nuevos
+    // en FrameBlock por el mismo motivo que DdgiBlock: extender Frame obliga a
+    // tocar los cuatro shaders que lo declaran sin que ninguno use el dato.
+    struct alignas(16) AoBlock {
+        glm::vec4 params;   // enabled, bentNormal, multiBounce, debugView
     };
 
     // ── Funciones puras que arman los bloques ──────────────────────────────
