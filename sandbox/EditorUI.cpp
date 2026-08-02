@@ -59,6 +59,23 @@ namespace {
         return barra == std::string::npos ? ruta : ruta.substr(barra + 1);
     }
 
+    // Carga un .efe y deja el editor consistente.
+    //
+    // RefreshHandles corre tambien cuando el Load falla, y eso es a proposito: si
+    // revienta el parse el grafo queda intacto, pero si revienta el Resolve la
+    // escena ya quedo a medio reemplazar y los handles cacheados (rat, sun,
+    // orbitLight, selected) apuntan a nodos que ya no existen.
+    void cargarEscena(EditorContext& ctx, const std::string& ruta) {
+        if (serialization::SceneSerializer::Load(ruta.c_str(), ctx.scene, ctx.assets,
+                                                 ctx.rm, ctx.registry)) {
+            ctx.state.currentScenePath = ruta;
+        } else {
+            EF_LOG_ERROR("No se pudo cargar la escena '%s'", ruta.c_str());
+            ctx.state.currentScenePath.clear();
+        }
+        RefreshHandles(ctx);
+    }
+
     bool algunBehaviorActivo(const scene::SceneGraph& scene, scene::NodeHandle h) {
         if (!scene.IsValid(h)) return false;
         for (const std::unique_ptr<scene::Behavior>& b : scene.Get(h).behaviors) {
@@ -128,11 +145,26 @@ namespace {
             if (ImGui::MenuItem("Guardar escena")) {
                 serialization::SceneSerializer::Save(kScenePath, ctx.scene, ctx.assets, ctx.rm, ctx.registry);
             }
-            if (ImGui::MenuItem("Cargar escena")) {
-                // Load ya hace Clear() de grafo y assets: no hay que limpiar a mano.
-                if (serialization::SceneSerializer::Load(kScenePath, ctx.scene, ctx.assets, ctx.rm, ctx.registry)) {
-                    RefreshHandles(ctx);
+            // Load ya hace Clear() de grafo y assets: no hay que limpiar a mano.
+            if (ImGui::BeginMenu("Cargar")) {
+                st.catalog.EnsureScanned();
+                const std::vector<std::string>& escenas = st.catalog.Scenes();
+
+                if (escenas.empty()) {
+                    ImGui::MenuItem("(no hay escenas)", nullptr, false, false);
+                } else {
+                    for (const std::string& ruta : escenas) {
+                        const bool abierta = (ruta == st.currentScenePath);
+                        if (ImGui::MenuItem(nombreDeArchivo(ruta).c_str(), nullptr, abierta)) {
+                            cargarEscena(ctx, ruta);
+                        }
+                    }
                 }
+                ImGui::Separator();
+                // El catalogo cachea: si copiaste un .efe con el sandbox abierto,
+                // este es el boton que lo hace aparecer.
+                if (ImGui::MenuItem("Refrescar lista")) st.catalog.Rescan();
+                ImGui::EndMenu();
             }
             ImGui::Separator();
             if (ImGui::MenuItem("Sala de Cornell")) {
