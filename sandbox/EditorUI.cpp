@@ -44,8 +44,6 @@ using namespace efengine;
 
 namespace {
 
-    constexpr const char* kScenePath = "assets/scenes/sandbox.efe";
-
     // Donde viven las escenas. El menu lista lo que hay aca y "Guardar como..."
     // escribe aca; el .efe de arranque lo elige main.cpp.
     constexpr const char* kScenesDir = "assets/scenes/";
@@ -142,9 +140,6 @@ namespace {
                             nullptr, false, false);
             ImGui::Separator();
 
-            if (ImGui::MenuItem("Guardar escena")) {
-                serialization::SceneSerializer::Save(kScenePath, ctx.scene, ctx.assets, ctx.rm, ctx.registry);
-            }
             // Load ya hace Clear() de grafo y assets: no hay que limpiar a mano.
             if (ImGui::BeginMenu("Cargar")) {
                 st.catalog.EnsureScanned();
@@ -166,9 +161,19 @@ namespace {
                 if (ImGui::MenuItem("Refrescar lista")) st.catalog.Rescan();
                 ImGui::EndMenu();
             }
+
+            // Sin archivo (Cornell recien armada) no hay nada que sobrescribir:
+            // el item queda gris y el camino es "Guardar como...".
+            const bool tieneArchivo = !st.currentScenePath.empty();
+            if (ImGui::MenuItem("Guardar", nullptr, false, tieneArchivo)) {
+                serialization::SceneSerializer::Save(st.currentScenePath.c_str(), ctx.scene,
+                                                     ctx.assets, ctx.rm, ctx.registry);
+            }
+
             ImGui::Separator();
             if (ImGui::MenuItem("Sala de Cornell")) {
-                BuildCornellScene(ctx);   // hace Clear de escena y assets, y RefreshHandles
+                BuildCornellScene(ctx);        // hace Clear de escena y assets, y RefreshHandles
+                st.currentScenePath.clear();   // escena generada en codigo: no salio de ningun archivo
             }
             ImGui::Separator();
             // MenuItem con bool* devuelve true en el frame en que cambia, igual que Checkbox:
