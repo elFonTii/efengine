@@ -1,7 +1,9 @@
 #include "efengine/scene/SceneGraph.h"
 #include <efengine/core/Assert.h>
 #include <efengine/core/Log.h>
+#include <efengine/math/Transform.h>
 #include <utility>
+#include <cmath>
 
 namespace efengine {
 namespace scene {
@@ -59,7 +61,7 @@ namespace scene {
     }
 
     // Camina hacia arriba desde 'of' por la cadena de padres. O(profundidad).
-    bool SceneGraph::isAncestorOrSelf(NodeHandle maybeAncestor, NodeHandle of) const {
+    bool SceneGraph::IsAncestorOrSelf(NodeHandle maybeAncestor, NodeHandle of) const {
         NodeHandle cur = of;
         while (IsValid(cur)) {
             if (cur == maybeAncestor) return true;
@@ -73,7 +75,7 @@ namespace scene {
         EF_ASSERT(IsValid(newParent), "SceneGraph::SetParent: newParent invalido");
         EF_ASSERT(child != m_root,    "SceneGraph::SetParent: la raiz no tiene padre");
 
-        if (isAncestorOrSelf(child, newParent)) {
+        if (IsAncestorOrSelf(child, newParent)) {
             EF_LOG_WARNING("SceneGraph::SetParent: reparent rechazado (crearia un ciclo)");
             return;
         }
@@ -91,6 +93,44 @@ namespace scene {
         m_slots[newParent.index].node.children.push_back(child);
 
         markSubtreeDirty(child);
+    }
+
+    glm::mat4 SceneGraph::computeWorld(NodeHandle handle) const {
+        glm::mat4 world(1.0f);
+        NodeHandle cur = handle;
+        while (IsValid(cur)) {
+            world = m_slots[cur.index].node.local.Matrix() * world;
+            cur   = m_slots[cur.index].node.parent;
+        }
+        return world;
+    }
+
+    void SceneGraph::SetParentKeepWorld(NodeHandle child, NodeHandle newParent) {
+        EF_ASSERT(IsValid(child),     "SceneGraph::SetParentKeepWorld: child invalido");
+        EF_ASSERT(IsValid(newParent), "SceneGraph::SetParentKeepWorld: newParent invalido");
+        EF_ASSERT(child != m_root,    "SceneGraph::SetParentKeepWorld: la raiz no tiene padre");
+
+        // El chequeo de ciclo va ANTES de escribir el local: un reparent
+        // rechazado tiene que dejar el nodo exactamente como estaba.
+        if (IsAncestorOrSelf(child, newParent)) {
+            EF_LOG_WARNING("SceneGraph::SetParentKeepWorld: reparent rechazado (crearia un ciclo)");
+            return;
+        }
+
+        const glm::mat4 worldChild  = computeWorld(child);
+        const glm::mat4 worldParent = computeWorld(newParent);
+
+        // Un padre con un eje en escala 0 tiene matriz singular: inverse() da
+        // infinitos y de ahi salen NaN que contaminan toda la rama.
+        if (std::fabs(glm::determinant(worldParent)) < 1e-8f) {
+            EF_LOG_WARNING("SceneGraph::SetParentKeepWorld: el nuevo padre tiene escala cero, "
+                           "se preserva el local");
+            SetParent(child, newParent);
+            return;
+        }
+
+        SetLocalTransform(child, math::DecomposeTRS(glm::inverse(worldParent) * worldChild));
+        SetParent(child, newParent);
     }
 
     void SceneGraph::AttachMesh(NodeHandle handle, MeshAttachment mesh) {

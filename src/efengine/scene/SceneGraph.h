@@ -45,6 +45,22 @@ namespace scene {
             void SetLocalTransform(NodeHandle handle, const math::Transform& transform);
             void SetParent(NodeHandle child, NodeHandle newParent);
 
+            // Reparenta preservando posicion, rotacion y escala EN EL MUNDO: el
+            // nodo no se mueve, se le recalcula el local contra el nuevo padre.
+            // Mismos rechazos que SetParent (raiz, handles invalidos, ciclos), y
+            // en esos casos NO toca el local.
+            //
+            // Si el nuevo padre tiene un eje en escala 0 su matriz es singular y
+            // preservar el mundo es imposible: loguea un warning y cae a
+            // preservar el local, como SetParent.
+            void SetParentKeepWorld(NodeHandle child, NodeHandle newParent);
+
+            // Camina hacia arriba desde 'of' por la cadena de padres. Publico
+            // porque la UI lo necesita para no ofrecer un drop que crearia un
+            // ciclo: sin esto el editor tendria que reimplementar el mismo
+            // recorrido que el motor ya sabe hacer.
+            bool IsAncestorOrSelf(NodeHandle maybeAncestor, NodeHandle of) const;
+
             // Transforms
             void UpdateWorldTransforms();
 
@@ -84,7 +100,11 @@ namespace scene {
 
             NodeHandle allocate(const std::string& name, NodeHandle parent);
             void destroySubtree(NodeHandle handle);
-            bool isAncestorOrSelf(NodeHandle maybeAncestor, NodeHandle of) const;
+            // World de un nodo compuesto desde los 'local' de su cadena de
+            // padres. NO lee Node::worldMatrix: ese cache lo refresca
+            // UpdateWorldTransforms, que corre despues de la UI en el frame, asi
+            // que al momento de un reparent puede estar sucio.
+            glm::mat4 computeWorld(NodeHandle handle) const;
             void markSubtreeDirty(NodeHandle handle);
             void updateNode(NodeHandle handle, const glm::mat4& parentWorld, bool parentChanged);
             

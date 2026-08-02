@@ -1,6 +1,8 @@
 #include <doctest/doctest.h>
 #include <efengine/scene/SceneGraph.h>
 
+#include <cmath>
+
 using namespace efengine;
 
 TEST_CASE("SceneGraph: arranca con una raiz valida y sin hijos") {
@@ -301,4 +303,131 @@ TEST_CASE("SceneGraph::DetachMesh es no-op con handle invalido o nodo sin malla"
     scene::NodeHandle h = g.CreateNode("pelado");
     g.DetachMesh(h);
     CHECK_FALSE(g.Get(h).mesh.has_value());
+}
+
+// ---------------------------------------------------------------------------
+// SetParentKeepWorld
+// ---------------------------------------------------------------------------
+
+namespace {
+    void CheckMundoIgual(const glm::mat4& actual, const glm::mat4& esperado) {
+        for (int c = 0; c < 4; c++) {
+            for (int r = 0; r < 4; r++) {
+                CHECK(actual[c][r] == doctest::Approx(esperado[c][r]).epsilon(0.001));
+            }
+        }
+    }
+
+    // Padre A y padre B con transforms bien distintos, y un hijo colgado de A.
+    struct DosPadres {
+        scene::SceneGraph g;
+        scene::NodeHandle a, b, hijo;
+
+        explicit DosPadres(const glm::vec3& escalaB = glm::vec3(1.0f)) {
+            a = g.CreateNode("a");
+            b = g.CreateNode("b");
+
+            math::Transform ta;
+            ta.position = glm::vec3(10.0f, 0.0f, 0.0f);
+            ta.rotation = glm::vec3(0.0f, 90.0f, 0.0f);
+            g.SetLocalTransform(a, ta);
+
+            math::Transform tb;
+            tb.position = glm::vec3(-4.0f, 7.0f, 2.0f);
+            tb.rotation = glm::vec3(15.0f, -30.0f, 45.0f);
+            tb.scale    = escalaB;
+            g.SetLocalTransform(b, tb);
+
+            hijo = g.CreateChild(a, "hijo");
+            math::Transform th;
+            th.position = glm::vec3(1.0f, 2.0f, 3.0f);
+            th.rotation = glm::vec3(0.0f, 25.0f, 0.0f);
+            g.SetLocalTransform(hijo, th);
+        }
+    };
+}
+
+TEST_CASE("SetParentKeepWorld: el nodo no se mueve en el mundo al cambiar de padre") {
+    DosPadres e;
+    e.g.UpdateWorldTransforms();
+    const glm::mat4 antes = e.g.Get(e.hijo).worldMatrix;
+
+    e.g.SetParentKeepWorld(e.hijo, e.b);
+    e.g.UpdateWorldTransforms();
+
+    CHECK(e.g.Get(e.hijo).parent == e.b);
+    CheckMundoIgual(e.g.Get(e.hijo).worldMatrix, antes);
+}
+
+TEST_CASE("SetParentKeepWorld: con padre de escala no uniforme preserva la posicion") {
+    // El padre mezcla rotacion con escala no uniforme, asi que la matriz
+    // relativa tiene cizalladura y NINGUN TRS la representa (ver el contrato de
+    // DecomposeTRS). Lo que si sobrevive exacto es la traslacion; la orientacion
+    // y la escala son la mejor aproximacion posible, no una igualdad.
+    DosPadres e(glm::vec3(2.0f, 0.5f, 3.0f));
+    e.g.UpdateWorldTransforms();
+    const glm::vec3 posAntes = glm::vec3(e.g.Get(e.hijo).worldMatrix[3]);
+
+    e.g.SetParentKeepWorld(e.hijo, e.b);
+    e.g.UpdateWorldTransforms();
+
+    const glm::vec3 posDespues = glm::vec3(e.g.Get(e.hijo).worldMatrix[3]);
+    CHECK(posDespues.x == doctest::Approx(posAntes.x).epsilon(0.001));
+    CHECK(posDespues.y == doctest::Approx(posAntes.y).epsilon(0.001));
+    CHECK(posDespues.z == doctest::Approx(posAntes.z).epsilon(0.001));
+
+    const math::Transform& l = e.g.Get(e.hijo).local;
+    CHECK(std::isnan(l.rotation.x) == false);
+    CHECK(std::isnan(l.scale.y) == false);
+}
+
+TEST_CASE("SetParentKeepWorld: reparentar a la raiz tambien preserva el mundo") {
+    DosPadres e;
+    e.g.UpdateWorldTransforms();
+    const glm::mat4 antes = e.g.Get(e.hijo).worldMatrix;
+
+    e.g.SetParentKeepWorld(e.hijo, e.g.Root());
+    e.g.UpdateWorldTransforms();
+
+    CHECK(e.g.Get(e.hijo).parent == e.g.Root());
+    CheckMundoIgual(e.g.Get(e.hijo).worldMatrix, antes);
+}
+
+TEST_CASE("SetParentKeepWorld: un ciclo se rechaza SIN tocar el local") {
+    // Este es el caso que justifica el orden de las operaciones: si el local se
+    // escribiera antes de chequear el ciclo, un drop invalido dejaria el nodo
+    // deformado aunque la jerarquia no cambie.
+    DosPadres e;
+    const math::Transform localAntes = e.g.Get(e.a).local;
+
+    e.g.SetParentKeepWorld(e.a, e.hijo);   // 'a' es ancestro de 'hijo'
+
+    CHECK(e.g.Get(e.a).parent == e.g.Root());          // la jerarquia no cambio
+    CHECK(e.g.Get(e.a).local.position.x == doctest::Approx(localAntes.position.x));
+    CHECK(e.g.Get(e.a).local.rotation.y == doctest::Approx(localAntes.rotation.y));
+    CHECK(e.g.Get(e.a).local.scale.x == doctest::Approx(localAntes.scale.x));
+}
+
+TEST_CASE("SetParentKeepWorld: un padre con escala cero reparenta sin NaN") {
+    // Matriz singular: preservar el mundo es imposible. El contrato es que caiga
+    // a preservar el local (el nodo salta) y no que ensucie la escena con NaN.
+    DosPadres e(glm::vec3(1.0f, 0.0f, 1.0f));
+
+    e.g.SetParentKeepWorld(e.hijo, e.b);
+
+    CHECK(e.g.Get(e.hijo).parent == e.b);
+    const math::Transform& l = e.g.Get(e.hijo).local;
+    CHECK(std::isnan(l.position.x) == false);
+    CHECK(std::isnan(l.rotation.y) == false);
+    CHECK(std::isnan(l.scale.z) == false);
+}
+
+TEST_CASE("IsAncestorOrSelf: reconoce al propio nodo, a sus ancestros, y rechaza al resto") {
+    DosPadres e;
+
+    CHECK(e.g.IsAncestorOrSelf(e.hijo, e.hijo));   // un nodo es ancestro de si mismo
+    CHECK(e.g.IsAncestorOrSelf(e.a, e.hijo));      // a es ancestro de hijo
+    CHECK(e.g.IsAncestorOrSelf(e.g.Root(), e.a));
+    CHECK_FALSE(e.g.IsAncestorOrSelf(e.hijo, e.a));
+    CHECK_FALSE(e.g.IsAncestorOrSelf(e.b, e.hijo));
 }
