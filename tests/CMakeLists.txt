@@ -36,12 +36,19 @@ add_executable(efengine_tests
     serialization/BehaviorRegistry.test.cpp
     serialization/Truncation.test.cpp
     serialization/SceneSerializer.test.cpp
+    efenet/State.test.cpp
+    efenet/Simulation.test.cpp
+    efenet/Protocol.test.cpp
+    efenet/Prediction.test.cpp
+    efenet/SnapshotBuffer.test.cpp
+    efenet/World.test.cpp
+    efenet/NetSim.test.cpp
 )
 
 # Include path raíz: los tests consumen el motor como <efengine/...>.
 target_include_directories(efengine_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
-target_link_libraries(efengine_tests PRIVATE efengine doctest::doctest)
+target_link_libraries(efengine_tests PRIVATE efengine efenet doctest::doctest)
 
 # Registra cada TEST_CASE como un test individual de CTest.
 doctest_discover_tests(efengine_tests)
