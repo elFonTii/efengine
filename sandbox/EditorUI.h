@@ -32,6 +32,11 @@ namespace sandbox {
         bool animateSun   = false;
         u32  spawnCounter = 0;
 
+        // Ruta del .efe abierto. Vacia = la escena no tiene archivo: es la sala
+        // de Cornell recien armada, o un arranque en el que el Load fallo. Sin
+        // ruta, "Guardar" no tiene destino.
+        std::string currentScenePath;
+
         bool showUI        = false;
         bool showHierarchy = true;
         bool showInspector = true;

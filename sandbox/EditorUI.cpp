@@ -5,6 +5,7 @@
 #include "SunGizmo.h"
 
 #include <efengine/application/Application.h>
+#include <efengine/core/Log.h>
 #include <efengine/renderer/BloomPass.h>
 #include <efengine/renderer/FxaaPass.h>
 #include <efengine/renderer/ShadowPass.h>
@@ -33,6 +34,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <string>
 #include <typeinfo>
 #include <vector>
 
@@ -43,6 +45,19 @@ using namespace efengine;
 namespace {
 
     constexpr const char* kScenePath = "assets/scenes/sandbox.efe";
+
+    // Donde viven las escenas. El menu lista lo que hay aca y "Guardar como..."
+    // escribe aca; el .efe de arranque lo elige main.cpp.
+    constexpr const char* kScenesDir = "assets/scenes/";
+
+    // "assets/scenes/interior.efe" -> "interior.efe". Los items del menu muestran
+    // el nombre solo: la ruta entera no aporta y hace el menu tres veces mas ancho.
+    // FileIO::ListFiles devuelve siempre '/' (generic_string), tambien en Windows,
+    // asi que alcanza con buscar la ultima barra.
+    std::string nombreDeArchivo(const std::string& ruta) {
+        const usize barra = ruta.find_last_of('/');
+        return barra == std::string::npos ? ruta : ruta.substr(barra + 1);
+    }
 
     bool algunBehaviorActivo(const scene::SceneGraph& scene, scene::NodeHandle h) {
         if (!scene.IsValid(h)) return false;
@@ -101,6 +116,15 @@ namespace {
         if (!ImGui::BeginMainMenuBar()) return;
 
         if (ImGui::BeginMenu("Escena")) {
+            // Rotulo, no accion: MenuItem con enabled=false para que se vea gris
+            // y no se pueda clickear. Es la unica pista de que archivo se esta
+            // editando, y de si hay archivo.
+            ImGui::MenuItem(st.currentScenePath.empty()
+                                ? "(sin guardar)"
+                                : nombreDeArchivo(st.currentScenePath).c_str(),
+                            nullptr, false, false);
+            ImGui::Separator();
+
             if (ImGui::MenuItem("Guardar escena")) {
                 serialization::SceneSerializer::Save(kScenePath, ctx.scene, ctx.assets, ctx.rm, ctx.registry);
             }

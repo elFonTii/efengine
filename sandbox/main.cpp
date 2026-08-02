@@ -171,12 +171,18 @@ int main() {
     // El estado de la UI vive aca (el loop es el dueno); el editor solo lo usa.
     sandbox::EditorState editorState;
     sandbox::EditorContext editor { app, scene, cam, controller, assets, rm, registry, editorState };
-    // La escena de arranque es la sala de Cornell, no el .efe: la sala de 200 m
-    // de sandbox.efe no sirve para validar iluminacion indirecta. Cargar el .efe
-    // sigue disponible desde el menu "Escena". Volver al arranque viejo es
-    // cambiar esta linea por el SceneSerializer::Load de siempre.
-    sandbox::BuildCornellScene(editor);   // ya llama a RefreshHandles}
-    //sandbox::RefreshHandles(editor);
+    // El .efe que se abre solo. El menu "Escena" carga cualquier otro de
+    // assets/scenes, y la sala de Cornell sigue estando ahi.
+    constexpr const char* kBootScene = "assets/scenes/sandbox.efe";
+    if (serialization::SceneSerializer::Load(kBootScene, scene, assets, rm, registry)) {
+        editorState.currentScenePath = kBootScene;
+    } else {
+        // No se cierra el sandbox: sin escena el editor igual sirve para cargar
+        // otra o para armar la sala de Cornell desde el menu.
+        EF_LOG_ERROR("No se pudo cargar '%s'; el sandbox arranca con la escena vacia",
+                     kBootScene);
+    }
+    sandbox::RefreshHandles(editor);
 
     while (app.Running()) {
         app.BeginFrame();
