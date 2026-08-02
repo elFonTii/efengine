@@ -21,5 +21,19 @@ namespace math {
     // sol: normalize(worldMatrix * vec4(0,0,-1,0)). Si se cambia el orden de
     // composicion de Matrix(), hay que cambiar esto tambien.
     glm::vec3 EulerFromForward(const glm::vec3& forward);
+
+    // Inversa de Transform::Matrix(): saca position, rotation y scale de una
+    // matriz afin. Los angulos salen en GRADOS y en el orden YXZ que compone
+    // Matrix(), no el orden default de glm.
+    //
+    // Exacta solo si la matriz es TRS pura. Si algun ancestro mezcla escala no
+    // uniforme con rotacion, la matriz tiene cizalladura y NO existe ningun TRS
+    // que la represente: se devuelve la mejor aproximacion (traslacion y
+    // rotacion exactas, escala por largo de columna, shear descartado). Es la
+    // misma limitacion que tienen Unity y Unreal.
+    //
+    // Si algun eje tiene escala ~0 la rotacion es indeterminada y sale en cero,
+    // pero nunca NaN.
+    Transform DecomposeTRS(const glm::mat4& m);
 }
 }
