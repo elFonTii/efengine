@@ -1,4 +1,3 @@
-// tests/renderer/RenderTarget.test.cpp
 // El present target es el unico RenderTarget que se puede construir sin
 // contexto GL: su handle lo da el backend y su extent es un static de TU.
 // Por eso su ruteo se testea headless.

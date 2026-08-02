@@ -8,7 +8,7 @@
 namespace efengine {
 namespace scene {
 
-    class Camera; // forward dec
+    class Camera;
 
     struct CameraSettings {
         f32  moveSpeed        = 20.0f;    // unidades/segundo

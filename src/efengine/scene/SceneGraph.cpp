@@ -10,18 +10,16 @@ namespace scene {
     NodeHandle SceneGraph::allocate(const std::string& name, NodeHandle parent) {
         u32 index;
 
-        if(!m_freeList.empty()) { // tiene que estar root ya poblado
-            // hago una copia y elimino el último indice de los no alocados
+        if(!m_freeList.empty()) {
             index = m_freeList.back();
-            m_freeList.pop_back(); 
+            m_freeList.pop_back();
         } else {
-            // asigno indice y lo pusheo al final
             index = static_cast<u32>(m_slots.size());
             m_slots.push_back(Slot{});
             m_slots[index].generation = 0;
         }
 
-        Slot& slot = m_slots[index]; // obtengo el slot por indice
+        Slot& slot = m_slots[index];
         slot.alive = true;
         if(slot.generation == 0) { slot.generation = 1; }
         slot.node            = Node{};
@@ -80,7 +78,6 @@ namespace scene {
             return;
         }
 
-        // Sacar del padre viejo.
         NodeHandle oldParent = m_slots[child.index].node.parent;
         if (IsValid(oldParent)) {
             std::vector<NodeHandle>& sibs = m_slots[oldParent.index].node.children;
@@ -89,7 +86,7 @@ namespace scene {
             }
         }
 
-        // Enganchar al padre nuevo. El local se preserva; el world cambia.
+        // El local se preserva; el world cambia.
         m_slots[child.index].node.parent = newParent;
         m_slots[newParent.index].node.children.push_back(child);
 
@@ -188,7 +185,6 @@ namespace scene {
         EF_ASSERT(handle != m_root, "SceneGraph::Destroy: No se puede destruir la raiz");
         if(!IsValid(handle)) return;
 
-        // 1   lo quito del parent (una sola vez arriba)
         Node& self = m_slots[handle.index].node;
         if(IsValid(self.parent)) {
             std::vector<NodeHandle>& sibs = m_slots[self.parent.index].node.children;
@@ -197,7 +193,6 @@ namespace scene {
             }
         }
 
-        // 2 libero el subarbol completo
         destroySubtree(handle);
     }
 
@@ -206,7 +201,7 @@ namespace scene {
         for (Slot& slot : m_slots) {
             if (slot.alive) {
                 slot.alive = false;
-                slot.generation++;   // invalida el generation viejo
+                slot.generation++;
             }
             slot.node = Node{};     // libera los behaviors
         }
@@ -240,8 +235,6 @@ namespace scene {
     }
 
     bool SceneGraph::IsValid(NodeHandle handle) const {
-         // es valido cuando:
-         // generation != 0, h.alive = true y i.gen == h.gen
         return !handle.IsNull()
             && handle.index < m_slots.size()
             && m_slots[handle.index].alive

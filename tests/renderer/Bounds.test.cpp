@@ -1,4 +1,3 @@
-// Escrito por Claude Opus 5
 #include <doctest/doctest.h>
 #include <efengine/renderer/Bounds.h>
 #include <efengine/renderer/Vertex.h>

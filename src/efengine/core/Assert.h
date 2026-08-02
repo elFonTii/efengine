@@ -2,20 +2,14 @@
 
 #include "Log.h"
 
-// 1. Namespace
 namespace efengine {
 namespace core {
 
-// 2. Variables
-
-// 3. Funciones
 void AssertFailed(const char* condition, const char* file, int line, const char* message);
-    
 
 }
 }
 
-// 4. Macros (Condicionales para debug/release)
 #ifdef _DEBUG
     #define EF_ASSERT(condition, message) \
         do { \
@@ -24,7 +18,7 @@ void AssertFailed(const char* condition, const char* file, int line, const char*
             } \
         } while (false)
 #else
-    #define EF_ASSERT(condition, message)((void)0) // No hace nada en release
+    #define EF_ASSERT(condition, message)((void)0)
 #endif
 
 #define EF_ASSERT_MSG(condition, message) EF_ASSERT(condition, message)

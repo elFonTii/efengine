@@ -65,7 +65,6 @@ namespace renderer {
             model = glm::scale(model, glm::vec3(escala));
             m_renderer.SetObjectMatrix(model);
 
-            // El indice del probe por draw, en el PassParams que ya existe.
             const PostParamsBlock params {
                 glm::vec4(static_cast<f32>(i),
                           (settings.debugMode == 1u) ? 1.0f : 0.0f, 0.0f, 0.0f) };

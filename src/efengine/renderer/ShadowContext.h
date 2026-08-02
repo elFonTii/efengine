@@ -7,7 +7,6 @@ namespace renderer {
 
     class Texture;
 
-    // info de sombra que viajan al Renderer cada frame
     struct ShadowContext {
         const Texture* map               = null;         // depth texture → unit 7
         glm::mat4      lightSpaceMatrix   = glm::mat4(1.0f);

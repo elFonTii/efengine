@@ -13,11 +13,11 @@ namespace renderer {
     // Parametros del precomputo IBL. Todo lo que hoy son argumentos sueltos de Create.
     struct EnvironmentDesc {
         const char* hdrPath        = nullptr;
-        u32         faceSize       = 512;   // cara del env cubemap
-        u32         irradianceSize = 32;    // cara del mapa de irradiancia difusa
+        u32         faceSize       = 512;
+        u32         irradianceSize = 32;
         u32         prefilterSize  = 128;   // cara del mip 0 del prefiltrado
         u32         prefilterMips  = 5;     // 5 niveles => roughness 0, .25, .5, .75, 1
-        u32         lutSize        = 512;   // lado de la BRDF LUT
+        u32         lutSize        = 512;
     };
 
     // Los computes que hacen el precomputo. Punteros no-dueños: viven en el

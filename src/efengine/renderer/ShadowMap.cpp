@@ -15,7 +15,6 @@ namespace renderer {
         EF_ASSERT(m_id != 0, "ShadowMap::ShadowMap: No hay contexto GL");
 
         efecom::FramebufferDepthTexture(m_id, m_depth.id());
-        // Sin color attachment: no dibujamos ni leemos color.
         efecom::FramebufferDisableColor(m_id);
 
         EF_GPU_CHECK(efecom::FramebufferComplete(m_id),

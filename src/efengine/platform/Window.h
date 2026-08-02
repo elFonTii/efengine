@@ -18,10 +18,9 @@ namespace platform {
         bool vsync = true;
     };
 
-    // === CLASE VENTANA ===
     class Window {
         public:
-            explicit Window(const WindowProps& props = WindowProps()); // ADQUIERE el recurso
+            explicit Window(const WindowProps& props = WindowProps());
             ~Window(); // Llamamos al destructor explícitamente para asegurarnos de que se llame a glfwTerminate() cuando se destruya la última ventana.
 
             // El copy es prohibido, una ventana de Windows no se puede "duplicar"
@@ -29,33 +28,27 @@ namespace platform {
             Window(const Window&) =             delete;
             Window& operator=(const Window&) =  delete;
 
-            // El move es permitido
             Window(Window&& other) noexcept;
             Window& operator=(Window&& other) noexcept;
 
-            // Accessors - es solo lectura
             GLFWwindow* handle() const { return m_handle; };
 
-            // Loop
             void PollEvents();
             void SwapBuffers();
             bool ShouldClose() const;
             void SetShouldClose(bool shouldClose);
 
-            // Input
             bool IsKeyPressed(Key _key) const;
 
             // el loop la llama todos los frames.
             void SetCursorCaptured(bool captured);
 
-            // Accessors
             u32 GetWidth() const { return m_width; }
             u32 GetHeight() const { return m_height; }
             f32 GetAspectRatio() const;
             GLFWwindow* GetNativeHandle() const { return m_handle; }
             static f64 GetTime();
 
-            // Eventos
             void SetEventListener(IEventListener* listener);
 
 

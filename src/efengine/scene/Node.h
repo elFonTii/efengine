@@ -13,7 +13,7 @@
 
 namespace efengine {
 namespace scene {
-    enum class LightKind { Point, Directional }; // TODO: extraer / separar
+    enum class LightKind { Point, Directional };
 
     struct MeshAttachment { 
         const renderer::Model* model = nullptr;
@@ -27,12 +27,12 @@ namespace scene {
 
     class Node {
         public: 
-            NodeHandle self; // yo mismo
+            NodeHandle self;
             std::string name;
 
             math::Transform         local; // transform relativo al padre (parent.transform * local.transform)
             glm::mat4               worldMatrix {1.0f};
-            bool                    worldDirty = true; // ¿recalcular?
+            bool                    worldDirty = true;
 
             NodeHandle              parent;
             std::vector<NodeHandle> children;
@@ -40,7 +40,7 @@ namespace scene {
             // con esta estructura podemos expandir a X attachments (scripts, colliders, etc...)
             std::optional<MeshAttachment> mesh;
             std::optional<LightAttachment> light;
-            std::vector<std::unique_ptr<Behavior>> behaviors; // runtime scripts
+            std::vector<std::unique_ptr<Behavior>> behaviors;
 
             Node()                       = default;
             Node(const Node&)            = delete;

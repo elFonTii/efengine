@@ -1,4 +1,3 @@
-// tests/renderer/PipelineState.test.cpp
 // PipelineState es solo datos: se testea headless. Lo que importa es (a) que la
 // igualdad compare TODOS los campos (el backend la usa para saltear llamadas gl*
 // redundantes: un campo olvidado ahi es un bug invisible) y (b) que cada estado

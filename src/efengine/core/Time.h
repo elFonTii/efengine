@@ -6,7 +6,7 @@ namespace core {
     class Time {
         public:
             void Tick();
-            void Advance(f64 nowSeconds); // avanza reloj a un timestamp dado
+            void Advance(f64 nowSeconds);
             void SetMaxDelta(f32 seconds);
 
             f32 DeltaTime() const;

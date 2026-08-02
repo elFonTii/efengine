@@ -5,8 +5,8 @@
 
 namespace {
     f64 nowSeconds() {
-        auto point =  std::chrono::steady_clock::now(); // time point es un instante
-        auto duration = point.time_since_epoch(); // duration es un intervalo
+        auto point =  std::chrono::steady_clock::now();
+        auto duration = point.time_since_epoch();
 
         return std::chrono::duration<f64>(duration).count(); // constructor de conversión
     }

@@ -1,4 +1,3 @@
-// tests/resources/ShaderPreprocessor.test.cpp
 // SpliceIncludes es una funcion pura sobre strings: se testea sin filesystem y
 // sin GPU inyectando un resolver falso. Es lo unico que evita que la matematica
 // de DDGI se duplique en cinco archivos GLSL.

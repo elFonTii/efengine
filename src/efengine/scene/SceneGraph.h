@@ -18,8 +18,6 @@ namespace scene {
         const renderer::MaterialMap* materials;
     };
 
-    // grafo con la identidad de los nodos.
-
     class SceneGraph {
         public:
             f32 iblIntensity = 1.0f;
@@ -32,7 +30,6 @@ namespace scene {
             void       Clear(); 
 
 
-            // Getters (const vs no const ->)
             bool    IsValid(NodeHandle handle) const;
             Node*   TryGet(NodeHandle handle);
             Node&   Get(NodeHandle handle);
@@ -81,7 +78,7 @@ namespace scene {
         private:
             struct Slot {
                 Node node;
-                u32 generation  = 0; // > 1 si la instancia está viva
+                u32 generation  = 0;
                 bool alive      = false;
             };
 

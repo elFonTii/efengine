@@ -11,7 +11,6 @@ namespace efengine {
 namespace renderer {
 
     namespace {
-        // Compila un stage. Devuelve 0 (y loguea el infolog) si falla.
         u32 compilar_stage(efecom::ShaderStage tipo, const char* src) {
             char log[512] = {};
             const u32 stage = efecom::CompileShader(tipo, src, log, sizeof(log));

@@ -9,8 +9,6 @@
 namespace efengine {
 namespace renderer {
 
-    // Axis-Aligned-Bounding-Box - guarda la esquina con x,y,z mínimas y la esquina con x,y,z máximas.
-    // sirve para responder rapido y aproximadamente donde está un objeto
     struct AABB {
         glm::vec3 min { 0.0f };
         glm::vec3 max { 0.0f };

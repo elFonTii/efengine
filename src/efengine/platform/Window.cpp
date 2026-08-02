@@ -37,7 +37,6 @@ namespace platform {
         glfwMakeContextCurrent(m_handle);
         glfwSwapInterval(props.vsync ? 1 : 0);
 
-        // Framebuffer
         i32 fbWidth = 0, fbHeight = 0 ;
         glfwGetFramebufferSize(m_handle, &fbWidth, &fbHeight);
         m_width = fbWidth;
@@ -80,7 +79,6 @@ namespace platform {
 
     Window& Window::operator=(Window&& other) noexcept {
         if(this != &other) {
-            // Liberar nuestro recurso actual si lo tenemos.
             if(m_handle != null) {
                 glfwDestroyWindow(m_handle);
 
@@ -144,7 +142,6 @@ namespace platform {
 
     void Window::SetEventListener(IEventListener* listener) { m_listener = listener; }
 
-    /* Callback que actualiza el tamaño del viewport */
     void Window::OnFramebufferResize(GLFWwindow* handle, int width, int height) {
         auto* self = static_cast<Window*>(glfwGetWindowUserPointer(handle)); // obtiene el puntero que se guardó con SetWindowUserPointer en el constructor
         EF_ASSERT(self != null, "Window::OnFramebufferResize: glfw user pointer nulo");
@@ -157,7 +154,6 @@ namespace platform {
         if (self->m_listener) self->m_listener->OnWindowResize(self->m_width, self->m_height);
     }
 
-    /* Callback que captura la posicion del cursor */
     void Window::OnCursorPos(GLFWwindow* handle, double xpos, double ypos) {
         auto* self = static_cast<Window*>(glfwGetWindowUserPointer(handle));
         EF_ASSERT(self != null, "Window::OnCursorPos: glfw user pointer nulo");
@@ -167,7 +163,6 @@ namespace platform {
         }
     }
 
-    /* Callback que captura los botones del cursor */
     void Window::OnMouseButton(GLFWwindow* handle, int button, int action, int mods) {
         auto* self = static_cast<Window*>(glfwGetWindowUserPointer(handle));
         EF_ASSERT(self != null, "Window::OnMouseButton: glfw user pointer nulo");
@@ -177,7 +172,6 @@ namespace platform {
         }
     }
 
-    /* Callback que captura el scroll del cursor */
     void Window::OnScroll(GLFWwindow* handle, double xoffset, double yoffset) {
         auto* self = static_cast<Window*>(glfwGetWindowUserPointer(handle));
         EF_ASSERT(self != null, "Window::OnScroll: glfw user pointer nulo");

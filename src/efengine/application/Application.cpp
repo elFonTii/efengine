@@ -39,7 +39,7 @@ namespace application {
         -1.0f,  1.0f, 0.0f, 1.0f,
         };
 
-        const u32 quadIndices[] = { 0, 1, 2, 2, 3, 0 };   // dos triángulos
+        const u32 quadIndices[] = { 0, 1, 2, 2, 3, 0 };
 
         renderer::Buffer       vbo(quadVertices, sizeof(quadVertices));
         renderer::IndexBuffer  ebo(quadIndices, 6);
@@ -164,8 +164,6 @@ namespace application {
         // Los dos pases de abajo (sombra y forward) leen el mismo resultado.
         scene.UpdateWorldTransforms();
 
-        // 2 cargas:  al FBO de la escena y Backbuffer de Window
-
         // Los cuatro contextos de iluminacion del frame, en un solo struct.
         renderer::SceneLighting lighting;
 
@@ -214,7 +212,6 @@ namespace application {
             lighting.ao = m_aoPass->Context();
         }
 
-        // Al Framebuffer de escena
         m_sceneFB.Bind();
         m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
         m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(),

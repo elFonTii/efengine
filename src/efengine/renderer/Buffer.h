@@ -9,7 +9,7 @@ namespace renderer {
     // adquiere el VBO en el ctor, lo libera en el dtor; no-copiable, movible.
     class Buffer {
         public:
-            Buffer(const void* data, usize size);  // crea el VBO y sube los datos
+            Buffer(const void* data, usize size);
             ~Buffer();
 
             Buffer(const Buffer&)            = delete;

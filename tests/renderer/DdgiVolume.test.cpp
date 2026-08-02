@@ -1,4 +1,3 @@
-// tests/renderer/DdgiVolume.test.cpp
 // La grilla de probes es datos puros: se testea sin GPU. Los errores de
 // indexado y de layout de atlas son invisibles a ojo -- se manifiestan como
 // "la GI se ve rara" sin decir donde -- asi que este es el unico lugar donde

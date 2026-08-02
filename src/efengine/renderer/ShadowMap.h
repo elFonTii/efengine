@@ -6,7 +6,6 @@
 namespace efengine {
 namespace renderer {
 
-    // FBO solo profundidad + textura de profundidad
     class ShadowMap {
         public:
             explicit ShadowMap(u32 resolution = 2048);

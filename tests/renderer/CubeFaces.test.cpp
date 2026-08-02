@@ -1,4 +1,3 @@
-// tests/renderer/CubeFaces.test.cpp
 // Los 6 pares (forward, up) de la captura de probes contra la tabla
 // dirForFace de assets/shaders/common/cubeface.glsl.
 //

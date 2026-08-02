@@ -6,8 +6,6 @@
 namespace efengine {
 namespace math {
     
-    // Matrix tiene que devolver T * R * S
-    // T: Translación | R: Rotación | S: Tamaño
     glm::mat4 Transform::Matrix() const {
         glm::mat4 T = glm::translate(glm::mat4(1.0f), position);
         glm::mat4 S = glm::scale(glm::mat4(1.0f), scale);

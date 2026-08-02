@@ -66,7 +66,7 @@ TEST_CASE("SceneGraph: FindByName devuelve el primer match, o nulo si no hay") {
 }
 
 // ---------------------------------------------------------------------------
-// Task 3: jerarquia y herencia de transform
+// Jerarquia y herencia de transform
 // ---------------------------------------------------------------------------
 
 TEST_CASE("SceneGraph: CreateChild cuelga del padre indicado, no de la raiz") {
@@ -117,7 +117,7 @@ TEST_CASE("SceneGraph: rotar el padre reubica al hijo (herencia de rotacion)") {
 }
 
 // ---------------------------------------------------------------------------
-// Task 4: destruccion en cascada
+// Destruccion en cascada
 // ---------------------------------------------------------------------------
 
 TEST_CASE("SceneGraph: destruir un padre invalida a TODOS sus descendientes (cascada)") {
@@ -148,7 +148,7 @@ TEST_CASE("SceneGraph: la cascada no toca a los hermanos") {
 }
 
 // ---------------------------------------------------------------------------
-// Task 5: reparentar con guard anti-ciclo
+// Reparentar con guard anti-ciclo
 // ---------------------------------------------------------------------------
 
 TEST_CASE("SceneGraph: SetParent mueve el nodo al nuevo padre") {
@@ -191,7 +191,7 @@ TEST_CASE("SceneGraph: SetParent rechaza crear un ciclo (reparentar a un descend
 }
 
 // ---------------------------------------------------------------------------
-// Task 6: adjuntos, gather de render y sol-nodo
+// Adjuntos, gather de render y sol-nodo
 // ---------------------------------------------------------------------------
 
 #include <efengine/renderer/Mesh.h>

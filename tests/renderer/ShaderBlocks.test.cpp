@@ -1,4 +1,3 @@
-// tests/renderer/ShaderBlocks.test.cpp
 // Los mirrors C++ de los bloques std140 son datos puros: se testean sin GPU.
 // Esto es lo que el refactor a UBOs vuelve testeable — antes el empaquetado de
 // estos valores era una tira de glUniform* que solo se podia verificar a ojo.

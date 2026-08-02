@@ -33,7 +33,7 @@ namespace renderer {
             Renderer();
 
             void Clear(f32 r, f32 g, f32 b, f32 a) const;
-            void SetViewport(u32 width, u32 height) const; // por el momento para evitar que Application llame gl crudo
+            void SetViewport(u32 width, u32 height) const;
             void Draw(const VertexArray& va, const Shader& shader) const;
 
             // Los cuatro contextos de iluminacion viajan en un solo struct: con

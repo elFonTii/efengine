@@ -1,4 +1,3 @@
-// tests/renderer/MaterialBlock.test.cpp
 // Material::ToBlock() es una funcion pura: empaqueta escalares y presencia de
 // mapas, sin tocar la GPU. Se puede construir un Material headless (shader nulo)
 // porque el UBO NO vive adentro de Material — vive en el Renderer, justo para
