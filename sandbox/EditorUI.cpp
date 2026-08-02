@@ -28,7 +28,9 @@
 
 #include <imgui.h>
 #include <imgui_internal.h>   // DockBuilder*: API de layout, no esta en imgui.h
+#include <imgui_stdlib.h>     // InputText sobre std::string
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <functional>
@@ -72,6 +74,81 @@ namespace {
             ctx.state.currentScenePath.clear();
         }
         RefreshHandles(ctx);
+    }
+
+    // Color de los mensajes de error de la UI. AuthoringUI.cpp tiene su propia
+    // copia en su namespace anonimo; son dos unidades de traduccion distintas.
+    const ImVec4 kColorError { 1.0f, 0.4f, 0.4f, 1.0f };
+
+    // Pega el nombre tipeado al directorio de escenas y le pone .efe si falta:
+    // guardar un archivo sin extension lo dejaria fuera del listado del menu.
+    std::string rutaDeEscena(const std::string& nombre) {
+        std::string archivo = nombre;
+        const bool tieneExt = archivo.size() >= 4
+                           && archivo.compare(archivo.size() - 4, 4, ".efe") == 0;
+        if (!tieneExt) archivo += ".efe";
+        return std::string(kScenesDir) + archivo;
+    }
+
+    // Ya hay un .efe con esa ruta? Se pregunta al catalogo y no al disco porque
+    // el catalogo se refresca al abrir el modal, asi que dice lo mismo.
+    bool escenaExiste(const EditorState& st, const std::string& ruta) {
+        const std::vector<std::string>& escenas = st.catalog.Scenes();
+        return std::find(escenas.begin(), escenas.end(), ruta) != escenas.end();
+    }
+
+    // Guarda con nombre nuevo. Devuelve false y deja el modal abierto si fallo,
+    // asi el nombre tipeado no se pierde.
+    bool guardarEscenaComo(EditorContext& ctx, const std::string& ruta) {
+        if (!serialization::SceneSerializer::Save(ruta.c_str(), ctx.scene, ctx.assets,
+                                                  ctx.rm, ctx.registry)) {
+            ctx.state.saveAsError = "No se pudo escribir el archivo. Ver el log.";
+            return false;
+        }
+        ctx.state.currentScenePath = ruta;
+        ctx.state.catalog.Rescan();   // que el archivo nuevo aparezca en el submenu "Cargar"
+        return true;
+    }
+
+    // Dibuja el modal. Va afuera de la barra de menu por el tema del ID stack que
+    // explica el comentario de openSaveAs en EditorUI.h.
+    void drawSaveAsModal(EditorContext& ctx) {
+        EditorState& st = ctx.state;
+
+        if (st.openSaveAs) {
+            ImGui::OpenPopup("Guardar escena como");
+            st.openSaveAs = false;
+        }
+
+        const ImVec2 centro = ImGui::GetMainViewport()->GetCenter();
+        ImGui::SetNextWindowPos(centro, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+        if (!ImGui::BeginPopupModal("Guardar escena como", nullptr,
+                                    ImGuiWindowFlags_AlwaysAutoResize)) return;
+
+        ImGui::Text("Se guarda en %s", kScenesDir);
+        ImGui::InputText("Nombre", &st.saveAsName);
+        if (!st.saveAsError.empty()) ImGui::TextColored(kColorError, "%s", st.saveAsError.c_str());
+
+        const std::string ruta = rutaDeEscena(st.saveAsName);
+
+        ImGui::BeginDisabled(st.saveAsName.empty());
+        if (ImGui::Button("Guardar", ImVec2(120.0f, 0.0f))) {
+            if (escenaExiste(st, ruta) && st.saveAsConfirm != ruta) {
+                // Primer click sobre un archivo que ya existe: avisa y espera. El
+                // segundo click llega con saveAsConfirm == ruta y si pisa.
+                st.saveAsConfirm = ruta;
+                st.saveAsError   = "Ya existe. Apreta Guardar de nuevo para pisarlo.";
+            } else if (guardarEscenaComo(ctx, ruta)) {
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::EndDisabled();
+
+        ImGui::SameLine();
+        if (ImGui::Button("Cancelar", ImVec2(120.0f, 0.0f))) ImGui::CloseCurrentPopup();
+
+        ImGui::EndPopup();
     }
 
     bool algunBehaviorActivo(const scene::SceneGraph& scene, scene::NodeHandle h) {
@@ -168,6 +245,20 @@ namespace {
             if (ImGui::MenuItem("Guardar", nullptr, false, tieneArchivo)) {
                 serialization::SceneSerializer::Save(st.currentScenePath.c_str(), ctx.scene,
                                                      ctx.assets, ctx.rm, ctx.registry);
+            }
+
+            if (ImGui::MenuItem("Guardar como...")) {
+                // Arranca con el nombre de la escena abierta: lo normal es derivar
+                // una variante, no escribir un nombre de cero.
+                st.saveAsName = st.currentScenePath.empty()
+                                  ? std::string("nueva.efe")
+                                  : nombreDeArchivo(st.currentScenePath);
+                st.saveAsConfirm.clear();
+                st.saveAsError.clear();
+                // El catalogo tiene que estar fresco: es lo que responde si el
+                // archivo ya existe.
+                st.catalog.Rescan();
+                st.openSaveAs = true;
             }
 
             ImGui::Separator();
@@ -750,6 +841,9 @@ void DrawEditor(EditorContext& ctx) {
     ctx.state.stats.Push(ctx.app.DeltaTime());
 
     drawMainMenuBar(ctx);
+    // Antes del early return de showUI: la barra de menu se dibuja siempre, asi
+    // que el modal que abre tambien tiene que poder dibujarse siempre.
+    drawSaveAsModal(ctx);
 
     if (!ctx.state.showUI) return;
 

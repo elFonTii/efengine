@@ -37,6 +37,17 @@ namespace sandbox {
         // ruta, "Guardar" no tiene destino.
         std::string currentScenePath;
 
+        // Estado del modal "Guardar como...". openSaveAs es el pedido de abrirlo:
+        // ImGui::OpenPopup llamado desde adentro de un BeginMenu queda en otro
+        // nivel del ID stack y el BeginPopupModal no lo encuentra, asi que el menu
+        // solo prende este flag y el modal se abre afuera.
+        // saveAsConfirm guarda la ruta que ya se aviso que existe: el segundo
+        // click sobre el mismo nombre es el que pisa el archivo.
+        bool        openSaveAs = false;
+        std::string saveAsName;
+        std::string saveAsConfirm;
+        std::string saveAsError;
+
         bool showUI        = false;
         bool showHierarchy = true;
         bool showInspector = true;
