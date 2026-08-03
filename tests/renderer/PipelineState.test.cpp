@@ -1,4 +1,3 @@
-// tests/renderer/PipelineState.test.cpp
 // PipelineState es solo datos: se testea headless. Lo que importa es (a) que la
 // igualdad compare TODOS los campos (el backend la usa para saltear llamadas gl*
 // redundantes: un campo olvidado ahi es un bug invisible) y (b) que cada estado
@@ -79,4 +78,18 @@ TEST_CASE("El estado opaco cullea la cara de atras; el double-sided no") {
     // Los pases que dibujan un quad fullscreen no tienen cara de atras que cullear.
     CHECK(SkyboxState().cullMode     == CullMode::None);
     CHECK(FullscreenState().cullMode == CullMode::None);
+}
+
+TEST_CASE("DdgiCaptureState: no cullea, para que el probe vea las caras internas") {
+    const efecom::PipelineState s = efengine::renderer::DdgiCaptureState();
+    CHECK(s.cullMode == efecom::CullMode::None);
+}
+
+TEST_CASE("DdgiCaptureState: en todo lo demas es OpaqueState") {
+    const efecom::PipelineState captura = efengine::renderer::DdgiCaptureState();
+    const efecom::PipelineState opaco   = efengine::renderer::OpaqueState();
+    CHECK(captura.depthTest   == opaco.depthTest);
+    CHECK(captura.depthWrite  == opaco.depthWrite);
+    CHECK(captura.depthFunc   == opaco.depthFunc);
+    CHECK(captura.blendEnable == opaco.blendEnable);
 }

@@ -1,10 +1,11 @@
-// tests/renderer/ShaderBlocks.test.cpp
 // Los mirrors C++ de los bloques std140 son datos puros: se testean sin GPU.
 // Esto es lo que el refactor a UBOs vuelve testeable — antes el empaquetado de
 // estos valores era una tira de glUniform* que solo se podia verificar a ojo.
 #include <doctest/doctest.h>
 #include <efengine/renderer/ShaderBlocks.h>
 #include <efengine/renderer/Renderer.h>
+#include <efengine/renderer/DdgiVolume.h>
+#include <efengine/renderer/DdgiSettings.h>
 
 #include <cstddef>
 #include <vector>
@@ -47,7 +48,8 @@ TEST_CASE("Layout std140: los offsets de MaterialBlock son los calculados a mano
     CHECK(offsetof(MaterialBlock, scalars0)     == 32u);
     CHECK(offsetof(MaterialBlock, scalars1)     == 48u);
     CHECK(offsetof(MaterialBlock, mapMask)      == 64u);
-    CHECK(sizeof(MaterialBlock) == 80u);
+    CHECK(offsetof(MaterialBlock, uvTransform)  == 80u);   // v4: el tiling de UV
+    CHECK(sizeof(MaterialBlock) == 96u);
     CHECK(sizeof(ObjectBlock)   == 64u);
 }
 
@@ -160,4 +162,137 @@ TEST_CASE("MakeFrameBlock: invViewProjRot ignora la traslacion de la vista") {
     for (int c = 0; c < 4; ++c)
         for (int r = 0; r < 4; ++r)
             CHECK(a.invViewProjRot[c][r] == doctest::Approx(b.invViewProjRot[c][r]));
+}
+
+TEST_CASE("Layout std140: los offsets de DdgiBlock son los calculados a mano") {
+    CHECK(offsetof(DdgiBlock, gridOrigin)  ==  0u);
+    CHECK(offsetof(DdgiBlock, gridSpacing) == 16u);
+    CHECK(offsetof(DdgiBlock, gridCounts)  == 32u);
+    CHECK(offsetof(DdgiBlock, atlasLayout) == 48u);
+    CHECK(offsetof(DdgiBlock, updateRange) == 64u);
+    CHECK(offsetof(DdgiBlock, params0)     == 80u);
+    CHECK(offsetof(DdgiBlock, params1)     == 96u);
+    CHECK(offsetof(DdgiBlock, params2)     == 112u);
+    CHECK(sizeof(DdgiBlock) == 128u);
+    CHECK(sizeof(DdgiBlock) % 16u == 0u);
+}
+
+TEST_CASE("MakeDdgiBlock: copia la grilla y calcula el total de probes") {
+    DdgiSettings s;
+    s.grid.origin  = glm::vec3(-6.0f, 0.2f, -6.0f);
+    s.grid.spacing = glm::vec3(1.5f);
+    s.grid.counts  = glm::ivec3(8, 4, 8);
+
+    const DdgiBlock b = MakeDdgiBlock(s.grid, s, UpdateRange{}, true);
+
+    CHECK(b.gridOrigin.x  == doctest::Approx(-6.0f));
+    CHECK(b.gridOrigin.y  == doctest::Approx( 0.2f));
+    CHECK(b.gridSpacing.z == doctest::Approx( 1.5f));
+    CHECK(b.gridCounts.x == 8);
+    CHECK(b.gridCounts.y == 4);
+    CHECK(b.gridCounts.z == 8);
+    CHECK(b.gridCounts.w == 256);   // total, para el modulo del round-robin
+}
+
+TEST_CASE("MakeDdgiBlock: atlasLayout lleva columnas, filas y los dos tamanos de tile") {
+    DdgiSettings s;
+    s.grid.counts = glm::ivec3(8, 4, 8);
+
+    const DdgiBlock b = MakeDdgiBlock(s.grid, s, UpdateRange{}, true);
+
+    CHECK(b.atlasLayout.x == 32);   // countX * countY
+    CHECK(b.atlasLayout.y ==  8);   // countZ
+    CHECK(b.atlasLayout.z == static_cast<i32>(kIrradianceTile));
+    CHECK(b.atlasLayout.w == static_cast<i32>(kDistanceTile));
+}
+
+TEST_CASE("MakeDdgiBlock: updateRange lleva el rango del frame y el stride de captura") {
+    DdgiSettings s;
+    s.probesPerFrame = 8u;
+
+    UpdateRange r;
+    r.first = 24u;
+    r.count = 8u;
+
+    const DdgiBlock b = MakeDdgiBlock(s.grid, s, r, true);
+
+    CHECK(b.updateRange.x == 24);
+    CHECK(b.updateRange.y ==  8);
+    CHECK(b.updateRange.z == static_cast<i32>(kProbeFaceSize));
+    CHECK(b.updateRange.w ==  8);   // probesPerFrame: el blend lo usa como stride
+}
+
+TEST_CASE("MakeDdgiBlock: params0 empaqueta hysteresis, intensidad y los dos bias") {
+    DdgiSettings s;
+    s.hysteresis = 0.9f;
+    s.intensity  = 1.5f;
+    s.normalBias = 0.3f;
+    s.viewBias   = 0.05f;
+
+    const DdgiBlock b = MakeDdgiBlock(s.grid, s, UpdateRange{}, true);
+
+    CHECK(b.params0.x == doctest::Approx(0.9f));
+    CHECK(b.params0.y == doctest::Approx(1.5f));
+    CHECK(b.params0.z == doctest::Approx(0.3f));
+    CHECK(b.params0.w == doctest::Approx(0.05f));
+}
+
+TEST_CASE("MakeDdgiBlock: params1.x es 1 solo con enabled y atlas valido") {
+    DdgiSettings s;
+    s.enabled = true;
+    s.chebyshevSharpness = 4.0f;
+
+    CHECK(MakeDdgiBlock(s.grid, s, UpdateRange{}, true).params1.x  == doctest::Approx(1.0f));
+    CHECK(MakeDdgiBlock(s.grid, s, UpdateRange{}, true).params1.y  == doctest::Approx(4.0f));
+
+    // Sin atlas: el shader tiene que caer a IBL puro, no samplear una unidad vacia.
+    CHECK(MakeDdgiBlock(s.grid, s, UpdateRange{}, false).params1.x == doctest::Approx(0.0f));
+
+    s.enabled = false;
+    CHECK(MakeDdgiBlock(s.grid, s, UpdateRange{}, true).params1.x  == doctest::Approx(0.0f));
+}
+
+TEST_CASE("MakeDdgiBlock: la grilla se sanea antes de empaquetar") {
+    // Un slider en cero no puede llegar al shader como cero.
+    DdgiSettings s;
+    s.grid.counts  = glm::ivec3(0, 4, 8);
+    s.grid.spacing = glm::vec3(0.0f, 1.5f, 1.5f);
+
+    const DdgiBlock b = MakeDdgiBlock(s.grid, s, UpdateRange{}, true);
+
+    CHECK(b.gridCounts.x == 1);
+    CHECK(b.gridSpacing.x > 0.0f);
+}
+
+TEST_CASE("MakeDdgiBlock: params2 lleva maxDistance y los dos umbrales de backface") {
+    DdgiGrid grid;
+    grid.origin  = glm::vec3(0.0f);
+    grid.spacing = glm::vec3(1.0f);
+    grid.counts  = glm::ivec3(2, 2, 2);
+
+    DdgiSettings s;
+    s.maxDistance       = 12.5f;
+    s.backfaceFadeStart = 0.2f;
+    s.backfaceFadeEnd   = 0.4f;
+
+    const DdgiBlock b = MakeDdgiBlock(grid, s, UpdateRange{}, true);
+
+    CHECK(b.params2.x == doctest::Approx(12.5f));
+    CHECK(b.params2.y == doctest::Approx(0.2f));
+    CHECK(b.params2.z == doctest::Approx(0.4f));
+    CHECK(b.params2.w == doctest::Approx(0.0f));
+}
+
+TEST_CASE("DdgiSettings: los umbrales de backface arrancan con start < end") {
+    const DdgiSettings s;
+    CHECK(s.backfaceFadeStart == doctest::Approx(0.15f));
+    CHECK(s.backfaceFadeEnd   == doctest::Approx(0.30f));
+    CHECK(s.backfaceFadeStart < s.backfaceFadeEnd);
+}
+
+TEST_CASE("Layout std140: DdgiBlock sigue siendo multiplo de 16 con params2") {
+    CHECK(sizeof(DdgiBlock) % 16u == 0u);
+    CHECK(offsetof(DdgiBlock, params0) == 80u);
+    CHECK(offsetof(DdgiBlock, params1) == 96u);
+    CHECK(offsetof(DdgiBlock, params2) == 112u);
 }

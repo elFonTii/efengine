@@ -17,5 +17,5 @@ namespace efecom {
             } \
         } while (false)
 #else
-    #define EFCOM_ASSERT(condition, message)((void)0) // No hace nada en release
+    #define EFCOM_ASSERT(condition, message)((void)0)
 #endif

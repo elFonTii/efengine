@@ -48,7 +48,7 @@ namespace renderer {
         Cubemap irradiance = Cubemap::Create(desc.irradianceSize, efecom::TextureFormat::RGBA16F, 1);
 
         shaders.irradianceConvolve->Bind();
-        env.Bind(0);                                    // entorno como samplerCube (unit 0)
+        env.Bind(0);
         irradiance.BindImage(0, 0, efecom::ImageAccess::WriteOnly, efecom::TextureFormat::RGBA16F);
 
         const u32 iGroups = (desc.irradianceSize + 7u) / 8u;
@@ -63,7 +63,7 @@ namespace renderer {
                                               desc.prefilterMips);
 
         shaders.prefilterGGX->Bind();
-        env.Bind(0);                                     // el env con sus mips, como samplerCube
+        env.Bind(0);
 
         // PassParams del prefiltrado: x = rugosidad del mip, y = resolucion de
         // cara del env (para el mip bias). Se re-sube por mip.

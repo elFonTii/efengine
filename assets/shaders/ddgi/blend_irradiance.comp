@@ -1,0 +1,95 @@
+#version 450 core
+// Integra el target de captura al atlas de irradiancia.
+//
+// UN workgroup por probe, y el local_size ES el tile con borde. Asi
+// gl_WorkGroupID.x es el slot del frame y gl_LocalInvocationID.xy el texel.
+layout(local_size_x = 10, local_size_y = 10, local_size_z = 1) in;   // kIrradianceTile + 2
+
+layout(binding = 0) uniform sampler2D uCapture;   // 96x512: rgb = radiancia, a = distancia
+layout(rgba16f, binding = 0) uniform image2D uIrradianceAtlas;
+
+#include "ddgi/common.glsl"
+
+void main() {
+    int slot = int(gl_WorkGroupID.x);
+    if (slot >= uDdgiRange.y) return;
+
+    int total = uDdgiCounts.w;
+    int probe = (uDdgiRange.x + slot) % total;
+
+    int tile     = uDdgiAtlas.z;                  // interior, 8
+    int bordered = tile + 2 * kDdgiBorder;        // 10
+
+    ivec2 local = ivec2(gl_LocalInvocationID.xy); // [0, bordered)
+
+    // Texel de borde -> espeja a su equivalente interior. El mapa octaedrico
+    // envuelve sobre si mismo, asi que el vecino envuelto de un texel de borde
+    // es un texel INTERIOR DEL MISMO TILE. Por eso el borde se puede resolver
+    // recalculando la integral de la direccion espejada, sin un segundo pase ni
+    // barrier: no hay dependencia entre invocaciones.
+    ivec2 inner = local - ivec2(kDdgiBorder);     // [-1, tile]
+    if (inner.x < 0 || inner.x >= tile || inner.y < 0 || inner.y >= tile) {
+        // Espejo octaedrico: cruzar un borde equivale a reflejar la coordenada
+        // del otro eje y saltar al lado opuesto.
+        if (inner.x < 0)          { inner.x = 0;            inner.y = tile - 1 - inner.y; }
+        else if (inner.x >= tile) { inner.x = tile - 1;     inner.y = tile - 1 - inner.y; }
+        if (inner.y < 0)          { inner.y = 0;            inner.x = tile - 1 - inner.x; }
+        else if (inner.y >= tile) { inner.y = tile - 1;     inner.x = tile - 1 - inner.x; }
+        inner = clamp(inner, ivec2(0), ivec2(tile - 1));
+    }
+
+    // Direccion octaedrica de este texel.
+    vec2 oct = (vec2(inner) + 0.5) / float(tile) * 2.0 - 1.0;
+    vec3 dirOct = OctDecode(oct);
+
+    // -- La integral --
+    // Se recorren las 6*faceSize^2 muestras de captura de este probe. El peso es
+    // el coseno por el angulo solido del texel; la normalizacion es POR LA SUMA
+    // DE LOS PESOS, y eso es lo que hace que un entorno de radiancia uniforme L0
+    // se guarde como L0 -- exactamente la convencion de
+    // ibl/irradiance_convolve.comp. Cambiar esto rompe el criterio de que
+    // encender DDGI no altere el brillo.
+    int faceSize = uDdgiRange.z;
+
+    vec3  suma      = vec3(0.0);
+    float sumaPesos = 0.0;
+
+    for (int face = 0; face < 6; ++face) {
+        for (int y = 0; y < faceSize; ++y) {
+            for (int x = 0; x < faceSize; ++x) {
+                vec2 ndc = (vec2(x, y) + 0.5) / float(faceSize) * 2.0 - 1.0;
+                vec3 dirCap = dirForFace(uint(face), ndc);
+
+                float coseno = dot(dirCap, dirOct);
+                if (coseno <= 0.0) continue;
+
+                // Angulo solido del texel: los de las esquinas de cada cara
+                // subtienden menos. Sin esto la irradiancia sale sesgada hacia
+                // las esquinas.
+                float r2 = 1.0 + ndc.x * ndc.x + ndc.y * ndc.y;
+                float solidAngle = 1.0 / (r2 * sqrt(r2));
+
+                ivec2 capTexel = ivec2(face * faceSize + x, slot * faceSize + y);
+                vec3  radiancia = texelFetch(uCapture, capTexel, 0).rgb;
+
+                float peso = coseno * solidAngle;
+                suma      += radiancia * peso;
+                sumaPesos += peso;
+            }
+        }
+    }
+
+    vec3 capturado = (sumaPesos > 0.0) ? suma / sumaPesos : vec3(0.0);
+
+    // -- Blend con histeresis --
+    // ESTO es el denoise temporal de DDGI: no hace falta SVGF. Leer y escribir
+    // el mismo texel desde la misma invocacion no necesita barrier -- no hay
+    // dependencia entre invocaciones.
+    ivec2 dst = DdgiTileOrigin(probe, bordered) + local;
+    vec3  previo = imageLoad(uIrradianceAtlas, dst).rgb;
+
+    float h = uDdgiParams0.x;
+    vec3  resultado = mix(capturado, previo, h);
+
+    imageStore(uIrradianceAtlas, dst, vec4(resultado, 1.0));
+}

@@ -23,8 +23,8 @@ namespace renderer {
             u32             width() const;
             u32             height() const;
         private:
-            u32     m_id       = 0; 
-            u32     m_depthRbo = 0;   // depth renderbuffer
+            u32     m_id       = 0;
+            u32     m_depthRbo = 0;
             Texture m_color;
             u32     m_width    = 0;
             u32     m_height   = 0;

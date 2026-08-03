@@ -17,7 +17,7 @@ namespace renderer {
         scratch_1.Resize(width, height);
         scratch_2.Resize(width, height);
 
-        for (IPostPass* p : m_passes) p->Resize(width, height); // redimensiona todos los pases de postprocesado
+        for (IPostPass* p : m_passes) p->Resize(width, height);
     }
 
     void PostChain::Run(const Texture& sceneHDR) {

@@ -11,11 +11,15 @@ namespace renderer {
     class VertexArray;
     class Shader;
 
+    // Tuneados junto con la exposure de Camera y la intensidad de IBL de la
+    // Cornell: los tres se leen en la misma imagen y moverlos por separado no
+    // tiene sentido. El threshold bajo a 0.215 porque, con IBL casi apagado y un
+    // solo rebote, casi nada de la escena pasaba de 1.0 y el bloom no existia.
     struct BloomSettings {
-        f32 threshold   = 1.0f;
-        f32 knee        = 0.5f;
-        f32 intensity   = 0.08f;
-        i32 iterations  = 5;
+        f32 threshold   = 0.215f;
+        f32 knee        = 0.190f;
+        f32 intensity   = 0.33f;
+        i32 iterations  = 6;
     };
 
     class BloomPass: public IPostPass {

@@ -2,12 +2,6 @@
 #include <efengine/core/Types.h>
 #include <efecom/RHI.h>
 
-// https://learnopengl.com/Advanced-OpenGL/Cubemaps
-// una textura con mipmaps tiene que guardar la imagen a resolucion completa
-// y además una cadena de versiones cada vez más chicas hasta una res 1x1
-// nivel 0: 512x512 - nivel 1: 256x256 - nivel 2: 128x128 - etc...
-
-
 namespace efengine {
 namespace renderer {
 

@@ -13,7 +13,6 @@ namespace core {
             __debugbreak(); // Pausar el debugger en el punto de fallo - SÓLO CON MSVC, para otros compiladores escuche __builtin_trap()
         #endif
 
-        // En release, termina el programa.
         std::abort();
     }
 

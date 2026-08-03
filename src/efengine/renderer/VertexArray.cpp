@@ -8,27 +8,23 @@
 namespace efengine {
 namespace renderer {
 
-    // Constructor
     VertexArray::VertexArray() {
         m_id = efecom::CreateVertexArray();
         EF_ASSERT(m_id != 0, "VertexArray: efecom::CreateVertexArray fallo");
     }
 
-    // Destructor
     VertexArray::~VertexArray() {
         if (m_id != 0) {
             efecom::DestroyVertexArray(m_id);
         }
     }
 
-    // Move constructor
     VertexArray::VertexArray(VertexArray&& other) noexcept
         : m_id(std::exchange(other.m_id, 0))
         , m_buffers(std::move(other.m_buffers))
         , m_indexBuffer(std::move(other.m_indexBuffer))
         , m_vertexCount(std::exchange(other.m_vertexCount, 0)) {}
 
-    // Move assignment operator
     VertexArray& VertexArray::operator=(VertexArray&& other) noexcept {
         if (this != &other) {
             if (m_id != 0) {

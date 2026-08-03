@@ -1,4 +1,3 @@
-// tests/renderer/Cubemap.test.cpp
 // Valida mipLevels: la cantidad de niveles de mip de una textura cuadrada.
 // Lógica pura (floor(log2(size))+1), sin contexto OpenGL.
 #include <doctest/doctest.h>

@@ -15,6 +15,11 @@
 namespace efengine {
 namespace resources {
 
+    f32 MetersPerUnit(f64 unitScaleFactor) {
+        if (unitScaleFactor <= 0.0) return 1.0f;
+        return static_cast<f32>(1.0 / unitScaleFactor);
+    }
+
     std::optional<renderer::Model> ModelLoader::Load(const char* path) {
         EF_ASSERT(path != null, "ModelLoader::Load: path no puede ser null");
 
@@ -34,6 +39,16 @@ namespace resources {
         EF_LOG_INFO("ModelLoader: '%s' - %u mallas, %u materiales",
             path, scene->mNumMeshes, scene->mNumMaterials);
 
+        // Escala de unidades. Sin esto, un .fbx exportado en centimetros entra a
+        // la escena 100 veces mas grande. PreTransformVertices ya aplano la
+        // jerarquia, asi que alcanza con escalar las posiciones al copiarlas.
+        f64 unitScale = 0.0;
+        if (scene->mMetaData != null) {
+            double v = 0.0;
+            if (scene->mMetaData->Get("UnitScaleFactor", v)) unitScale = v;
+        }
+        const f32 metros = MetersPerUnit(unitScale);
+
         std::vector<renderer::Mesh> meshes;
         meshes.reserve(scene->mNumMeshes);
 
@@ -46,7 +61,9 @@ namespace resources {
             for (u32 v = 0; v < m->mNumVertices; ++v) {
                 renderer::Vertex vert;
 
-                vert.position = { m->mVertices[v].x, m->mVertices[v].y, m->mVertices[v].z };
+                vert.position = { m->mVertices[v].x * metros,
+                                  m->mVertices[v].y * metros,
+                                  m->mVertices[v].z * metros };
                 vert.normal   = { m->mNormals[v].x,  m->mNormals[v].y,  m->mNormals[v].z  };
 
                 if (m->mTangents != null) {

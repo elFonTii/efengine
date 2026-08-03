@@ -9,10 +9,25 @@
 #include <efengine/core/Assert.h>
 #include <efengine/core/Log.h>
 
+namespace {
+    // Traduce la severidad del RHI al log del motor. Es el puente que evita que
+    // efecom tenga que incluir efengine/core/Log.h.
+    void gpuMessageSink(efecom::MessageSeverity severity, const char* message) {
+        switch (severity) {
+            case efecom::MessageSeverity::Error:   EF_LOG_ERROR  ("[GL] %s", message); break;
+            case efecom::MessageSeverity::Warning: EF_LOG_WARNING("[GL] %s", message); break;
+            case efecom::MessageSeverity::Info:    EF_LOG_INFO   ("[GL] %s", message); break;
+        }
+    }
+}
+
 namespace efengine {
 namespace renderer {
 
     Context::Context(platform::Window& window) {
+        // Antes de Initialize: si el propio init emite algo, tiene que ir al log.
+        efecom::SetMessageSink(&gpuMessageSink);
+
         const bool ok = efecom::Initialize(glfwGetProcAddress);
         EF_ASSERT(ok, "efecom::Initialize failed: could not load graphics API functions");
 

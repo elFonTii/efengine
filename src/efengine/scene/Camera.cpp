@@ -11,7 +11,7 @@ namespace scene {
     }
 
     glm::mat4 Camera::ProjectionMatrix() const {
-        return glm::perspective(glm::radians(m_fov), m_aspect, m_near, m_far); // construye la perspectiva
+        return glm::perspective(glm::radians(m_fov), m_aspect, m_near, m_far);
     }
 
     void Camera::LookAt(const glm::vec3& position, const glm::vec3& target, const glm::vec3& up) {

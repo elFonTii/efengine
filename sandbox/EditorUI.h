@@ -28,10 +28,35 @@ namespace sandbox {
         efengine::scene::NodeHandle sun;
         efengine::scene::NodeHandle selected;
 
+        // Reparent pedido por drag & drop, pendiente de aplicar. Mutar la
+        // jerarquia en medio de la recursion que la dibuja rompe el recorrido,
+        // asi que el drop solo anota y drawHierarchy aplica al final del frame.
+        // Child nulo = no hay pedido. Uno por frame alcanza: no se pueden soltar
+        // dos cosas a la vez.
+        efengine::scene::NodeHandle pendingReparentChild;
+        efengine::scene::NodeHandle pendingReparentParent;
+
         bool animate      = false;
         bool animateSun   = false;
         u32  spawnCounter = 0;
 
+        // Ruta del .efe abierto. Vacia = la escena no tiene archivo: es la sala
+        // de Cornell recien armada, o un arranque en el que el Load fallo. Sin
+        // ruta, "Guardar" no tiene destino.
+        std::string currentScenePath;
+
+        // Estado del modal "Guardar como...". openSaveAs es el pedido de abrirlo:
+        // ImGui::OpenPopup llamado desde adentro de un BeginMenu queda en otro
+        // nivel del ID stack y el BeginPopupModal no lo encuentra, asi que el menu
+        // solo prende este flag y el modal se abre afuera.
+        // saveAsConfirm guarda la ruta que ya se aviso que existe: el segundo
+        // click sobre el mismo nombre es el que pisa el archivo.
+        bool        openSaveAs = false;
+        std::string saveAsName;
+        std::string saveAsConfirm;
+        std::string saveAsError;
+
+        bool showUI        = false;
         bool showHierarchy = true;
         bool showInspector = true;
         bool showMaterials = true;

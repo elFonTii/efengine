@@ -275,7 +275,7 @@ Detalle importante: `GetTexture` recibe el `ColorSpace`. El albedo va en **sRGB*
 
 ### 6. `Material` y `MaterialDef`
 
-`Material` en runtime solo tiene punteros a `Shader` y hasta siete `Texture` (albedo, normal, AO, roughness, metallic, height, opacity) más los escalares. `MaterialDef` es la **fuente de verdad para guardar**: nombre, shader, paths de cada mapa con su color space, y los escalares (`albedoTint`, `metallic`, `roughness`, `aoStrength`, `heightScale`, `alphaCutoff`). `MaterialBuilder` arma un `Material` desde un `Def` resolviendo texturas contra el `ResourceManager`.
+`Material` en runtime solo tiene punteros a `Shader` y hasta ocho `Texture` (albedo, normal, AO, roughness, metallic, height, opacity, emissive) más los escalares. `MaterialDef` es la **fuente de verdad para guardar**: nombre, shader, paths de cada mapa con su color space, y los escalares (`albedoTint`, `metallic`, `roughness`, `aoStrength`, `heightScale`, `alphaCutoff`, `emissiveTint`, `emissiveIntensity`, `normalStrength`, `doubleSided`). También lleva `uvTiling`/`uvOffset`: la transformación `uv = vUV * tiling + offset` que se aplica **igual a los ocho mapas**, para que un set PBR nunca quede desalineado consigo mismo. `MaterialBuilder` arma un `Material` desde un `Def` resolviendo texturas contra el `ResourceManager`.
 
 Los índices de `TextureSlot` **son parte del formato**: no se reordenan sin subir la versión.
 

@@ -1,4 +1,3 @@
-// tests/core/Types.test.cpp
 // Test de ejemplo: valida las constantes y aliases de core/Types.h.
 // No necesita contexto OpenGL, así prueba el pipeline de punta a punta.
 #include <doctest/doctest.h>

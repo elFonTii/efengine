@@ -5,7 +5,6 @@
 namespace efengine {
 namespace platform {
     enum class Key : i32 {
-        // ASCII
         Escape  = 256,
         Space   = 32,
         Tab     = 258,

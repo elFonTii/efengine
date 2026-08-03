@@ -13,6 +13,7 @@ namespace renderer {
     efecom::PipelineState SkyboxState();
     efecom::PipelineState ShadowDepthState();
     efecom::PipelineState FullscreenState();
+    efecom::PipelineState DdgiCaptureState();
 
 }
 }

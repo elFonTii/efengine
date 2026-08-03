@@ -1,4 +1,3 @@
-// tests/renderer/VertexLayout.test.cpp
 // Valida la lógica pura de VertexLayout (stride, offset, location).
 // No necesita contexto OpenGL.
 #include <doctest/doctest.h>

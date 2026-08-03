@@ -111,7 +111,7 @@ TEST_CASE("Behavior: varios behaviors en un nodo corren todos") {
 TEST_CASE("Behavior: SetLocal integra el transform a lo largo de varios ticks") {
     scene::SceneGraph g;
     scene::NodeHandle h = g.CreateNode("actor");
-    g.AttachBehavior(h, std::make_unique<SpinY>());   // 90 grados/seg
+    g.AttachBehavior(h, std::make_unique<SpinY>());
 
     for (int i = 0; i < 10; ++i) g.Update(0.1f);      // 10 * 0.1s = 1s
 

@@ -9,15 +9,13 @@
 // material no posee, solo contiene observadores para shaders y texturas.
 namespace efengine {
 namespace renderer {
-    // forward dec
-    class Shader; 
+    class Shader;
     class Texture;
 
     class Material {
         public:
             explicit Material(const Shader* shader) : m_shader(shader) {}
 
-            // setters
             void SetAlbedoMap(const Texture* texture);
             void SetNormalMap(const Texture* texture);
             void SetAOMap(const Texture* texture);
@@ -29,7 +27,6 @@ namespace renderer {
 
             const Shader& shader() const { return *m_shader; }
 
-            // escalares para el muestreo de cada tex
             glm::vec3 albedoTint = glm::vec3(1.0f);
             f32 metallic = 0.5f;
             f32 roughness = 1.0f;
@@ -45,6 +42,13 @@ namespace renderer {
 
             // Elige el PipelineState del draw: OpaqueState u OpaqueDoubleSidedState.
             bool      doubleSided       = false;
+
+            // Tiling de la UV, comun a los 8 mapas: uv = vUV * uvTiling + uvOffset.
+            // (1,1)/(0,0) es la identidad — la UV de la malla tal cual. Es un solo
+            // par para todos los mapas a proposito: un set PBR desalineado entre
+            // albedo y normal siempre es un bug, nunca una decision artistica.
+            glm::vec2 uvTiling = glm::vec2(1.0f);
+            glm::vec2 uvOffset = glm::vec2(0.0f);
 
             // Bindea los mapas del material a sus unidades (0-7, el valor de su
             // TextureSlot). NO bindea el shader ni sube nada al UBO: los samplers

@@ -1,4 +1,3 @@
-// tests/renderer/PostChain.test.cpp
 // Valida el ruteo de targets de la PostChain: qué pase escribe a un scratch
 // (y cuál) y cuál va al destino de presentación. Lógica pura, sin contexto OpenGL.
 #include <doctest/doctest.h>

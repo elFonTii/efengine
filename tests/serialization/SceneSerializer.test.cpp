@@ -341,6 +341,51 @@ TEST_CASE("EfeSceneSerializer: un material de una sola cara sale con doubleSided
     CHECK(doc.materials[0].doubleSided == 0u);
 }
 
+TEST_CASE("EfeSceneSerializer: el tiling de UV del MaterialDef llega al MaterialRecord") {
+    scene::SceneGraph grafo;
+    grafo.CreateNode("root");
+
+    resources::SceneAssets assets;
+    renderer::MaterialDef def;
+    def.name       = "ladrillo";
+    def.shaderName = "pbr";
+    def.uvTiling   = glm::vec2(6.0f, 3.0f);
+    def.uvOffset   = glm::vec2(0.125f, -0.25f);
+    // Material headless: Extract solo lee el DEF, nunca toca el Material.
+    assets.AddMaterial(def, renderer::Material(nullptr));
+
+    resources::ResourceManager rm;
+    const SceneRegistry reg = armarRegistry();
+
+    SceneDocument doc;
+    REQUIRE(SceneSerializer::Extract(grafo, assets, rm, reg, doc));
+    REQUIRE(doc.materials.size() == 1u);
+    CHECK(doc.materials[0].uvTiling.x == doctest::Approx(6.0f));
+    CHECK(doc.materials[0].uvTiling.y == doctest::Approx(3.0f));
+    CHECK(doc.materials[0].uvOffset.x == doctest::Approx(0.125f));
+    CHECK(doc.materials[0].uvOffset.y == doctest::Approx(-0.25f));
+}
+
+TEST_CASE("EfeSceneSerializer: un material sin tocar sale con la UV en identidad") {
+    scene::SceneGraph grafo;
+    grafo.CreateNode("root");
+
+    resources::SceneAssets assets;
+    renderer::MaterialDef def;
+    def.name       = "pared";
+    def.shaderName = "pbr";
+    assets.AddMaterial(def, renderer::Material(nullptr));
+
+    resources::ResourceManager rm;
+    const SceneRegistry reg = armarRegistry();
+
+    SceneDocument doc;
+    REQUIRE(SceneSerializer::Extract(grafo, assets, rm, reg, doc));
+    REQUIRE(doc.materials.size() == 1u);
+    CHECK(doc.materials[0].uvTiling.x == doctest::Approx(1.0f));
+    CHECK(doc.materials[0].uvOffset.x == doctest::Approx(0.0f));
+}
+
 TEST_CASE("EfeSceneAssets: indices, lookup inverso y Clear") {
     resources::SceneAssets assets;
     CHECK(assets.MaterialCount() == 0u);
