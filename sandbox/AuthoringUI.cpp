@@ -31,6 +31,24 @@ namespace {
 
     const ImVec4 kColorError { 1.0f, 0.4f, 0.4f, 1.0f };
 
+    // Mismo ancho de etiqueta que EditorUI.cpp: los dos paneles quedan con los
+    // campos alineados a la misma columna. Son TUs distintas, por eso la copia.
+    constexpr f32 kAnchoEtiqueta = 150.0f;
+
+    // OJO: la pila de item width es POR VENTANA, asi que el guard tiene que morir
+    // ANTES del ImGui::End() de su panel. Si vive hasta el final de la funcion, el
+    // Pop cae en la ventana de afuera y ImGui asserta con "Calling PopItemWidth()
+    // too many times!".
+    struct CamposAlineados {
+        explicit CamposAlineados(f32 anchoEtiqueta = kAnchoEtiqueta) {
+            ImGui::PushItemWidth(-anchoEtiqueta);
+        }
+        ~CamposAlineados() { ImGui::PopItemWidth(); }
+
+        CamposAlineados(const CamposAlineados&)            = delete;
+        CamposAlineados& operator=(const CamposAlineados&) = delete;
+    };
+
     // Nombres de submesh DISTINTOS: dos submeshes pueden compartir
     // materialName() y el MaterialMap los unifica en una sola entrada.
     std::vector<std::string> nombresDeSubmesh(const renderer::Model& model) {
@@ -331,6 +349,11 @@ void DrawMaterialsPanel(EditorContext& ctx) {
 
     ImGui::SeparatorText(ctx.assets.DefAt(st.activeMaterial)->name.c_str());
 
+    // Recien aca: arriba hay un camino que hace End() y sale, y el guard tiene
+    // que morir antes de cualquier End() (ver el comentario de la struct).
+    {
+    CamposAlineados alineados;
+
     renderer::MaterialDef& def = st.materialDraft;
     bool changed = false;
 
@@ -340,14 +363,21 @@ void DrawMaterialsPanel(EditorContext& ctx) {
     ImGui::SeparatorText("Texturas");
     for (const SlotInfo& info : kSlots) changed |= dibujarSlotDeTextura(ctx, def, info);
 
-    ImGui::SeparatorText("Escalares");
+    // Escalares agrupados por lo que hacen: primero los que definen la superficie
+    // PBR, despues los que solo pesan el efecto de una textura, y al final lo que
+    // cambia como se dibuja la malla.
+    ImGui::SeparatorText("Superficie");
     changed |= ImGui::ColorEdit3 ("Tint",      glm::value_ptr(def.albedoTint));
     changed |= ImGui::SliderFloat("Metallic",  &def.metallic,    0.0f,  1.0f);
     changed |= ImGui::SliderFloat("Roughness", &def.roughness,   0.02f, 1.0f);
-    changed |= ImGui::SliderFloat("AO",        &def.aoStrength,  0.0f,  1.0f);
-    changed |= ImGui::SliderFloat("Height",    &def.heightScale, 0.0f,  0.2f);
-    changed |= ImGui::SliderFloat("Alpha cut", &def.alphaCutoff, 0.0f,  1.0f);
-    changed |= ImGui::SliderFloat("Normal str", &def.normalStrength, 0.0f, 2.0f);
+
+    ImGui::SeparatorText("Peso de mapas");
+    changed |= ImGui::SliderFloat("Fuerza de normal", &def.normalStrength, 0.0f, 2.0f);
+    changed |= ImGui::SliderFloat("Fuerza de AO",     &def.aoStrength,     0.0f, 1.0f);
+    changed |= ImGui::SliderFloat("Altura (POM)",     &def.heightScale,    0.0f, 0.2f);
+
+    ImGui::SeparatorText("Dibujado");
+    changed |= ImGui::SliderFloat("Alpha cut", &def.alphaCutoff, 0.0f, 1.0f);
     changed |= ImGui::Checkbox("Doble cara", &def.doubleSided);
 
     ImGui::SeparatorText("UV");
@@ -360,15 +390,16 @@ void DrawMaterialsPanel(EditorContext& ctx) {
     changed |= ImGui::DragFloat2("Offset", glm::value_ptr(def.uvOffset), 0.01f);
 
     ImGui::SeparatorText("Emision");
-    changed |= ImGui::ColorEdit3 ("Emis tint", glm::value_ptr(def.emissiveTint));
+    changed |= ImGui::ColorEdit3 ("Color emisivo", glm::value_ptr(def.emissiveTint));
     // Rango HDR: para que el bloom lo agarre, la emision tiene que pasar el
     // threshold del brightpass, que trabaja sobre radiancia lineal sin tonemapear.
-    changed |= ImGui::SliderFloat("Emis int",  &def.emissiveIntensity, 0.0f, 20.0f);
+    changed |= ImGui::SliderFloat("Intensidad",    &def.emissiveIntensity, 0.0f, 20.0f);
 
     if (changed) aplicarDraft(ctx);
 
     if (!st.materialError.empty()) ImGui::TextColored(kColorError, "%s", st.materialError.c_str());
     ImGui::TextDisabled("Un material es de la escena: editarlo cambia todos los nodos que lo usan.");
+    }
 
     ImGui::End();
 }

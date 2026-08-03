@@ -76,9 +76,33 @@ namespace {
         RefreshHandles(ctx);
     }
 
-    // Color de los mensajes de error de la UI. AuthoringUI.cpp tiene su propia
-    // copia en su namespace anonimo; son dos unidades de traduccion distintas.
-    const ImVec4 kColorError { 1.0f, 0.4f, 0.4f, 1.0f };
+    // Colores de mensaje de la UI. AuthoringUI.cpp tiene su propia copia de
+    // kColorError en su namespace anonimo; son dos unidades de traduccion distintas.
+    const ImVec4 kColorError { 1.00f, 0.40f, 0.40f, 1.0f };
+    const ImVec4 kColorAviso { 1.00f, 0.80f, 0.30f, 1.0f };
+    const ImVec4 kColorOk    { 0.45f, 0.85f, 0.45f, 1.0f };
+
+    // Ancho reservado para las etiquetas de los campos. Los widgets se estiran
+    // hasta el borde del panel menos esto, asi que todos empiezan y terminan
+    // alineados en vez de tener cada uno el largo que le toco.
+    constexpr f32 kAnchoEtiqueta = 150.0f;
+
+    // RAII sobre PushItemWidth: se abre una al principio de cada panel y todo lo
+    // que se dibuje adentro queda alineado sin repetir la llamada por widget.
+    //
+    // OJO: la pila de item width es POR VENTANA, asi que el guard tiene que morir
+    // ANTES del ImGui::End() de su panel. Si vive hasta el final de la funcion, el
+    // Pop cae en la ventana de afuera y ImGui asserta con "Calling PopItemWidth()
+    // too many times!". Por eso los paneles lo meten en un bloque propio.
+    struct CamposAlineados {
+        explicit CamposAlineados(f32 anchoEtiqueta = kAnchoEtiqueta) {
+            ImGui::PushItemWidth(-anchoEtiqueta);
+        }
+        ~CamposAlineados() { ImGui::PopItemWidth(); }
+
+        CamposAlineados(const CamposAlineados&)            = delete;
+        CamposAlineados& operator=(const CamposAlineados&) = delete;
+    };
 
     // Pega el nombre tipeado al directorio de escenas y le pone .efe si falta:
     // guardar un archivo sin extension lo dejaria fuera del listado del menu.
@@ -415,25 +439,33 @@ namespace {
 
         scene::Node& node = ctx.scene.Get(st.selected);
 
+        {
+        CamposAlineados alineados;   // se cierra antes del End() de abajo
+
+        ImGui::SeparatorText("Nodo");
+
         // Escribe directo sobre el nodo, sin confirmar y sin validar: el nombre
         // es cosmetico. La identidad real es el NodeHandle y el .efe guarda el
         // parent por indice, asi que un nombre vacio o repetido no rompe nada.
         // Lo unico que se degrada es FindByName, que ya devuelve el primer match
         // por contrato.
         ImGui::InputText("Nombre", &node.name);
-        if (ImGui::SmallButton("Focus")) FocusSelection(ctx);
-        ImGui::TextDisabled("handle { index=%u, gen=%u }", node.self.index, node.self.generation);
 
         // El world es derivado: se muestra como lectura, no se edita.
         const glm::vec3 worldPos = glm::vec3(node.worldMatrix[3]);
-        ImGui::TextDisabled("mundo: %.2f, %.2f, %.2f", worldPos.x, worldPos.y, worldPos.z);
+        ImGui::TextDisabled("mundo   %.2f, %.2f, %.2f", worldPos.x, worldPos.y, worldPos.z);
+        ImGui::TextDisabled("handle  index=%u, gen=%u", node.self.index, node.self.generation);
 
-        ImGui::SeparatorText("Transform");
+        if (ImGui::Button("Encuadrar (F)", ImVec2(-kAnchoEtiqueta, 0.0f))) FocusSelection(ctx);
+
+        // "(local)" en el titulo y no en cada etiqueta: es la misma aclaracion
+        // para los tres campos y repetirla los hacia tres veces mas largos.
+        ImGui::SeparatorText("Transform (local)");
         math::Transform t = node.local;
         bool changed = false;
-        changed |= ImGui::DragFloat3("Posicion local", glm::value_ptr(t.position), 0.1f);
-        changed |= ImGui::DragFloat3("Rotacion local", glm::value_ptr(t.rotation), 0.5f);
-        changed |= ImGui::DragFloat3("Escala local",   glm::value_ptr(t.scale),    0.05f);
+        changed |= ImGui::DragFloat3("Posicion", glm::value_ptr(t.position), 0.1f);
+        changed |= ImGui::DragFloat3("Rotacion", glm::value_ptr(t.rotation), 0.5f);
+        changed |= ImGui::DragFloat3("Escala",   glm::value_ptr(t.scale),    0.05f);
         if (changed) ctx.scene.SetLocalTransform(st.selected, t);
 
         DrawMeshSection(ctx, st.selected);
@@ -459,6 +491,7 @@ namespace {
             const f32 speed  = node.light->kind == scene::LightKind::Point ? 10.0f    : 0.05f;
             ImGui::DragFloat3("Color/Int", glm::value_ptr(node.light->color), speed, 0.0f, maxInt);
         }
+        }
 
         ImGui::End();
     }
@@ -468,19 +501,20 @@ namespace {
 
         std::optional<renderer::DdgiPass>& opt = ctx.app.GetDdgiPass();
         if (!opt.has_value()) {
-            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
-                               "DdgiPass no disponible: fallo la carga de shaders.");
+            ImGui::TextColored(kColorError, "DdgiPass no disponible: fallo la carga de shaders.");
             ImGui::TextWrapped("La escena esta usando IBL puro. Mira la consola.");
             return;
         }
         renderer::DdgiPass&     pass = *opt;
         renderer::DdgiSettings& s    = pass.settings();
 
+        CamposAlineados alineados;
+
         // -- Lo primero que hay que mirar cuando "no se ve la GI" --------------
         if (pass.atlasValid()) {
-            ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "pbr.frag recibe los atlas: SI");
+            ImGui::TextColored(kColorOk, "pbr.frag recibe los atlas: SI");
         } else {
-            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "pbr.frag recibe los atlas: NO");
+            ImGui::TextColored(kColorError, "pbr.frag recibe los atlas: NO");
             ImGui::TextWrapped("Hasta que corra un blend, DDGI aporta cero y la imagen es IBL puro.");
         }
 
@@ -489,15 +523,15 @@ namespace {
         // -- Grilla ------------------------------------------------------------
         ImGui::SeparatorText("Grilla");
         bool gridChanged = false;
-        gridChanged |= ImGui::DragFloat3("Origen",        &s.grid.origin.x,  0.1f);
-        gridChanged |= ImGui::DragFloat3("Espaciado",     &s.grid.spacing.x, 0.05f, 0.05f, 10.0f);
-        gridChanged |= ImGui::DragInt3  ("Probes por eje", &s.grid.counts.x, 1.0f,
+        gridChanged |= ImGui::DragFloat3("Origen",         &s.grid.origin.x,  0.1f);
+        gridChanged |= ImGui::DragFloat3("Espaciado",      &s.grid.spacing.x, 0.05f, 0.05f, 10.0f);
+        gridChanged |= ImGui::DragInt3  ("Probes por eje", &s.grid.counts.x,  1.0f,
                                          1, renderer::kMaxProbesPerAxis);
-        ImGui::Text("Total: %u probes", renderer::ProbeCount(s.grid));
+        ImGui::TextDisabled("total: %u probes", renderer::ProbeCount(s.grid));
 
         // Encajar la grilla a la escena resuelve de un click la clase entera de
         // bug "la grilla no cubre la sala", que es con la que arranco este ciclo.
-        if (ImGui::Button("Encajar grilla a la escena")) {
+        if (ImGui::Button("Encajar grilla a la escena", ImVec2(-kAnchoEtiqueta, 0.0f))) {
             const renderer::AABB& b = ctx.scene.WorldBounds();
             if (b.Valid()) {
                 // Un 10% de margen hacia adentro: un probe DENTRO de una pared
@@ -515,7 +549,7 @@ namespace {
             }
         }
         if (gridChanged) {
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f),
+            ImGui::TextColored(kColorAviso,
                                "Cambiar la grilla realoca los atlas y reinicia el barrido.");
         }
 
@@ -526,12 +560,10 @@ namespace {
                              static_cast<int>(renderer::kMaxProbesPerFrame))) {
             s.probesPerFrame = static_cast<u32>(perFrame);
         }
+        // Histeresis: cuanto del valor viejo se conserva. ESTO es el denoise
+        // temporal de DDGI, no hace falta un denoiser aparte. Mas alto = mas
+        // estable y mas lento en reaccionar.
         ImGui::SliderFloat("Histeresis", &s.hysteresis, 0.0f, 0.995f, "%.3f");
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Cuanto del valor viejo se conserva. ESTO es el denoise\n"
-                              "temporal de DDGI: no hace falta un denoiser aparte.\n"
-                              "Mas alto = mas estable y mas lento en reaccionar.");
-        }
         ImGui::Checkbox("Congelar (freeze)", &s.freeze);
         ImGui::SameLine();
         if (ImGui::Button("Reset")) pass.Reset();
@@ -540,36 +572,29 @@ namespace {
         const u32 framesPorBarrido = (s.probesPerFrame > 0u)
                                    ? (total + s.probesPerFrame - 1u) / s.probesPerFrame
                                    : 0u;
-        ImGui::Text("Cursor: %u / %u   Barridos: %u", pass.cursor(), total, pass.sweepsDone());
-        ImGui::Text("Frames por barrido: %u", framesPorBarrido);
-        ImGui::Text("Pase (CPU): %.3f ms", pass.lastMs());
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Tiempo de CPU emitiendo las llamadas, no de GPU\n"
-                              "ejecutandolas. Sirve para detectar que el round-robin\n"
-                              "se fue de escala, no como profiler.");
-        }
+        ImGui::TextDisabled("cursor %u / %u   barridos %u", pass.cursor(), total, pass.sweepsDone());
+        ImGui::TextDisabled("frames por barrido: %u", framesPorBarrido);
+        // Tiempo de CPU emitiendo las llamadas, no de GPU ejecutandolas: sirve
+        // para detectar que el round-robin se fue de escala, no como profiler.
+        ImGui::TextDisabled("pase (CPU): %.3f ms", pass.lastMs());
 
         // -- Sampleo -----------------------------------------------------------
         ImGui::SeparatorText("Sampleo");
         ImGui::SliderFloat("Intensidad", &s.intensity, 0.0f, 4.0f);
+        // Normal bias: subir si la luz atraviesa las paredes; bajar si los
+        // rincones tienen una banda oscura.
         ImGui::SliderFloat("Normal bias", &s.normalBias, 0.0f, 1.0f, "%.3f m");
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Sube si la luz atraviesa las paredes.\n"
-                              "Baja si los rincones tienen una banda oscura.");
-        }
         ImGui::SliderFloat("View bias", &s.viewBias, 0.0f, 1.0f, "%.3f m");
-        ImGui::SliderFloat("Chebyshev sharpness", &s.chebyshevSharpness, 1.0f, 16.0f);
+        ImGui::SliderFloat("Chebyshev", &s.chebyshevSharpness, 1.0f, 16.0f);
 
         // El rango sale de la escena, no de un numero fijo: con un tope de 100 m
         // fijo, abrir el panel con maxDistance en 200 lo clamparia en silencio y
         // cambiaria el far plane de la captura sin que nadie toque nada.
         const renderer::AABB& bounds = ctx.scene.WorldBounds();
         const f32 topeDist = bounds.Valid() ? glm::max(4.0f * bounds.Radius(), 10.0f) : 200.0f;
-        ImGui::SliderFloat("Distancia max (captura)", &s.maxDistance, 1.0f, topeDist, "%.1f m");
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Far plane de la captura de probes. Muy alto tira la\n"
-                              "precision del depth; muy bajo deja la captura vacia.");
-        }
+        // Es el far plane de la captura de probes: muy alto tira la precision
+        // del depth, muy bajo deja la captura vacia.
+        ImGui::SliderFloat("Distancia max", &s.maxDistance, 1.0f, topeDist, "%.1f m");
 
         // -- Debug -------------------------------------------------------------
         ImGui::SeparatorText("Debug");
@@ -586,26 +611,29 @@ namespace {
                                  "Albedo",
                                  "Normal",
                                  "Sombra del sol (cruda)" };
+        //
+        // Como se leen estas vistas (era un tooltip; vive aca para no tapar la UI):
+        //
+        //   Eligen que termino escribe pbr.frag en vez de la imagen final.
+        //
+        //   'Indirecta aplicada' es lo que la indirecta le suma al pixel. OJO: ahi
+        //   adentro el IBL y DDGI van MEZCLADOS por el fade, asi que no ver negro no
+        //   prueba que DDGI aporte. Para leerlo, primero Render > Iluminacion >
+        //   Intensidad IBL a 0: lo que quede es DDGI.
+        //
+        //   Y para saber por que: comparar 'DDGI ignorando el fade' con 'Fade del
+        //   volumen'. Si el primero tiene color y el segundo esta negro, la GI se
+        //   calcula bien y la tira el fade -- la grilla no cubre esa superficie con
+        //   el margen que el fade pide.
+        //
+        //   Todas pasan por bloom y ACES: son cualitativas, no numeros.
+        //
         int vista = static_cast<int>(s.debugView);
         if (ImGui::Combo("Vista", &vista, vistas, IM_ARRAYSIZE(vistas))) {
             s.debugView = static_cast<u32>(vista);
         }
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip(
-                "Que termino escribe pbr.frag en vez de la imagen final.\n\n"
-                "'Indirecta aplicada' es lo que la indirecta le suma al pixel.\n"
-                "OJO: ahi adentro el IBL y DDGI van MEZCLADOS por el fade, asi\n"
-                "que no ver negro no prueba que DDGI aporte. Para leerlo, primero\n"
-                "Render > Iluminacion > Intensidad IBL a 0: lo que quede es DDGI.\n\n"
-                "Y para saber por que: compara 'DDGI ignorando el fade' con\n"
-                "'Fade del volumen'. Si el primero tiene color y el segundo esta\n"
-                "negro, la GI se calcula bien y la tira el fade -- la grilla no\n"
-                "cubre esa superficie con el margen que el fade pide.\n\n"
-                "Pasan por bloom y ACES: son cualitativos, no numeros.");
-        }
         if (s.debugView != renderer::DdgiSettings::kDebugOff) {
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f),
-                               "Vista de debug activa: la imagen NO es la final.");
+            ImGui::TextColored(kColorAviso, "Vista de debug activa: la imagen NO es la final.");
         }
 
         ImGui::Checkbox("Mostrar probes", &s.debugProbes);
@@ -621,25 +649,22 @@ namespace {
 
         std::optional<renderer::AoPass>& opt = ctx.app.GetAoPass();
         if (!opt.has_value()) {
-            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
-                               "AoPass no disponible: fallo la carga de shaders.");
+            ImGui::TextColored(kColorError, "AoPass no disponible: fallo la carga de shaders.");
             ImGui::TextWrapped("La escena esta sin oclusion de contacto. Mira la consola.");
             return;
         }
         renderer::AoSettings& s = opt->settings();
 
+        CamposAlineados alineados;
+
         ImGui::Checkbox("Habilitado", &s.enabled);
 
+        ImGui::SeparatorText("Trazado");
+        // El radio va en METROS y tiene que quedar POR DEBAJO del espaciado de
+        // probes de DDGI: lo que el AO ocluye es exactamente lo que la grilla no
+        // puede ver. Por encima, los dos oscurecen la misma cosa. Radio 0 =
+        // control nulo, la imagen tiene que volver a ser la de AO apagado.
         ImGui::SliderFloat("Radio", &s.radius, 0.0f, 3.0f, "%.2f m");
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip(
-                "En METROS. Tiene que quedar POR DEBAJO del espaciado de\n"
-                "probes de DDGI: lo que el AO ocluye es exactamente lo que\n"
-                "la grilla no puede ver. Por encima, los dos oscurecen la\n"
-                "misma cosa.\n\n"
-                "Radio 0 = control nulo: la imagen tiene que volver a ser\n"
-                "la de AO apagado.");
-        }
 
         // El espaciado de DDGI al lado del slider: la regla "radio < espaciado"
         // no se puede verificar de otra forma desde el panel.
@@ -648,7 +673,7 @@ namespace {
             const glm::vec3& sp = ddgi->settings().grid.spacing;
             const f32 minSp = glm::min(sp.x, glm::min(sp.y, sp.z));
             if (s.radius >= minSp) {
-                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f),
+                ImGui::TextColored(kColorAviso,
                                    "Radio >= espaciado de probes (%.2f m): doble oscurecimiento.", minSp);
             } else {
                 ImGui::TextDisabled("espaciado de probes mas chico: %.2f m", minSp);
@@ -656,28 +681,21 @@ namespace {
         }
 
         ImGui::SliderFloat("Intensidad", &s.intensity, 0.0f, 4.0f);
+        // Grosor: que tan rapido se desvanece una muestra lejana. Bajarlo hace
+        // que un objeto lejano alineado en pantalla deje de ocluir a uno cercano.
         ImGui::SliderFloat("Grosor",     &s.thickness, 0.01f, 1.0f);
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Que tan rapido se desvanece una muestra lejana.\n"
-                              "Bajarlo hace que un objeto lejano alineado en\n"
-                              "pantalla deje de ocluir a uno cercano.");
-        }
         ImGui::SliderInt  ("Cortes",     &s.slices, 1, 8);
         ImGui::SliderInt  ("Pasos",      &s.steps,  1, 32);
         ImGui::SliderFloat("Techo de radio", &s.maxScreenRadius, 8.0f, 512.0f, "%.0f px");
 
         ImGui::SeparatorText("Aplicacion");
+        // Bent normal: orienta el lookup de irradiancia (IBL y DDGI) hacia donde
+        // el hemisferio esta abierto. En un rincon de Cornell cambia la DIRECCION
+        // del color bleeding.
         ImGui::Checkbox("Bent normal",  &s.bentNormal);
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Orienta el lookup de irradiancia (IBL y DDGI) hacia\n"
-                              "donde el hemisferio esta abierto. En un rincon de\n"
-                              "Cornell cambia la DIRECCION del color bleeding.");
-        }
+        // Multi-rebote: el AO se tiñe con el albedo en vez de oscurecer a gris.
+        // Sobre la pared roja la diferencia es directa.
         ImGui::Checkbox("Multi-rebote", &s.multiBounce);
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("El AO se tiñe con el albedo en vez de oscurecer a gris.\n"
-                              "Sobre la pared roja la diferencia es directa.");
-        }
         ImGui::Checkbox("Blur", &s.blur);
 
         ImGui::SeparatorText("Debug");
@@ -686,18 +704,14 @@ namespace {
                                  "Bent normal (world)",
                                  "Normal del prepass (view)",
                                  "Profundidad (1 banda = 1 m)" };
+        // Las dos ultimas vuelcan el prepass y saltean el blur. Si esta vista y
+        // la de DDGI estan las dos activas, gana esta.
         int vista = static_cast<int>(s.debugView);
         if (ImGui::Combo("Vista AO", &vista, vistas, IM_ARRAYSIZE(vistas))) {
             s.debugView = static_cast<u32>(vista);
         }
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Las dos ultimas vuelcan el prepass y saltean el blur.\n"
-                              "Si esta vista y la de DDGI estan las dos activas,\n"
-                              "gana esta.");
-        }
         if (s.debugView != 0u) {
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f),
-                               "Vista de debug activa: la imagen NO es la final.");
+            ImGui::TextColored(kColorAviso, "Vista de debug activa: la imagen NO es la final.");
         }
     }
 
@@ -706,49 +720,13 @@ namespace {
 
         if (!ImGui::Begin("Render", &st.showRender)) { ImGui::End(); return; }
 
+        {
+        CamposAlineados alineados;   // se cierra antes del End() de abajo
+
         if (ImGui::CollapsingHeader("Iluminacion", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::SliderFloat("Intensidad IBL", &ctx.scene.iblIntensity, 0.0f, 2.0f);
             f32 exposure = ctx.camera.Exposure();
             if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 5.0f)) ctx.camera.SetExposure(exposure);
-        }
-
-        if (ImGui::CollapsingHeader("Camara")) {
-            scene::CameraSettings& cs = ctx.controller.settings();
-            ImGui::SliderFloat("Velocidad",     &cs.moveSpeed,       1.0f,    200.0f);
-            ImGui::SliderFloat("Boost (Shift)", &cs.boostMultiplier, 1.0f,    20.0f);
-            ImGui::SliderFloat("Sensibilidad",  &cs.lookSensitivity, 0.0005f, 0.02f,  "%.4f");
-            ImGui::SliderFloat("Paneo",         &cs.panSpeed,        0.0001f, 0.01f,  "%.4f");
-            ImGui::SliderFloat("Dolly",         &cs.dollySpeed,      0.01f,   0.5f);
-            ImGui::Checkbox("Invertir X", &cs.invertX);
-            ImGui::SameLine();
-            ImGui::Checkbox("Invertir Y", &cs.invertY);
-
-            ImGui::TextDisabled("mouselook: %s", ctx.controller.LookToggled() ? "ON (Tab/Esc para salir)"
-                                                                             : "off (Tab para entrar)");
-            ImGui::TextDisabled("pivote a %.2f | yaw %.1f | pitch %.1f",
-                                ctx.controller.PivotDistance(),
-                                glm::degrees(ctx.controller.Yaw()),
-                                glm::degrees(ctx.controller.Pitch()));
-
-            // Los bindings son invisibles: nadie los adivina mirando la ventana.
-            ImGui::SeparatorText("Controles");
-            ImGui::TextDisabled("Tab mirar libre  -  RMB mirar sostenido");
-            ImGui::TextDisabled("Alt+LMB orbitar  -  MMB panear");
-            ImGui::TextDisabled("scroll dolly  -  WASD volar  -  Q/E bajar-subir");
-            ImGui::TextDisabled("Shift acelerar  -  F encuadrar seleccion");
-        }
-
-        if (ImGui::CollapsingHeader("Bloom")) {
-            renderer::BloomSettings& s = ctx.app.GetBloomPass().settings();
-            ImGui::SliderFloat("Threshold",  &s.threshold,  0.0f, 5.0f);
-            ImGui::SliderFloat("Knee",       &s.knee,       0.0f, 1.0f);
-            ImGui::SliderFloat("Intensity",  &s.intensity,  0.0f, 0.5f);
-            ImGui::SliderInt  ("Iterations", &s.iterations, 1,    10);
-        }
-
-        if (ImGui::CollapsingHeader("FXAA")) {
-            renderer::FxaaSettings& fx = ctx.app.GetFxaaPass().settings();
-            ImGui::Checkbox("FXAA habilitado", &fx.enabled);
         }
 
         if (ImGui::CollapsingHeader("Sombras", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -756,12 +734,10 @@ namespace {
             renderer::ShadowSettings& sh   = pase.settings();
 
             ImGui::Checkbox   ("Habilitadas", &sh.enabled);
+            // Margen: aire alrededor de la escena. El encuadre de la luz sale de
+            // sus bounds y esto es lo unico a mano. Mas margen = texel mas
+            // grande = mas acne.
             ImGui::SliderFloat("Margen",      &sh.padding, 0.0f, 10.0f, "%.2f m");
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Aire alrededor de la escena. El encuadre de la luz\n"
-                                  "sale de sus bounds; esto es lo unico a mano.\n"
-                                  "Mas margen = texel mas grande = mas acne.");
-            }
             // Sirve para medir: si un artefacto se afina a la mitad al duplicar
             // la resolucion, escala con el texel y es del shadow map.
             const char* resoluciones[] = { "512", "1024", "2048", "4096" };
@@ -773,21 +749,16 @@ namespace {
                 sh.resolution = valores[resSel];
             }
 
+            // El mecanismo principal contra el acne (lineas oscuras en zonas
+            // iluminadas): subirlo. NO abre luz en los rincones; el techo es la
+            // geometria fina, que empieza a filtrar.
             ImGui::SliderFloat("Normal offset", &sh.normalOffsetTexels, 0.0f, 8.0f, "%.1f texels");
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("El mecanismo principal. Subilo si hay acne\n"
-                                  "(lineas oscuras en zonas iluminadas).\n"
-                                  "Subirlo NO abre luz en los rincones; el techo\n"
-                                  "es la geometria fina, que empieza a filtrar.");
-            }
 
-            ImGui::SliderFloat("Bias Min", &sh.biasMin, 0.0f, 0.01f, "%.4f");
-            ImGui::SliderFloat("Bias Max", &sh.biasMax, 0.0f, 0.02f, "%.4f");
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Escotilla. Empuja la profundidad hacia la luz,\n"
-                                  "asi que cualquier valor > 0 abre una banda de\n"
-                                  "luz en las aristas entre paredes. Dejar en 0.");
-            }
+            // Los dos bias son la escotilla: empujan la profundidad hacia la luz,
+            // asi que cualquier valor > 0 abre una banda de luz en las aristas
+            // entre paredes. Dejarlos en 0.
+            ImGui::SliderFloat("Bias min", &sh.biasMin, 0.0f, 0.01f, "%.4f");
+            ImGui::SliderFloat("Bias max", &sh.biasMax, 0.0f, 0.02f, "%.4f");
 
             // Los dos bias son fracciones de profundidad NDC, que no quiere
             // decir nada solo. Lo que se tunea de verdad es cuantos texels de
@@ -805,6 +776,54 @@ namespace {
 
         drawDdgiSection(ctx);
         drawAoSection(ctx);
+
+        // -- Post ---------------------------------------------------------------
+        // Bloom y FXAA corren sobre la imagen ya resuelta, asi que van despues de
+        // todo lo que la produce. Nombres de campo en castellano como el resto
+        // del panel: eran los unicos en ingles.
+        if (ImGui::CollapsingHeader("Bloom")) {
+            renderer::BloomSettings& s = ctx.app.GetBloomPass().settings();
+            ImGui::SliderFloat("Umbral",      &s.threshold,  0.0f, 5.0f);
+            ImGui::SliderFloat("Knee",        &s.knee,       0.0f, 1.0f);
+            ImGui::SliderFloat("Intensidad",  &s.intensity,  0.0f, 0.5f);
+            ImGui::SliderInt  ("Iteraciones", &s.iterations, 1,    10);
+        }
+
+        if (ImGui::CollapsingHeader("FXAA")) {
+            renderer::FxaaSettings& fx = ctx.app.GetFxaaPass().settings();
+            ImGui::Checkbox("Habilitado", &fx.enabled);
+        }
+
+        // -- Camara -------------------------------------------------------------
+        // Ultima a proposito: no produce imagen, es como se navega, y una vez
+        // configurada no se vuelve a tocar.
+        if (ImGui::CollapsingHeader("Camara")) {
+            scene::CameraSettings& cs = ctx.controller.settings();
+            ImGui::SliderFloat("Velocidad",     &cs.moveSpeed,       1.0f,    200.0f);
+            ImGui::SliderFloat("Boost (Shift)", &cs.boostMultiplier, 1.0f,    20.0f);
+            ImGui::SliderFloat("Sensibilidad",  &cs.lookSensitivity, 0.0005f, 0.02f,  "%.4f");
+            ImGui::SliderFloat("Paneo",         &cs.panSpeed,        0.0001f, 0.01f,  "%.4f");
+            ImGui::SliderFloat("Dolly",         &cs.dollySpeed,      0.01f,   0.5f);
+            ImGui::Checkbox("Invertir X", &cs.invertX);
+            ImGui::SameLine();
+            ImGui::Checkbox("Invertir Y", &cs.invertY);
+
+            ImGui::SeparatorText("Estado");
+            ImGui::TextDisabled("mouselook: %s", ctx.controller.LookToggled() ? "ON (Tab/Esc para salir)"
+                                                                             : "off (Tab para entrar)");
+            ImGui::TextDisabled("pivote a %.2f | yaw %.1f | pitch %.1f",
+                                ctx.controller.PivotDistance(),
+                                glm::degrees(ctx.controller.Yaw()),
+                                glm::degrees(ctx.controller.Pitch()));
+
+            // Los bindings son invisibles: nadie los adivina mirando la ventana.
+            ImGui::SeparatorText("Controles");
+            ImGui::TextDisabled("Tab mirar libre  -  RMB mirar sostenido");
+            ImGui::TextDisabled("Alt+LMB orbitar  -  MMB panear");
+            ImGui::TextDisabled("scroll dolly  -  WASD volar  -  Q/E bajar-subir");
+            ImGui::TextDisabled("Shift acelerar  -  F encuadrar seleccion");
+        }
+        }
 
         ImGui::End();
     }
