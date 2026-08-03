@@ -96,7 +96,6 @@ namespace platform {
         m_prev = m_curr;
         m_curr = m_pending;
 
-        // Resetear el acumulador de scroll
         m_pending.scroll = 0.0f;
     }
 

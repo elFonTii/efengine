@@ -53,6 +53,11 @@ namespace renderer {
         return out;
     }
 
+    AABB AccumulateBounds(const AABB& acc, const AABB& local, const glm::mat4& world) {
+        if (!local.Valid()) return acc;
+        return AABB::Merge(acc, local.Transformed(world));
+    }
+
     AABB ComputeBounds(const std::vector<Vertex>& vertices) {
         AABB out = AABB::Empty();
         for (const Vertex& v : vertices) {

@@ -20,8 +20,9 @@ namespace serialization {
 
     // Version del esquema. v2 agrega los escalares de emissive/normalStrength al
     // MaterialRecord y cambia el significado del primer f32 del chunk SCNE
-    // (ambientFactor -> iblIntensity).
-    inline constexpr u32 kCurrentVersion      = 2u;
+    // (ambientFactor -> iblIntensity). v3 agrega doubleSided al MaterialRecord.
+    // v4 agrega uvTiling/uvOffset al MaterialRecord.
+    inline constexpr u32 kCurrentVersion      = 4u;
 
     // Version mas vieja que esta build todavia sabe leer. Se escribe SIEMPRE
     // kCurrentVersion: leer v1 es solo para no dejar ilegibles las escenas guardadas.

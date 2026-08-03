@@ -50,6 +50,15 @@ namespace renderer {
         glm::vec3 emissiveTint      = glm::vec3(1.0f);   // blanco = no tiñe el mapa
         f32       emissiveIntensity = 0.0f;              // 0 = sin emision
         f32       normalStrength    = 1.0f;              // 1 = el mapa tal cual
+
+        // v3 del formato. false = se cullea la cara de atras (lo de siempre);
+        // true = se dibujan las dos caras. Para planos, cortinas y mallas de una
+        // sola cara cuyo winding no aguanta el culling.
+        bool      doubleSided       = false;
+
+        // v4 del formato. La identidad deja el material igual que antes del tiling.
+        glm::vec2 uvTiling = glm::vec2(1.0f);   // repeticiones sobre la UV de la malla
+        glm::vec2 uvOffset = glm::vec2(0.0f);   // corrimiento, en las mismas unidades
     };
 
 }

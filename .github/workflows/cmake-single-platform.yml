@@ -35,13 +35,19 @@ concurrency:
 
 jobs:
   build:
-    name: Compilar
+    name: Compilar (${{ matrix.build_type }})
     # Solo en push (cualquier rama) o disparo manual. Del evento de PR mergeado
     # se encarga el job 'release'.
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Debug queda para destapar bugs que solo aparecen con _DEBUG activo
+        # (p.ej. asserts que en Release se compilan afuera).
+        build_type: [Debug, Release]
 
     steps:
       - name: Checkout del código
@@ -64,11 +70,14 @@ jobs:
         run: >
           cmake -B ${{ github.workspace }}/build
           -G Ninja
-          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
-          -DEFENGINE_BUILD_TESTS=OFF
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
 
       - name: Compilar
-        run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }}
+        run: cmake --build ${{ github.workspace }}/build --config ${{ matrix.build_type }}
+
+      - name: Ejecutar tests
+        working-directory: ${{ github.workspace }}/build
+        run: ctest --output-on-failure --build-config ${{ matrix.build_type }}
 
   release:
     name: Publicar release

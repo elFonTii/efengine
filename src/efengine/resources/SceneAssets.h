@@ -17,7 +17,7 @@ namespace resources {
     class SceneAssets {
         public:
             // Mismo valor que en serialization
-            static constexpr u32 kInvalidIndex = 0xFFFFFFFFu; // valor centinela
+            static constexpr u32 kInvalidIndex = 0xFFFFFFFFu;
 
             u32 AddMaterial(renderer::MaterialDef def, renderer::Material mat);
             // Reemplaza def y CONTENIDO del material del slot, sin cambiar su

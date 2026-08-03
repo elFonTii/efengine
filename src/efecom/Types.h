@@ -7,7 +7,6 @@
 
 namespace efecom {
 
-    // Tipos enteros standard.
     using u8  = unsigned char;
     using u16 = unsigned short;
     using u32 = unsigned int;
@@ -18,11 +17,9 @@ namespace efecom {
     using i32 = int;
     using i64 = long long;
 
-    // Tipos de punto flotante standard.
     using f32 = float;
     using f64 = double;
 
-    // Tipo tamaño.
     using usize = decltype(sizeof(0));
 
 }

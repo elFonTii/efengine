@@ -1,11 +1,11 @@
 #pragma once
 #include <efengine/core/Types.h>
 #include <efengine/renderer/Texture.h>
+#include <efengine/renderer/RenderTarget.h>
 
 namespace efengine {
 namespace renderer {
 
-    // FBO solo profundidad + textura de profundidad
     class ShadowMap {
         public:
             explicit ShadowMap(u32 resolution = 2048);
@@ -15,8 +15,8 @@ namespace renderer {
             ShadowMap(ShadowMap&& other) noexcept;
             ShadowMap& operator=(ShadowMap&& other) noexcept;
 
-            void Bind() const;     // bindea el FBO + viewport a la resolución
-            void Unbind() const;
+            RenderTarget   Target() const;   // el FBO + su resolucion como viewport
+            void           Bind() const;     // azucar de Target().Bind()
             const Texture& DepthTexture() const { return m_depth; }
             u32 resolution() const { return m_resolution; }
 

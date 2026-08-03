@@ -1,4 +1,3 @@
-// Escrito por Claude Opus 5
 #include <doctest/doctest.h>
 #include <efengine/platform/Input.h>
 #include <efengine/platform/InputCodes.h>

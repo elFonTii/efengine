@@ -8,9 +8,19 @@ out vec3 vFragPos;   // posición en espacio mundo
 out vec3 vNormal;    // normal en espacio mundo
 out vec2 vUV;
 
-uniform mat4 uModel;
-uniform mat4 uView;
-uniform mat4 uProjection;
+layout(std140, binding = 0) uniform Frame {
+    mat4 uView;
+    mat4 uProjection;
+    mat4 uLightSpaceMatrix;
+    mat4 uInvViewProjRot;
+    vec4 uViewPos;
+    vec4 uShadowParams;
+    vec4 uIblParams;
+};
+
+layout(std140, binding = 2) uniform Object {
+    mat4 uModel;
+};
 
 void main() {
     vFragPos = vec3(uModel * vec4(aPos, 1.0));

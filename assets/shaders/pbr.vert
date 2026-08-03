@@ -14,9 +14,19 @@ out vec3 vFragPos;
 out vec2 vUV;
 out mat3 vTBN;
 
-uniform mat4 uModel;
-uniform mat4 uView;
-uniform mat4 uProjection;
+layout(std140, binding = 0) uniform Frame {
+    mat4 uView;
+    mat4 uProjection;
+    mat4 uLightSpaceMatrix;
+    mat4 uInvViewProjRot;
+    vec4 uViewPos;        // .xyz
+    vec4 uShadowParams;   // x=enabled, y=biasMin, z=biasMax
+    vec4 uIblParams;      // x=hasIbl, y=intensity, z=prefilterMaxLod
+};
+
+layout(std140, binding = 2) uniform Object {
+    mat4 uModel;
+};
 
 void main() {
     vFragPos = vec3(uModel * vec4(aPos, 1.0)); // de vec4 a vec3

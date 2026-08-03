@@ -7,6 +7,7 @@ add_executable(efengine_tests
     core/Types.test.cpp
     core/Time.test.cpp
     math/Transform.test.cpp
+    math/Math.test.cpp
     platform/InputCodes.test.cpp
     platform/Input.test.cpp
     renderer/VertexLayout.test.cpp
@@ -14,9 +15,19 @@ add_executable(efengine_tests
     renderer/PostChain.test.cpp
     renderer/Cubemap.test.cpp
     renderer/ShadowMath.test.cpp
+    renderer/AoMath.test.cpp
     renderer/Bounds.test.cpp
+    renderer/BoxMesh.test.cpp
+    renderer/CubeFaces.test.cpp
+    renderer/DdgiVolume.test.cpp
     renderer/MaterialMap.test.cpp
+    renderer/RenderTarget.test.cpp
+    renderer/PipelineState.test.cpp
+    renderer/ShaderBlocks.test.cpp
+    renderer/MaterialBlock.test.cpp
     resources/FileIO.test.cpp
+    resources/ModelLoader.test.cpp
+    resources/ShaderPreprocessor.test.cpp
     resources/ResourceManager.test.cpp
     resources/SceneAssets.test.cpp
     scene/NodeHandle.test.cpp

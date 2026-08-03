@@ -7,13 +7,16 @@ namespace renderer {
 
     class Texture;
 
-    // info de sombra que viajan al Renderer cada frame
     struct ShadowContext {
         const Texture* map               = null;         // depth texture → unit 7
         glm::mat4      lightSpaceMatrix   = glm::mat4(1.0f);
         bool           enabled            = false;
-        f32            biasMin            = 0.0005f;
-        f32            biasMax            = 0.0025f;
+        // En METROS, ya convertido desde ShadowSettings::normalOffsetTexels con
+        // el encuadre del frame. El shader no conoce el tamaño del texel, asi
+        // que la conversion se hace aca.
+        f32            normalOffset       = 0.0f;
+        f32            biasMin            = 0.0f;
+        f32            biasMax            = 0.0f;
     };
 
 }

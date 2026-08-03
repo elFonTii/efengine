@@ -1,4 +1,3 @@
-// tests/renderer/Vertex.test.cpp
 // Valida el contrato entre el struct Vertex y el VertexLayout estándar:
 // el layout que construye Mesh/ModelLoader debe describir exactamente la
 // memoria de Vertex (mismo stride, mismos offsets). Lógica pura, sin OpenGL.
@@ -29,7 +28,6 @@ TEST_CASE("Vertex: offsets y locations del layout en el orden correcto") {
     CHECK(layout.attributes()[2].location == 2);
     CHECK(layout.attributes()[3].location == 3);
 
-    // offsets acumulados: pos(0) → normal(12) → uv(24) → tangent(32).
     CHECK(layout.attributes()[0].offset == 0);
     CHECK(layout.attributes()[1].offset == 12);
     CHECK(layout.attributes()[2].offset == 24);

@@ -1,3 +1,1 @@
-// Types.cpp
-//  Aliases de tipos para estandarizar u32, f32, etc...
 // TYPES ES HEADER ONLY. Se mantiene por definición en estándar de desarrollo.

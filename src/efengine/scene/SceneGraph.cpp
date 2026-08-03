@@ -1,7 +1,9 @@
 #include "efengine/scene/SceneGraph.h"
 #include <efengine/core/Assert.h>
 #include <efengine/core/Log.h>
+#include <efengine/math/Transform.h>
 #include <utility>
+#include <cmath>
 
 namespace efengine {
 namespace scene {
@@ -10,18 +12,16 @@ namespace scene {
     NodeHandle SceneGraph::allocate(const std::string& name, NodeHandle parent) {
         u32 index;
 
-        if(!m_freeList.empty()) { // tiene que estar root ya poblado
-            // hago una copia y elimino el último indice de los no alocados
+        if(!m_freeList.empty()) {
             index = m_freeList.back();
-            m_freeList.pop_back(); 
+            m_freeList.pop_back();
         } else {
-            // asigno indice y lo pusheo al final
             index = static_cast<u32>(m_slots.size());
             m_slots.push_back(Slot{});
             m_slots[index].generation = 0;
         }
 
-        Slot& slot = m_slots[index]; // obtengo el slot por indice
+        Slot& slot = m_slots[index];
         slot.alive = true;
         if(slot.generation == 0) { slot.generation = 1; }
         slot.node            = Node{};
@@ -61,7 +61,7 @@ namespace scene {
     }
 
     // Camina hacia arriba desde 'of' por la cadena de padres. O(profundidad).
-    bool SceneGraph::isAncestorOrSelf(NodeHandle maybeAncestor, NodeHandle of) const {
+    bool SceneGraph::IsAncestorOrSelf(NodeHandle maybeAncestor, NodeHandle of) const {
         NodeHandle cur = of;
         while (IsValid(cur)) {
             if (cur == maybeAncestor) return true;
@@ -75,12 +75,11 @@ namespace scene {
         EF_ASSERT(IsValid(newParent), "SceneGraph::SetParent: newParent invalido");
         EF_ASSERT(child != m_root,    "SceneGraph::SetParent: la raiz no tiene padre");
 
-        if (isAncestorOrSelf(child, newParent)) {
+        if (IsAncestorOrSelf(child, newParent)) {
             EF_LOG_WARNING("SceneGraph::SetParent: reparent rechazado (crearia un ciclo)");
             return;
         }
 
-        // Sacar del padre viejo.
         NodeHandle oldParent = m_slots[child.index].node.parent;
         if (IsValid(oldParent)) {
             std::vector<NodeHandle>& sibs = m_slots[oldParent.index].node.children;
@@ -89,11 +88,49 @@ namespace scene {
             }
         }
 
-        // Enganchar al padre nuevo. El local se preserva; el world cambia.
+        // El local se preserva; el world cambia.
         m_slots[child.index].node.parent = newParent;
         m_slots[newParent.index].node.children.push_back(child);
 
         markSubtreeDirty(child);
+    }
+
+    glm::mat4 SceneGraph::computeWorld(NodeHandle handle) const {
+        glm::mat4 world(1.0f);
+        NodeHandle cur = handle;
+        while (IsValid(cur)) {
+            world = m_slots[cur.index].node.local.Matrix() * world;
+            cur   = m_slots[cur.index].node.parent;
+        }
+        return world;
+    }
+
+    void SceneGraph::SetParentKeepWorld(NodeHandle child, NodeHandle newParent) {
+        EF_ASSERT(IsValid(child),     "SceneGraph::SetParentKeepWorld: child invalido");
+        EF_ASSERT(IsValid(newParent), "SceneGraph::SetParentKeepWorld: newParent invalido");
+        EF_ASSERT(child != m_root,    "SceneGraph::SetParentKeepWorld: la raiz no tiene padre");
+
+        // El chequeo de ciclo va ANTES de escribir el local: un reparent
+        // rechazado tiene que dejar el nodo exactamente como estaba.
+        if (IsAncestorOrSelf(child, newParent)) {
+            EF_LOG_WARNING("SceneGraph::SetParentKeepWorld: reparent rechazado (crearia un ciclo)");
+            return;
+        }
+
+        const glm::mat4 worldChild  = computeWorld(child);
+        const glm::mat4 worldParent = computeWorld(newParent);
+
+        // Un padre con un eje en escala 0 tiene matriz singular: inverse() da
+        // infinitos y de ahi salen NaN que contaminan toda la rama.
+        if (std::fabs(glm::determinant(worldParent)) < 1e-8f) {
+            EF_LOG_WARNING("SceneGraph::SetParentKeepWorld: el nuevo padre tiene escala cero, "
+                           "se preserva el local");
+            SetParent(child, newParent);
+            return;
+        }
+
+        SetLocalTransform(child, math::DecomposeTRS(glm::inverse(worldParent) * worldChild));
+        SetParent(child, newParent);
     }
 
     void SceneGraph::AttachMesh(NodeHandle handle, MeshAttachment mesh) {
@@ -140,8 +177,16 @@ namespace scene {
         // Sin el clear las listas se duplicarian en cada frame.
         m_renderables.clear();
         m_pointLights.clear();
+        m_worldBounds = renderer::AABB::Empty();
 
         updateNode(m_root, glm::mat4(1.0f), false);
+
+        // La caja de la escena sale de la lista que updateNode acaba de armar, no
+        // de recorrer el grafo otra vez.
+        for (const RenderItem& item : m_renderables) {
+            if (item.model == null) continue;
+            m_worldBounds = renderer::AccumulateBounds(m_worldBounds, item.model->bounds(), item.world);
+        }
 
         // Sol: direccion desde el world del nodo primario; color desde su adjunto.
         if (IsValid(m_primarySun)) {
@@ -180,7 +225,6 @@ namespace scene {
         EF_ASSERT(handle != m_root, "SceneGraph::Destroy: No se puede destruir la raiz");
         if(!IsValid(handle)) return;
 
-        // 1   lo quito del parent (una sola vez arriba)
         Node& self = m_slots[handle.index].node;
         if(IsValid(self.parent)) {
             std::vector<NodeHandle>& sibs = m_slots[self.parent.index].node.children;
@@ -189,7 +233,6 @@ namespace scene {
             }
         }
 
-        // 2 libero el subarbol completo
         destroySubtree(handle);
     }
 
@@ -198,7 +241,7 @@ namespace scene {
         for (Slot& slot : m_slots) {
             if (slot.alive) {
                 slot.alive = false;
-                slot.generation++;   // invalida el generation viejo
+                slot.generation++;
             }
             slot.node = Node{};     // libera los behaviors
         }
@@ -232,8 +275,6 @@ namespace scene {
     }
 
     bool SceneGraph::IsValid(NodeHandle handle) const {
-         // es valido cuando:
-         // generation != 0, h.alive = true y i.gen == h.gen
         return !handle.IsNull()
             && handle.index < m_slots.size()
             && m_slots[handle.index].alive

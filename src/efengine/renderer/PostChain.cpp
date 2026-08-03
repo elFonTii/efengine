@@ -1,6 +1,7 @@
 #include "efengine/renderer/PostChain.h"
 #include <efengine/core/Assert.h>
 #include <efecom/RHI.h>
+#include <efengine/renderer/PipelineStates.h>
 
 namespace efengine {
 namespace renderer {
@@ -16,28 +17,30 @@ namespace renderer {
         scratch_1.Resize(width, height);
         scratch_2.Resize(width, height);
 
-        for (IPostPass* p : m_passes) p->Resize(width, height); // redimensiona todos los pases de postprocesado
+        for (IPostPass* p : m_passes) p->Resize(width, height);
     }
 
     void PostChain::Run(const Texture& sceneHDR) {
-        efecom::SetDepthTest(false);
+        efecom::ApplyPipelineState(FullscreenState());
         const u32 count = static_cast<u32>(m_passes.size());
         const Texture* input = &sceneHDR;
 
         for(u32 i = 0; i < count; i++) {
             PassRoute route = postChainTarget(i, count);
 
-            Framebuffer* target = route.toBackbuffer
+            Framebuffer* scratch = route.toPresent
                 ? null
                 : (route.scratch == 0 ? &scratch_1 : &scratch_2);
 
+            const RenderTarget target = route.toPresent
+                ? RenderTarget::Present()
+                : scratch->Target();
+
             m_passes[i]->Apply(*input, target);
 
-            if(!route.toBackbuffer)
-                input = &target->ColorTexture();
+            if(!route.toPresent)
+                input = &scratch->ColorTexture();
         }
-        
-        efecom::SetDepthTest(true);
     }
 }
 }

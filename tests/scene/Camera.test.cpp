@@ -28,7 +28,7 @@ TEST_CASE("Camera::ProjectionMatrix coincide con glm::perspective") {
 
     for(int c = 0; c < 4; c++) {
         for(int r = 0; r < 4; r++) {
-            CHECK(actual[c][r] == doctest::Approx(expected[c][r])); // Se recorre la matriz y se comparan los valores
+            CHECK(actual[c][r] == doctest::Approx(expected[c][r]));
         }
     }
 }
@@ -45,10 +45,9 @@ TEST_CASE("Camera::ViewMatrix tiene que coincidir con glom::lookAt") {
     glm::mat4 actual  = cam.ViewMatrix();
     glm::mat4 expected = glm::lookAt(pos, target, up);
 
-    // Recorremos las matrices y comparamos sus valores
     for(int c = 0; c < 4; c++) {
         for(int r = 0; r < 4; r++) {
-            CHECK(actual[c][r] == doctest::Approx(expected[c][r])); // tienen que ser iguales.
+            CHECK(actual[c][r] == doctest::Approx(expected[c][r]));
         }
     }
 }

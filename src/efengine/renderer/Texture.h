@@ -14,13 +14,13 @@ namespace renderer {
             static std::optional<Texture> CreateHDR(const char* path);
             static Texture CreateColorAttachment(u32 width, u32 height);
             static Texture CreateDepthAttachment(u32 width, u32 height);
-            static Texture CreateStorage2D(u32 width, u32 height, efecom::TextureFormat format); // vacia para el compute
+            static Texture CreateStorage2D(u32 width, u32 height, efecom::TextureFormat format);
             ~Texture();
 
-            Texture(const Texture&)             = delete; // deshabilita copia
+            Texture(const Texture&)             = delete;
             Texture& operator=(const Texture&)  = delete;
-            Texture(Texture&& other)          noexcept; // constructor de movimiento
-            Texture& operator=(Texture&& other) noexcept; // permite que una textura adquiera la propiedad de la copia
+            Texture(Texture&& other)          noexcept;
+            Texture& operator=(Texture&& other) noexcept;
 
             void Bind(u32 unit = 0) const;
             void BindImage(u32 unit, u32 level, efecom::ImageAccess access, efecom::TextureFormat format) const;

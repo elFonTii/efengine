@@ -1,11 +1,20 @@
 #include "EditorUI.h"
 
 #include "AuthoringUI.h"
+#include "TestScene.h"
+#include "SunGizmo.h"
 
 #include <efengine/application/Application.h>
+#include <efengine/core/Log.h>
 #include <efengine/renderer/BloomPass.h>
 #include <efengine/renderer/FxaaPass.h>
 #include <efengine/renderer/ShadowPass.h>
+#include <efengine/renderer/DdgiPass.h>
+#include <efengine/renderer/DdgiSettings.h>
+#include <efengine/renderer/DdgiVolume.h>
+#include <efengine/renderer/AoPass.h>
+#include <efengine/renderer/AoSettings.h>
+#include <efengine/renderer/Bounds.h>
 #include <efengine/resources/SceneAssets.h>
 #include <efengine/renderer/Model.h>
 #include <efengine/scene/Camera.h>
@@ -19,11 +28,15 @@
 
 #include <imgui.h>
 #include <imgui_internal.h>   // DockBuilder*: API de layout, no esta en imgui.h
+#include <imgui_stdlib.h>     // InputText sobre std::string
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <optional>
+#include <string>
 #include <typeinfo>
 #include <vector>
 
@@ -33,7 +46,134 @@ using namespace efengine;
 
 namespace {
 
-    constexpr const char* kScenePath = "assets/scenes/sandbox.efe";
+    // Donde viven las escenas. El menu lista lo que hay aca y "Guardar como..."
+    // escribe aca; el .efe de arranque lo elige main.cpp.
+    constexpr const char* kScenesDir = "assets/scenes/";
+
+    // "assets/scenes/interior.efe" -> "interior.efe". Los items del menu muestran
+    // el nombre solo: la ruta entera no aporta y hace el menu tres veces mas ancho.
+    // FileIO::ListFiles devuelve siempre '/' (generic_string), tambien en Windows,
+    // asi que alcanza con buscar la ultima barra.
+    std::string nombreDeArchivo(const std::string& ruta) {
+        const usize barra = ruta.find_last_of('/');
+        return barra == std::string::npos ? ruta : ruta.substr(barra + 1);
+    }
+
+    // Carga un .efe y deja el editor consistente.
+    //
+    // RefreshHandles corre tambien cuando el Load falla, y eso es a proposito: si
+    // revienta el parse el grafo queda intacto, pero si revienta el Resolve la
+    // escena ya quedo a medio reemplazar y los handles cacheados (rat, sun,
+    // orbitLight, selected) apuntan a nodos que ya no existen.
+    void cargarEscena(EditorContext& ctx, const std::string& ruta) {
+        if (serialization::SceneSerializer::Load(ruta.c_str(), ctx.scene, ctx.assets,
+                                                 ctx.rm, ctx.registry)) {
+            ctx.state.currentScenePath = ruta;
+        } else {
+            EF_LOG_ERROR("No se pudo cargar la escena '%s'", ruta.c_str());
+            ctx.state.currentScenePath.clear();
+        }
+        RefreshHandles(ctx);
+    }
+
+    // Colores de mensaje de la UI. AuthoringUI.cpp tiene su propia copia de
+    // kColorError en su namespace anonimo; son dos unidades de traduccion distintas.
+    const ImVec4 kColorError { 1.00f, 0.40f, 0.40f, 1.0f };
+    const ImVec4 kColorAviso { 1.00f, 0.80f, 0.30f, 1.0f };
+    const ImVec4 kColorOk    { 0.45f, 0.85f, 0.45f, 1.0f };
+
+    // Ancho reservado para las etiquetas de los campos. Los widgets se estiran
+    // hasta el borde del panel menos esto, asi que todos empiezan y terminan
+    // alineados en vez de tener cada uno el largo que le toco.
+    constexpr f32 kAnchoEtiqueta = 150.0f;
+
+    // RAII sobre PushItemWidth: se abre una al principio de cada panel y todo lo
+    // que se dibuje adentro queda alineado sin repetir la llamada por widget.
+    //
+    // OJO: la pila de item width es POR VENTANA, asi que el guard tiene que morir
+    // ANTES del ImGui::End() de su panel. Si vive hasta el final de la funcion, el
+    // Pop cae en la ventana de afuera y ImGui asserta con "Calling PopItemWidth()
+    // too many times!". Por eso los paneles lo meten en un bloque propio.
+    struct CamposAlineados {
+        explicit CamposAlineados(f32 anchoEtiqueta = kAnchoEtiqueta) {
+            ImGui::PushItemWidth(-anchoEtiqueta);
+        }
+        ~CamposAlineados() { ImGui::PopItemWidth(); }
+
+        CamposAlineados(const CamposAlineados&)            = delete;
+        CamposAlineados& operator=(const CamposAlineados&) = delete;
+    };
+
+    // Pega el nombre tipeado al directorio de escenas y le pone .efe si falta:
+    // guardar un archivo sin extension lo dejaria fuera del listado del menu.
+    std::string rutaDeEscena(const std::string& nombre) {
+        std::string archivo = nombre;
+        const bool tieneExt = archivo.size() >= 4
+                           && archivo.compare(archivo.size() - 4, 4, ".efe") == 0;
+        if (!tieneExt) archivo += ".efe";
+        return std::string(kScenesDir) + archivo;
+    }
+
+    // Ya hay un .efe con esa ruta? Se pregunta al catalogo y no al disco porque
+    // el catalogo se refresca al abrir el modal, asi que dice lo mismo.
+    bool escenaExiste(const EditorState& st, const std::string& ruta) {
+        const std::vector<std::string>& escenas = st.catalog.Scenes();
+        return std::find(escenas.begin(), escenas.end(), ruta) != escenas.end();
+    }
+
+    // Guarda con nombre nuevo. Devuelve false y deja el modal abierto si fallo,
+    // asi el nombre tipeado no se pierde.
+    bool guardarEscenaComo(EditorContext& ctx, const std::string& ruta) {
+        if (!serialization::SceneSerializer::Save(ruta.c_str(), ctx.scene, ctx.assets,
+                                                  ctx.rm, ctx.registry)) {
+            ctx.state.saveAsError = "No se pudo escribir el archivo. Ver el log.";
+            return false;
+        }
+        ctx.state.currentScenePath = ruta;
+        ctx.state.catalog.Rescan();   // que el archivo nuevo aparezca en el submenu "Cargar"
+        return true;
+    }
+
+    // Dibuja el modal. Va afuera de la barra de menu por el tema del ID stack que
+    // explica el comentario de openSaveAs en EditorUI.h.
+    void drawSaveAsModal(EditorContext& ctx) {
+        EditorState& st = ctx.state;
+
+        if (st.openSaveAs) {
+            ImGui::OpenPopup("Guardar escena como");
+            st.openSaveAs = false;
+        }
+
+        const ImVec2 centro = ImGui::GetMainViewport()->GetCenter();
+        ImGui::SetNextWindowPos(centro, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+        if (!ImGui::BeginPopupModal("Guardar escena como", nullptr,
+                                    ImGuiWindowFlags_AlwaysAutoResize)) return;
+
+        ImGui::Text("Se guarda en %s", kScenesDir);
+        ImGui::InputText("Nombre", &st.saveAsName);
+        if (!st.saveAsError.empty()) ImGui::TextColored(kColorError, "%s", st.saveAsError.c_str());
+
+        const std::string ruta = rutaDeEscena(st.saveAsName);
+
+        ImGui::BeginDisabled(st.saveAsName.empty());
+        if (ImGui::Button("Guardar", ImVec2(120.0f, 0.0f))) {
+            if (escenaExiste(st, ruta) && st.saveAsConfirm != ruta) {
+                // Primer click sobre un archivo que ya existe: avisa y espera. El
+                // segundo click llega con saveAsConfirm == ruta y si pisa.
+                st.saveAsConfirm = ruta;
+                st.saveAsError   = "Ya existe. Apreta Guardar de nuevo para pisarlo.";
+            } else if (guardarEscenaComo(ctx, ruta)) {
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::EndDisabled();
+
+        ImGui::SameLine();
+        if (ImGui::Button("Cancelar", ImVec2(120.0f, 0.0f))) ImGui::CloseCurrentPopup();
+
+        ImGui::EndPopup();
+    }
 
     bool algunBehaviorActivo(const scene::SceneGraph& scene, scene::NodeHandle h) {
         if (!scene.IsValid(h)) return false;
@@ -92,14 +232,63 @@ namespace {
         if (!ImGui::BeginMainMenuBar()) return;
 
         if (ImGui::BeginMenu("Escena")) {
-            if (ImGui::MenuItem("Guardar escena")) {
-                serialization::SceneSerializer::Save(kScenePath, ctx.scene, ctx.assets, ctx.rm, ctx.registry);
-            }
-            if (ImGui::MenuItem("Cargar escena")) {
-                // Load ya hace Clear() de grafo y assets: no hay que limpiar a mano.
-                if (serialization::SceneSerializer::Load(kScenePath, ctx.scene, ctx.assets, ctx.rm, ctx.registry)) {
-                    RefreshHandles(ctx);
+            // Rotulo, no accion: MenuItem con enabled=false para que se vea gris
+            // y no se pueda clickear. Es la unica pista de que archivo se esta
+            // editando, y de si hay archivo.
+            ImGui::MenuItem(st.currentScenePath.empty()
+                                ? "(sin guardar)"
+                                : nombreDeArchivo(st.currentScenePath).c_str(),
+                            nullptr, false, false);
+            ImGui::Separator();
+
+            // Load ya hace Clear() de grafo y assets: no hay que limpiar a mano.
+            if (ImGui::BeginMenu("Cargar")) {
+                st.catalog.EnsureScanned();
+                const std::vector<std::string>& escenas = st.catalog.Scenes();
+
+                if (escenas.empty()) {
+                    ImGui::MenuItem("(no hay escenas)", nullptr, false, false);
+                } else {
+                    for (const std::string& ruta : escenas) {
+                        const bool abierta = (ruta == st.currentScenePath);
+                        if (ImGui::MenuItem(nombreDeArchivo(ruta).c_str(), nullptr, abierta)) {
+                            cargarEscena(ctx, ruta);
+                        }
+                    }
                 }
+                ImGui::Separator();
+                // El catalogo cachea: si copiaste un .efe con el sandbox abierto,
+                // este es el boton que lo hace aparecer.
+                if (ImGui::MenuItem("Refrescar lista")) st.catalog.Rescan();
+                ImGui::EndMenu();
+            }
+
+            // Sin archivo (Cornell recien armada) no hay nada que sobrescribir:
+            // el item queda gris y el camino es "Guardar como...".
+            const bool tieneArchivo = !st.currentScenePath.empty();
+            if (ImGui::MenuItem("Guardar", nullptr, false, tieneArchivo)) {
+                serialization::SceneSerializer::Save(st.currentScenePath.c_str(), ctx.scene,
+                                                     ctx.assets, ctx.rm, ctx.registry);
+            }
+
+            if (ImGui::MenuItem("Guardar como...")) {
+                // Arranca con el nombre de la escena abierta: lo normal es derivar
+                // una variante, no escribir un nombre de cero.
+                st.saveAsName = st.currentScenePath.empty()
+                                  ? std::string("nueva.efe")
+                                  : nombreDeArchivo(st.currentScenePath);
+                st.saveAsConfirm.clear();
+                st.saveAsError.clear();
+                // El catalogo tiene que estar fresco: es lo que responde si el
+                // archivo ya existe.
+                st.catalog.Rescan();
+                st.openSaveAs = true;
+            }
+
+            ImGui::Separator();
+            if (ImGui::MenuItem("Sala de Cornell")) {
+                BuildCornellScene(ctx);        // hace Clear de escena y assets, y RefreshHandles
+                st.currentScenePath.clear();   // escena generada en codigo: no salio de ningun archivo
             }
             ImGui::Separator();
             // MenuItem con bool* devuelve true en el frame en que cambia, igual que Checkbox:
@@ -117,6 +306,8 @@ namespace {
         }
 
         if (ImGui::BeginMenu("Ventanas")) {
+            ImGui::MenuItem("UI",               nullptr, &st.showUI);
+            ImGui::Separator();
             ImGui::MenuItem("Jerarquia",        nullptr, &st.showHierarchy);
             ImGui::MenuItem("Inspector",        nullptr, &st.showInspector);
             ImGui::MenuItem("Materiales",       nullptr, &st.showMaterials);
@@ -159,6 +350,37 @@ namespace {
             const bool open = ImGui::TreeNodeEx("nodo", flags, "%s %s%s", tag, node.name.c_str(), behTag);
             if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) st.selected = h;
 
+            // La raiz no puede arrastrarse: no tiene padre que cambiar.
+            // El payload es el NodeHandle crudo (indice + generacion): es un POD
+            // y ImGui se queda con una copia de los bytes.
+            if (h != ctx.scene.Root() && ImGui::BeginDragDropSource()) {
+                ImGui::SetDragDropPayload("EF_NODE", &h, sizeof(h));
+                ImGui::Text("%s", node.name.c_str());
+                ImGui::EndDragDropSource();
+            }
+
+            if (ImGui::BeginDragDropTarget()) {
+                // Se espia el payload SIN aceptarlo: si el drop crearia un ciclo
+                // (soltar sobre si mismo o sobre un descendiente) no se acepta, y
+                // asi ImGui tampoco ilumina el target. Rechazarlo despues, dentro
+                // del motor, dejaria al usuario soltando sin que pase nada.
+                const ImGuiPayload* espia = ImGui::GetDragDropPayload();
+                bool valido = false;
+                if (espia != nullptr && espia->IsDataType("EF_NODE")) {
+                    const scene::NodeHandle arrastrado =
+                        *static_cast<const scene::NodeHandle*>(espia->Data);
+                    valido = !ctx.scene.IsAncestorOrSelf(arrastrado, h);
+                }
+
+                if (valido) {
+                    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("EF_NODE")) {
+                        st.pendingReparentChild  = *static_cast<const scene::NodeHandle*>(p->Data);
+                        st.pendingReparentParent = h;
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+
             if (open && !node.children.empty()) {
                 const std::vector<scene::NodeHandle> kids = node.children;
                 for (scene::NodeHandle c : kids) {
@@ -169,6 +391,18 @@ namespace {
             ImGui::PopID();
         };
         drawNode(ctx.scene.Root());
+
+        // Recien aca es seguro tocar la jerarquia: el recorrido ya termino.
+        // Se revalidan los dos handles porque entre el drop y este punto podria
+        // haberse destruido cualquiera de los dos.
+        if (!st.pendingReparentChild.IsNull()) {
+            if (ctx.scene.IsValid(st.pendingReparentChild) &&
+                ctx.scene.IsValid(st.pendingReparentParent)) {
+                ctx.scene.SetParentKeepWorld(st.pendingReparentChild, st.pendingReparentParent);
+            }
+            st.pendingReparentChild  = scene::NodeHandle{};
+            st.pendingReparentParent = scene::NodeHandle{};
+        }
 
         ImGui::Separator();
 
@@ -204,21 +438,34 @@ namespace {
         }
 
         scene::Node& node = ctx.scene.Get(st.selected);
-        ImGui::Text("Nodo: %s", node.name.c_str());
-        ImGui::SameLine();
-        if (ImGui::SmallButton("Focus")) FocusSelection(ctx);
-        ImGui::TextDisabled("handle { index=%u, gen=%u }", node.self.index, node.self.generation);
+
+        {
+        CamposAlineados alineados;   // se cierra antes del End() de abajo
+
+        ImGui::SeparatorText("Nodo");
+
+        // Escribe directo sobre el nodo, sin confirmar y sin validar: el nombre
+        // es cosmetico. La identidad real es el NodeHandle y el .efe guarda el
+        // parent por indice, asi que un nombre vacio o repetido no rompe nada.
+        // Lo unico que se degrada es FindByName, que ya devuelve el primer match
+        // por contrato.
+        ImGui::InputText("Nombre", &node.name);
 
         // El world es derivado: se muestra como lectura, no se edita.
         const glm::vec3 worldPos = glm::vec3(node.worldMatrix[3]);
-        ImGui::TextDisabled("mundo: %.2f, %.2f, %.2f", worldPos.x, worldPos.y, worldPos.z);
+        ImGui::TextDisabled("mundo   %.2f, %.2f, %.2f", worldPos.x, worldPos.y, worldPos.z);
+        ImGui::TextDisabled("handle  index=%u, gen=%u", node.self.index, node.self.generation);
 
-        ImGui::SeparatorText("Transform");
+        if (ImGui::Button("Encuadrar (F)", ImVec2(-kAnchoEtiqueta, 0.0f))) FocusSelection(ctx);
+
+        // "(local)" en el titulo y no en cada etiqueta: es la misma aclaracion
+        // para los tres campos y repetirla los hacia tres veces mas largos.
+        ImGui::SeparatorText("Transform (local)");
         math::Transform t = node.local;
         bool changed = false;
-        changed |= ImGui::DragFloat3("Posicion local", glm::value_ptr(t.position), 0.1f);
-        changed |= ImGui::DragFloat3("Rotacion local", glm::value_ptr(t.rotation), 0.5f);
-        changed |= ImGui::DragFloat3("Escala local",   glm::value_ptr(t.scale),    0.05f);
+        changed |= ImGui::DragFloat3("Posicion", glm::value_ptr(t.position), 0.1f);
+        changed |= ImGui::DragFloat3("Rotacion", glm::value_ptr(t.rotation), 0.5f);
+        changed |= ImGui::DragFloat3("Escala",   glm::value_ptr(t.scale),    0.05f);
         if (changed) ctx.scene.SetLocalTransform(st.selected, t);
 
         DrawMeshSection(ctx, st.selected);
@@ -244,8 +491,228 @@ namespace {
             const f32 speed  = node.light->kind == scene::LightKind::Point ? 10.0f    : 0.05f;
             ImGui::DragFloat3("Color/Int", glm::value_ptr(node.light->color), speed, 0.0f, maxInt);
         }
+        }
 
         ImGui::End();
+    }
+
+    void drawDdgiSection(EditorContext& ctx) {
+        if (!ImGui::CollapsingHeader("DDGI (iluminacion indirecta)")) return;
+
+        std::optional<renderer::DdgiPass>& opt = ctx.app.GetDdgiPass();
+        if (!opt.has_value()) {
+            ImGui::TextColored(kColorError, "DdgiPass no disponible: fallo la carga de shaders.");
+            ImGui::TextWrapped("La escena esta usando IBL puro. Mira la consola.");
+            return;
+        }
+        renderer::DdgiPass&     pass = *opt;
+        renderer::DdgiSettings& s    = pass.settings();
+
+        CamposAlineados alineados;
+
+        // -- Lo primero que hay que mirar cuando "no se ve la GI" --------------
+        if (pass.atlasValid()) {
+            ImGui::TextColored(kColorOk, "pbr.frag recibe los atlas: SI");
+        } else {
+            ImGui::TextColored(kColorError, "pbr.frag recibe los atlas: NO");
+            ImGui::TextWrapped("Hasta que corra un blend, DDGI aporta cero y la imagen es IBL puro.");
+        }
+
+        ImGui::Checkbox("Habilitado", &s.enabled);
+
+        // -- Grilla ------------------------------------------------------------
+        ImGui::SeparatorText("Grilla");
+        bool gridChanged = false;
+        gridChanged |= ImGui::DragFloat3("Origen",         &s.grid.origin.x,  0.1f);
+        gridChanged |= ImGui::DragFloat3("Espaciado",      &s.grid.spacing.x, 0.05f, 0.05f, 10.0f);
+        gridChanged |= ImGui::DragInt3  ("Probes por eje", &s.grid.counts.x,  1.0f,
+                                         1, renderer::kMaxProbesPerAxis);
+        ImGui::TextDisabled("total: %u probes", renderer::ProbeCount(s.grid));
+
+        // Encajar la grilla a la escena resuelve de un click la clase entera de
+        // bug "la grilla no cubre la sala", que es con la que arranco este ciclo.
+        if (ImGui::Button("Encajar grilla a la escena", ImVec2(-kAnchoEtiqueta, 0.0f))) {
+            const renderer::AABB& b = ctx.scene.WorldBounds();
+            if (b.Valid()) {
+                // Un 10% de margen hacia adentro: un probe DENTRO de una pared
+                // captura su interior y contamina a sus vecinos por el peso
+                // trilineal.
+                const glm::vec3 ext    = b.Extents() * 0.9f;
+                const glm::vec3 minPos = b.Center() - ext;
+                const glm::ivec3 n     = s.grid.counts;
+                s.grid.origin  = minPos;
+                s.grid.spacing = glm::vec3(
+                    n.x > 1 ? (2.0f * ext.x) / f32(n.x - 1) : 1.0f,
+                    n.y > 1 ? (2.0f * ext.y) / f32(n.y - 1) : 1.0f,
+                    n.z > 1 ? (2.0f * ext.z) / f32(n.z - 1) : 1.0f);
+                gridChanged = true;
+            }
+        }
+        if (gridChanged) {
+            ImGui::TextColored(kColorAviso,
+                               "Cambiar la grilla realoca los atlas y reinicia el barrido.");
+        }
+
+        // -- Update ------------------------------------------------------------
+        ImGui::SeparatorText("Update");
+        int perFrame = static_cast<int>(s.probesPerFrame);
+        if (ImGui::SliderInt("Probes por frame", &perFrame, 0,
+                             static_cast<int>(renderer::kMaxProbesPerFrame))) {
+            s.probesPerFrame = static_cast<u32>(perFrame);
+        }
+        // Histeresis: cuanto del valor viejo se conserva. ESTO es el denoise
+        // temporal de DDGI, no hace falta un denoiser aparte. Mas alto = mas
+        // estable y mas lento en reaccionar.
+        ImGui::SliderFloat("Histeresis", &s.hysteresis, 0.0f, 0.995f, "%.3f");
+        ImGui::Checkbox("Congelar (freeze)", &s.freeze);
+        ImGui::SameLine();
+        if (ImGui::Button("Reset")) pass.Reset();
+
+        const u32 total = renderer::ProbeCount(s.grid);
+        const u32 framesPorBarrido = (s.probesPerFrame > 0u)
+                                   ? (total + s.probesPerFrame - 1u) / s.probesPerFrame
+                                   : 0u;
+        ImGui::TextDisabled("cursor %u / %u   barridos %u", pass.cursor(), total, pass.sweepsDone());
+        ImGui::TextDisabled("frames por barrido: %u", framesPorBarrido);
+        // Tiempo de CPU emitiendo las llamadas, no de GPU ejecutandolas: sirve
+        // para detectar que el round-robin se fue de escala, no como profiler.
+        ImGui::TextDisabled("pase (CPU): %.3f ms", pass.lastMs());
+
+        // -- Sampleo -----------------------------------------------------------
+        ImGui::SeparatorText("Sampleo");
+        ImGui::SliderFloat("Intensidad", &s.intensity, 0.0f, 4.0f);
+        // Normal bias: subir si la luz atraviesa las paredes; bajar si los
+        // rincones tienen una banda oscura.
+        ImGui::SliderFloat("Normal bias", &s.normalBias, 0.0f, 1.0f, "%.3f m");
+        ImGui::SliderFloat("View bias", &s.viewBias, 0.0f, 1.0f, "%.3f m");
+        ImGui::SliderFloat("Chebyshev", &s.chebyshevSharpness, 1.0f, 16.0f);
+
+        // El rango sale de la escena, no de un numero fijo: con un tope de 100 m
+        // fijo, abrir el panel con maxDistance en 200 lo clamparia en silencio y
+        // cambiaria el far plane de la captura sin que nadie toque nada.
+        const renderer::AABB& bounds = ctx.scene.WorldBounds();
+        const f32 topeDist = bounds.Valid() ? glm::max(4.0f * bounds.Radius(), 10.0f) : 200.0f;
+        // Es el far plane de la captura de probes: muy alto tira la precision
+        // del depth, muy bajo deja la captura vacia.
+        ImGui::SliderFloat("Distancia max", &s.maxDistance, 1.0f, topeDist, "%.1f m");
+
+        // -- Debug -------------------------------------------------------------
+        ImGui::SeparatorText("Debug");
+
+        // Primero de la seccion a proposito: es el unico control que contesta la
+        // pregunta con la que uno abre este panel, "DDGI esta aportando algo".
+        // El orden espeja DdgiSettings::DebugView.
+        const char* vistas[] = { "Final (normal)",
+                                 "Indirecta (irradiancia)",
+                                 "Indirecta aplicada al pixel",
+                                 "Solo luz directa",
+                                 "DDGI ignorando el fade",
+                                 "Fade del volumen",
+                                 "Albedo",
+                                 "Normal",
+                                 "Sombra del sol (cruda)" };
+        //
+        // Como se leen estas vistas (era un tooltip; vive aca para no tapar la UI):
+        //
+        //   Eligen que termino escribe pbr.frag en vez de la imagen final.
+        //
+        //   'Indirecta aplicada' es lo que la indirecta le suma al pixel. OJO: ahi
+        //   adentro el IBL y DDGI van MEZCLADOS por el fade, asi que no ver negro no
+        //   prueba que DDGI aporte. Para leerlo, primero Render > Iluminacion >
+        //   Intensidad IBL a 0: lo que quede es DDGI.
+        //
+        //   Y para saber por que: comparar 'DDGI ignorando el fade' con 'Fade del
+        //   volumen'. Si el primero tiene color y el segundo esta negro, la GI se
+        //   calcula bien y la tira el fade -- la grilla no cubre esa superficie con
+        //   el margen que el fade pide.
+        //
+        //   Todas pasan por bloom y ACES: son cualitativas, no numeros.
+        //
+        int vista = static_cast<int>(s.debugView);
+        if (ImGui::Combo("Vista", &vista, vistas, IM_ARRAYSIZE(vistas))) {
+            s.debugView = static_cast<u32>(vista);
+        }
+        if (s.debugView != renderer::DdgiSettings::kDebugOff) {
+            ImGui::TextColored(kColorAviso, "Vista de debug activa: la imagen NO es la final.");
+        }
+
+        ImGui::Checkbox("Mostrar probes", &s.debugProbes);
+        const char* modos[] = { "Irradiancia", "Media de distancia", "Target de captura",
+                                "Target de captura (distancia)" };
+        int modo = static_cast<int>(s.debugMode);
+        if (ImGui::Combo("Modo", &modo, modos, 4)) s.debugMode = static_cast<u32>(modo);
+        ImGui::SliderFloat("Radio de esfera", &s.debugRadius, 0.02f, 0.5f, "%.3f m");
+    }
+
+    void drawAoSection(EditorContext& ctx) {
+        if (!ImGui::CollapsingHeader("Oclusion ambiental (GTAO)")) return;
+
+        std::optional<renderer::AoPass>& opt = ctx.app.GetAoPass();
+        if (!opt.has_value()) {
+            ImGui::TextColored(kColorError, "AoPass no disponible: fallo la carga de shaders.");
+            ImGui::TextWrapped("La escena esta sin oclusion de contacto. Mira la consola.");
+            return;
+        }
+        renderer::AoSettings& s = opt->settings();
+
+        CamposAlineados alineados;
+
+        ImGui::Checkbox("Habilitado", &s.enabled);
+
+        ImGui::SeparatorText("Trazado");
+        // El radio va en METROS y tiene que quedar POR DEBAJO del espaciado de
+        // probes de DDGI: lo que el AO ocluye es exactamente lo que la grilla no
+        // puede ver. Por encima, los dos oscurecen la misma cosa. Radio 0 =
+        // control nulo, la imagen tiene que volver a ser la de AO apagado.
+        ImGui::SliderFloat("Radio", &s.radius, 0.0f, 3.0f, "%.2f m");
+
+        // El espaciado de DDGI al lado del slider: la regla "radio < espaciado"
+        // no se puede verificar de otra forma desde el panel.
+        std::optional<renderer::DdgiPass>& ddgi = ctx.app.GetDdgiPass();
+        if (ddgi.has_value()) {
+            const glm::vec3& sp = ddgi->settings().grid.spacing;
+            const f32 minSp = glm::min(sp.x, glm::min(sp.y, sp.z));
+            if (s.radius >= minSp) {
+                ImGui::TextColored(kColorAviso,
+                                   "Radio >= espaciado de probes (%.2f m): doble oscurecimiento.", minSp);
+            } else {
+                ImGui::TextDisabled("espaciado de probes mas chico: %.2f m", minSp);
+            }
+        }
+
+        ImGui::SliderFloat("Intensidad", &s.intensity, 0.0f, 4.0f);
+        // Grosor: que tan rapido se desvanece una muestra lejana. Bajarlo hace
+        // que un objeto lejano alineado en pantalla deje de ocluir a uno cercano.
+        ImGui::SliderFloat("Grosor",     &s.thickness, 0.01f, 1.0f);
+        ImGui::SliderInt  ("Cortes",     &s.slices, 1, 8);
+        ImGui::SliderInt  ("Pasos",      &s.steps,  1, 32);
+        ImGui::SliderFloat("Techo de radio", &s.maxScreenRadius, 8.0f, 512.0f, "%.0f px");
+
+        ImGui::SeparatorText("Aplicacion");
+        // Bent normal: orienta el lookup de irradiancia (IBL y DDGI) hacia donde
+        // el hemisferio esta abierto. En un rincon de Cornell cambia la DIRECCION
+        // del color bleeding.
+        ImGui::Checkbox("Bent normal",  &s.bentNormal);
+        // Multi-rebote: el AO se tiñe con el albedo en vez de oscurecer a gris.
+        // Sobre la pared roja la diferencia es directa.
+        ImGui::Checkbox("Multi-rebote", &s.multiBounce);
+        ImGui::Checkbox("Blur", &s.blur);
+
+        ImGui::SeparatorText("Debug");
+        const char* vistas[] = { "Final (normal)",
+                                 "Visibilidad",
+                                 "Bent normal (world)",
+                                 "Normal del prepass (view)",
+                                 "Profundidad (1 banda = 1 m)" };
+        // Las dos ultimas vuelcan el prepass y saltean el blur. Si esta vista y
+        // la de DDGI estan las dos activas, gana esta.
+        int vista = static_cast<int>(s.debugView);
+        if (ImGui::Combo("Vista AO", &vista, vistas, IM_ARRAYSIZE(vistas))) {
+            s.debugView = static_cast<u32>(vista);
+        }
+        if (s.debugView != 0u) {
+            ImGui::TextColored(kColorAviso, "Vista de debug activa: la imagen NO es la final.");
+        }
     }
 
     void drawRenderPanel(EditorContext& ctx) {
@@ -253,12 +720,83 @@ namespace {
 
         if (!ImGui::Begin("Render", &st.showRender)) { ImGui::End(); return; }
 
+        {
+        CamposAlineados alineados;   // se cierra antes del End() de abajo
+
         if (ImGui::CollapsingHeader("Iluminacion", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::SliderFloat("Intensidad IBL", &ctx.scene.iblIntensity, 0.0f, 2.0f);
             f32 exposure = ctx.camera.Exposure();
             if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 5.0f)) ctx.camera.SetExposure(exposure);
         }
 
+        if (ImGui::CollapsingHeader("Sombras", ImGuiTreeNodeFlags_DefaultOpen)) {
+            renderer::ShadowPass&     pase = ctx.app.GetShadowPass();
+            renderer::ShadowSettings& sh   = pase.settings();
+
+            ImGui::Checkbox   ("Habilitadas", &sh.enabled);
+            // Margen: aire alrededor de la escena. El encuadre de la luz sale de
+            // sus bounds y esto es lo unico a mano. Mas margen = texel mas
+            // grande = mas acne.
+            ImGui::SliderFloat("Margen",      &sh.padding, 0.0f, 10.0f, "%.2f m");
+            // Sirve para medir: si un artefacto se afina a la mitad al duplicar
+            // la resolucion, escala con el texel y es del shadow map.
+            const char* resoluciones[] = { "512", "1024", "2048", "4096" };
+            const u32   valores[]      = { 512u,  1024u,  2048u,  4096u  };
+            int resSel = 2;
+            for (int i = 0; i < IM_ARRAYSIZE(valores); ++i)
+                if (valores[i] == sh.resolution) resSel = i;
+            if (ImGui::Combo("Resolucion", &resSel, resoluciones, IM_ARRAYSIZE(resoluciones))) {
+                sh.resolution = valores[resSel];
+            }
+
+            // El mecanismo principal contra el acne (lineas oscuras en zonas
+            // iluminadas): subirlo. NO abre luz en los rincones; el techo es la
+            // geometria fina, que empieza a filtrar.
+            ImGui::SliderFloat("Normal offset", &sh.normalOffsetTexels, 0.0f, 8.0f, "%.1f texels");
+
+            // Los dos bias son la escotilla: empujan la profundidad hacia la luz,
+            // asi que cualquier valor > 0 abre una banda de luz en las aristas
+            // entre paredes. Dejarlos en 0.
+            ImGui::SliderFloat("Bias min", &sh.biasMin, 0.0f, 0.01f, "%.4f");
+            ImGui::SliderFloat("Bias max", &sh.biasMax, 0.0f, 0.02f, "%.4f");
+
+            // Los dos bias son fracciones de profundidad NDC, que no quiere
+            // decir nada solo. Lo que se tunea de verdad es cuantos texels de
+            // holgura son, asi que se muestra la conversion.
+            const renderer::DirectionalLightFit& fit = pase.fit();
+            const f32 texel = (pase.resolution() > 0)
+                            ? 2.0f * fit.orthoHalfSize / static_cast<f32>(pase.resolution())
+                            : 0.0f;
+            ImGui::TextDisabled("Encuadre: half %.1f m | rango %.1f m | texel %.1f mm",
+                                fit.orthoHalfSize, fit.depthRange, texel * 1000.0f);
+            ImGui::TextDisabled("Normal offset = %.1f mm | Bias Max = %.1f mm",
+                                sh.normalOffsetTexels * texel * 1000.0f,
+                                sh.biasMax * fit.depthRange * 1000.0f);
+        }
+
+        drawDdgiSection(ctx);
+        drawAoSection(ctx);
+
+        // -- Post ---------------------------------------------------------------
+        // Bloom y FXAA corren sobre la imagen ya resuelta, asi que van despues de
+        // todo lo que la produce. Nombres de campo en castellano como el resto
+        // del panel: eran los unicos en ingles.
+        if (ImGui::CollapsingHeader("Bloom")) {
+            renderer::BloomSettings& s = ctx.app.GetBloomPass().settings();
+            ImGui::SliderFloat("Umbral",      &s.threshold,  0.0f, 5.0f);
+            ImGui::SliderFloat("Knee",        &s.knee,       0.0f, 1.0f);
+            ImGui::SliderFloat("Intensidad",  &s.intensity,  0.0f, 0.5f);
+            ImGui::SliderInt  ("Iteraciones", &s.iterations, 1,    10);
+        }
+
+        if (ImGui::CollapsingHeader("FXAA")) {
+            renderer::FxaaSettings& fx = ctx.app.GetFxaaPass().settings();
+            ImGui::Checkbox("Habilitado", &fx.enabled);
+        }
+
+        // -- Camara -------------------------------------------------------------
+        // Ultima a proposito: no produce imagen, es como se navega, y una vez
+        // configurada no se vuelve a tocar.
         if (ImGui::CollapsingHeader("Camara")) {
             scene::CameraSettings& cs = ctx.controller.settings();
             ImGui::SliderFloat("Velocidad",     &cs.moveSpeed,       1.0f,    200.0f);
@@ -270,6 +808,7 @@ namespace {
             ImGui::SameLine();
             ImGui::Checkbox("Invertir Y", &cs.invertY);
 
+            ImGui::SeparatorText("Estado");
             ImGui::TextDisabled("mouselook: %s", ctx.controller.LookToggled() ? "ON (Tab/Esc para salir)"
                                                                              : "off (Tab para entrar)");
             ImGui::TextDisabled("pivote a %.2f | yaw %.1f | pitch %.1f",
@@ -284,29 +823,6 @@ namespace {
             ImGui::TextDisabled("scroll dolly  -  WASD volar  -  Q/E bajar-subir");
             ImGui::TextDisabled("Shift acelerar  -  F encuadrar seleccion");
         }
-
-        if (ImGui::CollapsingHeader("Bloom")) {
-            renderer::BloomSettings& s = ctx.app.GetBloomPass().settings();
-            ImGui::SliderFloat("Threshold",  &s.threshold,  0.0f, 5.0f);
-            ImGui::SliderFloat("Knee",       &s.knee,       0.0f, 1.0f);
-            ImGui::SliderFloat("Intensity",  &s.intensity,  0.0f, 0.5f);
-            ImGui::SliderInt  ("Iterations", &s.iterations, 1,    10);
-        }
-
-        if (ImGui::CollapsingHeader("FXAA")) {
-            renderer::FxaaSettings& fx = ctx.app.GetFxaaPass().settings();
-            ImGui::Checkbox("FXAA habilitado", &fx.enabled);
-        }
-
-        if (ImGui::CollapsingHeader("Sombras", ImGuiTreeNodeFlags_DefaultOpen)) {
-            renderer::ShadowSettings& sh = ctx.app.GetShadowPass().settings();
-            ImGui::Checkbox   ("Habilitadas",    &sh.enabled);
-            ImGui::SliderFloat("Ortho HalfSize", &sh.orthoHalfSize, 5.0f,  200.0f);
-            ImGui::SliderFloat("Distancia Luz",  &sh.distance,      10.0f, 400.0f);
-            ImGui::SliderFloat("Near",           &sh.nearPlane,     0.1f,  50.0f);
-            ImGui::SliderFloat("Far",            &sh.farPlane,      50.0f, 600.0f);
-            ImGui::SliderFloat("Bias Min",       &sh.biasMin,       0.0f,  0.01f, "%.4f");
-            ImGui::SliderFloat("Bias Max",       &sh.biasMax,       0.0f,  0.02f, "%.4f");
         }
 
         ImGui::End();
@@ -391,9 +907,12 @@ void FocusSelection(EditorContext& ctx) {
 void DrawEditor(EditorContext& ctx) {
     ctx.state.stats.Push(ctx.app.DeltaTime());
 
-    // La barra va primero: el dockspace se ancla al area de trabajo, que es lo
-    // que queda del viewport despues de descontarla.
     drawMainMenuBar(ctx);
+    // Antes del early return de showUI: la barra de menu se dibuja siempre, asi
+    // que el modal que abre tambien tiene que poder dibujarse siempre.
+    drawSaveAsModal(ctx);
+
+    if (!ctx.state.showUI) return;
 
     // Y el dockspace antes que los paneles: cada Begin() de abajo consulta en que
     // nodo esta dockeado, y ese nodo tiene que existir ya.
@@ -408,6 +927,8 @@ void DrawEditor(EditorContext& ctx) {
     if (ctx.state.showMaterials) DrawMaterialsPanel(ctx);
     if (ctx.state.showRender)    drawRenderPanel(ctx);
     if (ctx.state.showStats)     drawStatsOverlay(ctx, dockId);
+
+    DrawSunGizmo(ctx, dockId);
 }
 
 } // namespace sandbox

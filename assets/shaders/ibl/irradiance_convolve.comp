@@ -10,18 +10,7 @@ layout(rgba16f, binding = 0) uniform writeonly imageCube uIrradiance; // destino
 
 const float PI = 3.14159265359;
 
-// Misma tabla que equirect_to_cube.comp: uv de texel [-1,1] -> dirección mundo.
-// Invierte el major-axis del spec GL para evitar costuras entre caras.
-vec3 dirForFace(uint face, vec2 uv) {
-    vec3 d;
-    if      (face == 0u) d = vec3( 1.0, -uv.y, -uv.x); // +X
-    else if (face == 1u) d = vec3(-1.0, -uv.y,  uv.x); // -X
-    else if (face == 2u) d = vec3( uv.x,  1.0,  uv.y); // +Y
-    else if (face == 3u) d = vec3( uv.x, -1.0, -uv.y); // -Y
-    else if (face == 4u) d = vec3( uv.x, -uv.y,  1.0); // +Z
-    else                 d = vec3(-uv.x, -uv.y, -1.0); // -Z
-    return normalize(d);
-}
+#include "common/cubeface.glsl"
 
 void main() {
     ivec3 texel = ivec3(gl_GlobalInvocationID);   // (x, y, face)

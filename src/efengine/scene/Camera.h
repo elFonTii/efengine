@@ -29,7 +29,9 @@ namespace scene {
             f32 m_aspect = 1.0f;
             f32 m_near   = 0.1f;
             f32 m_far    = 5000.0f;
-            f32 m_exposure = 1.0f;
+            // Tuneada contra la Cornell junto con BloomSettings y la intensidad
+            // de IBL de la escena: los tres se leen en la misma imagen.
+            f32 m_exposure = 1.025f;
     };
 }
 }

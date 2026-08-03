@@ -9,17 +9,15 @@ namespace efengine {
 namespace renderer {
 
     Framebuffer::Framebuffer(u32 width, u32 height) : m_color(Texture::CreateColorAttachment(width, height)), m_width(width), m_height(height) {
-        // secuencia de fbo:  -1 pedir id -2 enganchar color -3 enganchar depthbuffer -4 verificar completo
-
-        m_id = efecom::CreateFramebuffer(); // -1
+        m_id = efecom::CreateFramebuffer();
         EF_ASSERT(m_id != 0, "Framebuffer::Framebuffer: No hay contexto GL");
 
-        efecom::FramebufferColorTexture(m_id, m_color.id()); // -2
+        efecom::FramebufferColorTexture(m_id, m_color.id());
 
         m_depthRbo = efecom::CreateDepthRenderbuffer(width, height); // reserva buffer 24bits
-        efecom::FramebufferDepthRenderbuffer(m_id, m_depthRbo); // -3
+        efecom::FramebufferDepthRenderbuffer(m_id, m_depthRbo);
 
-        EF_ASSERT(efecom::FramebufferComplete(m_id), "Framebuffer incompleto"); // -4
+        EF_GPU_CHECK(efecom::FramebufferComplete(m_id), "Framebuffer incompleto");
     }
 
     Framebuffer::~Framebuffer() {
@@ -48,14 +46,11 @@ namespace renderer {
         return *this;
     }
 
-    void Framebuffer::Bind() const {
-        efecom::BindFramebuffer(m_id);
-        efecom::SetViewport(0, 0, m_width, m_height);
+    RenderTarget Framebuffer::Target() const {
+        return RenderTarget(m_id, m_width, m_height);
     }
 
-    void Framebuffer::Unbind() const {
-        efecom::BindFramebuffer(0);
-    }
+    void Framebuffer::Bind() const { Target().Bind(); }
 
     const Texture& Framebuffer::ColorTexture() const {
         return m_color;
@@ -70,9 +65,8 @@ namespace renderer {
     };
 
     void Framebuffer::Resize(u32 width, u32 height) {
-        if(width == m_width && height == m_height) return; // nada que redimensionar
+        if(width == m_width && height == m_height) return;
 
-        // desreferencia, creo un framebuffer nuevo y copio
         *this = Framebuffer(width, height);
     }
 }

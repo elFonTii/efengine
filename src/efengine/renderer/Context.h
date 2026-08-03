@@ -5,8 +5,6 @@ namespace platform { class Window; } // forward declaration
 
 namespace renderer {
 
-    // Encapsula la inicialización de OpenGL para una ventana:
-    // carga los punteros de función con GLAD y reporta info de la GPU.
     class Context {
         public:
             // Requiere que el contexto GL de 'window' ya esté current

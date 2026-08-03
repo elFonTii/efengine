@@ -22,7 +22,7 @@ namespace scene {
     }
 
     CameraController::CameraController(Camera* cam) : m_camera(cam) {
-        Apply();   // bootstrap de cámara
+        Apply();
     }
 
     glm::vec3 CameraController::Forward() const {

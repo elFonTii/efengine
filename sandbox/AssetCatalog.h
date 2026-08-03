@@ -14,10 +14,12 @@ namespace sandbox {
 
             const std::vector<std::string>& Models()   const { return m_models; }
             const std::vector<std::string>& Textures() const { return m_textures; }
+            const std::vector<std::string>& Scenes()   const { return m_scenes; }
 
         private:
             std::vector<std::string> m_models;
             std::vector<std::string> m_textures;
+            std::vector<std::string> m_scenes;
             bool m_scanned = false;
     };
 

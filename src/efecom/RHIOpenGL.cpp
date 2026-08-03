@@ -7,6 +7,8 @@
 
 #include <glad/gl.h>
 
+#include <cstdio>
+
 namespace efecom {
 
     // ── Mapeos de enums RHI → GL ───────────────────────────────────────────
@@ -77,10 +79,51 @@ namespace efecom {
 
     }
 
+    // ── Diagnostico ────────────────────────────────────────────────────────
+    namespace {
+        MessageSink g_messageSink = nullptr;
+
+        void emit(MessageSeverity sev, const char* msg) {
+            if (g_messageSink != nullptr) { g_messageSink(sev, msg); return; }
+            std::fprintf(stderr, "[EFCOM GL] %s\n", msg);
+        }
+
+        // GLAD_API_PTR y no APIENTRY: es el spelling que define el propio glad,
+        // y APIENTRY solo existe si antes se incluyo windows.h.
+        void GLAD_API_PTR debugCallback(GLenum /*source*/, GLenum type, GLuint /*id*/,
+                                        GLenum severity, GLsizei /*length*/,
+                                        const GLchar* message, const void* /*user*/) {
+            MessageSeverity sev = MessageSeverity::Info;
+            if (severity == GL_DEBUG_SEVERITY_HIGH)        sev = MessageSeverity::Error;
+            else if (severity == GL_DEBUG_SEVERITY_MEDIUM) sev = MessageSeverity::Warning;
+            else if (type == GL_DEBUG_TYPE_ERROR)          sev = MessageSeverity::Error;
+            emit(sev, message);
+        }
+    }
+
+    void SetMessageSink(MessageSink sink) { g_messageSink = sink; }
+
     // ── Inicialización / contexto ───────────────────────────────────────────
     bool Initialize(ProcAddressLoader loader) {
         EFCOM_ASSERT(loader != nullptr, "Initialize: loader no puede ser null");
-        return gladLoadGL((GLADloadfunc)loader) != 0;
+        if (gladLoadGL((GLADloadfunc)loader) == 0) return false;
+
+#ifdef _DEBUG
+        // SYNCHRONOUS es lo que hace util al callback: sin el dispara en
+        // cualquier momento posterior y el stack no dice nada. Con el, un
+        // breakpoint aca para en la llamada gl* culpable. Cuesta rendimiento,
+        // por eso solo en debug.
+        glEnable(GL_DEBUG_OUTPUT);
+        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+        glDebugMessageCallback(debugCallback, nullptr);
+
+        // El driver de NVIDIA emite una NOTIFICATION por cada asignacion de
+        // buffer. Sin este filtro el log queda ilegible y se deja de leer, que
+        // es exactamente el problema que este callback viene a resolver.
+        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION,
+                              0, nullptr, GL_FALSE);
+#endif
+        return true;
     }
 
     DeviceInfo GetDeviceInfo() {
@@ -100,16 +143,138 @@ namespace efecom {
 
     void SetClearColor(f32 r, f32 g, f32 b, f32 a) { glClearColor(r, g, b, a); }
 
+    namespace {
+        // Ultimo estado aplicado. g_stateValid = false fuerza reemitir todo:
+        // arranca invalido porque el estado real de GL al abrir el contexto no
+        // tiene por que coincidir con los defaults de PipelineState.
+        //
+        // Vive aca arriba, y no junto a ApplyPipelineState, porque Clear tambien
+        // lo escribe: un clear cambia las mascaras y el cache tiene que enterarse.
+        PipelineState g_state;
+        bool          g_stateValid = false;
+    }
+
     void Clear(ClearMask mask) {
         GLbitfield bits = 0;
         if ((u32)mask & (u32)ClearMask::Color) bits |= GL_COLOR_BUFFER_BIT;
         if ((u32)mask & (u32)ClearMask::Depth) bits |= GL_DEPTH_BUFFER_BIT;
+        if (bits == 0) return;
+
+        // glClear obedece las mascaras de escritura y el scissor. Sin forzarlos,
+        // que un Clear limpie o no depende de que pase aplico estado antes: con
+        // las sombras apagadas nadie aplica nada, el depthMask sigue en FALSE
+        // desde el post del frame anterior, y el depth no se limpia.
+        glDisable(GL_SCISSOR_TEST);
+        if (bits & GL_DEPTH_BUFFER_BIT) glDepthMask(GL_TRUE);
+        if (bits & GL_COLOR_BUFFER_BIT) glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
         glClear(bits);
+
+        // El cache tiene que reflejar lo que quedo emitido. Sin esto, el proximo
+        // ApplyPipelineState compara contra un g_state que miente y se saltea
+        // llamadas que si hacen falta.
+        if (bits & GL_DEPTH_BUFFER_BIT) g_state.depthWrite = true;
+        if (bits & GL_COLOR_BUFFER_BIT) {
+            g_state.colorWrite[0] = g_state.colorWrite[1] =
+            g_state.colorWrite[2] = g_state.colorWrite[3] = true;
+        }
     }
 
-    void SetDepthTest(bool enabled) {
-        if (enabled) glEnable(GL_DEPTH_TEST);
-        else         glDisable(GL_DEPTH_TEST);
+    // ── Estado de rasterizacion ────────────────────────────────────────────
+    namespace {
+        GLenum toGlDepthFunc(DepthFunc f) {
+            switch (f) {
+                case DepthFunc::Never:        return GL_NEVER;
+                case DepthFunc::Less:         return GL_LESS;
+                case DepthFunc::Equal:        return GL_EQUAL;
+                case DepthFunc::LessEqual:    return GL_LEQUAL;
+                case DepthFunc::Greater:      return GL_GREATER;
+                case DepthFunc::NotEqual:     return GL_NOTEQUAL;
+                case DepthFunc::GreaterEqual: return GL_GEQUAL;
+                case DepthFunc::Always:       return GL_ALWAYS;
+            }
+            return GL_LESS;
+        }
+
+        GLenum toGlBlendFactor(BlendFactor f) {
+            switch (f) {
+                case BlendFactor::Zero:             return GL_ZERO;
+                case BlendFactor::One:              return GL_ONE;
+                case BlendFactor::SrcAlpha:         return GL_SRC_ALPHA;
+                case BlendFactor::OneMinusSrcAlpha: return GL_ONE_MINUS_SRC_ALPHA;
+                case BlendFactor::DstAlpha:         return GL_DST_ALPHA;
+                case BlendFactor::OneMinusDstAlpha: return GL_ONE_MINUS_DST_ALPHA;
+                case BlendFactor::SrcColor:         return GL_SRC_COLOR;
+                case BlendFactor::OneMinusSrcColor: return GL_ONE_MINUS_SRC_COLOR;
+                case BlendFactor::DstColor:         return GL_DST_COLOR;
+                case BlendFactor::OneMinusDstColor: return GL_ONE_MINUS_DST_COLOR;
+            }
+            return GL_ONE;
+        }
+
+        GLenum toGlBlendOp(BlendOp op) {
+            switch (op) {
+                case BlendOp::Add:             return GL_FUNC_ADD;
+                case BlendOp::Subtract:        return GL_FUNC_SUBTRACT;
+                case BlendOp::ReverseSubtract: return GL_FUNC_REVERSE_SUBTRACT;
+                case BlendOp::Min:             return GL_MIN;
+                case BlendOp::Max:             return GL_MAX;
+            }
+            return GL_FUNC_ADD;
+        }
+
+    }
+
+    void ResetPipelineStateCache() { g_stateValid = false; }
+
+    void ApplyPipelineState(const PipelineState& s) {
+        const bool all = !g_stateValid;
+
+        if (all || s.depthTest != g_state.depthTest) {
+            if (s.depthTest) glEnable(GL_DEPTH_TEST);
+            else             glDisable(GL_DEPTH_TEST);
+        }
+        if (all || s.depthWrite != g_state.depthWrite) {
+            glDepthMask(s.depthWrite ? GL_TRUE : GL_FALSE);
+        }
+        if (all || s.depthFunc != g_state.depthFunc) {
+            glDepthFunc(toGlDepthFunc(s.depthFunc));
+        }
+        if (all || s.cullMode != g_state.cullMode) {
+            if (s.cullMode == CullMode::None) {
+                glDisable(GL_CULL_FACE);
+            } else {
+                glEnable(GL_CULL_FACE);
+                glCullFace(s.cullMode == CullMode::Back ? GL_BACK : GL_FRONT);
+            }
+        }
+        if (all || s.frontFace != g_state.frontFace) {
+            glFrontFace(s.frontFace == FrontFace::CounterClockwise ? GL_CCW : GL_CW);
+        }
+        if (all || s.blendEnable != g_state.blendEnable) {
+            if (s.blendEnable) glEnable(GL_BLEND);
+            else               glDisable(GL_BLEND);
+        }
+        if (all || s.srcColor != g_state.srcColor || s.dstColor != g_state.dstColor
+                || s.srcAlpha != g_state.srcAlpha || s.dstAlpha != g_state.dstAlpha) {
+            glBlendFuncSeparate(toGlBlendFactor(s.srcColor), toGlBlendFactor(s.dstColor),
+                                toGlBlendFactor(s.srcAlpha), toGlBlendFactor(s.dstAlpha));
+        }
+        if (all || s.colorOp != g_state.colorOp || s.alphaOp != g_state.alphaOp) {
+            glBlendEquationSeparate(toGlBlendOp(s.colorOp), toGlBlendOp(s.alphaOp));
+        }
+        if (all || s.colorWrite[0] != g_state.colorWrite[0]
+                || s.colorWrite[1] != g_state.colorWrite[1]
+                || s.colorWrite[2] != g_state.colorWrite[2]
+                || s.colorWrite[3] != g_state.colorWrite[3]) {
+            glColorMask(s.colorWrite[0] ? GL_TRUE : GL_FALSE,
+                        s.colorWrite[1] ? GL_TRUE : GL_FALSE,
+                        s.colorWrite[2] ? GL_TRUE : GL_FALSE,
+                        s.colorWrite[3] ? GL_TRUE : GL_FALSE);
+        }
+
+        g_state      = s;
+        g_stateValid = true;
     }
 
     // ── Buffers ────────────────────────────────────────────────────────────
@@ -122,6 +287,23 @@ namespace efecom {
     }
 
     void DestroyBuffer(u32 buffer) { glDeleteBuffers(1, &buffer); }
+
+    u32 CreateUniformBuffer(usize size) {
+        u32 id = 0;
+        glCreateBuffers(1, &id);
+        EFCOM_ASSERT(id != 0, "CreateUniformBuffer: glCreateBuffers fallo (sin contexto GL)");
+        // DYNAMIC_DRAW: se reescribe por frame o por draw, no es contenido estatico.
+        glNamedBufferData(id, (GLsizeiptr)size, nullptr, GL_DYNAMIC_DRAW);
+        return id;
+    }
+
+    void UpdateBuffer(u32 buffer, const void* data, usize size, usize offset) {
+        glNamedBufferSubData(buffer, (GLintptr)offset, (GLsizeiptr)size, data);
+    }
+
+    void BindUniformBuffer(u32 buffer, u32 bindingIndex) {
+        glBindBufferBase(GL_UNIFORM_BUFFER, (GLuint)bindingIndex, (GLuint)buffer);
+    }
 
     // ── Vertex arrays ──────────────────────────────────────────────────────
     u32 CreateVertexArray() {
@@ -195,49 +377,61 @@ namespace efecom {
     void DestroyProgram(u32 program) { glDeleteProgram(program); }
     void BindProgram(u32 program)    { glUseProgram(program); }
 
-    i32 GetUniformLocation(u32 program, const char* name) {
-        return glGetUniformLocation(program, name);
-    }
 
-    void SetUniformInt(i32 location, i32 value)          { glUniform1i(location, value); }
-    void SetUniformFloat(i32 location, f32 value)        { glUniform1f(location, value); }
-    void SetUniformVec3(i32 location, const f32* values3)  { glUniform3fv(location, 1, values3); }
-    void SetUniformMat4(i32 location, const f32* values16) { glUniformMatrix4fv(location, 1, GL_FALSE, values16); }
 
     // ── Texturas 2D ────────────────────────────────────────────────────────
     u32 CreateTexture2D(const Texture2DDesc& desc, const void* pixels) {
         const GLFormat fmt = to_gl(desc.format);
 
         u32 id = 0;
-        glGenTextures(1, &id);
-        EFCOM_ASSERT(id != 0, "CreateTexture2D: glGenTextures fallo (sin contexto GL)");
+        glCreateTextures(GL_TEXTURE_2D, 1, &id);
+        EFCOM_ASSERT(id != 0, "CreateTexture2D: glCreateTextures fallo (sin contexto GL)");
 
-        glBindTexture(GL_TEXTURE_2D, id);
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, to_gl(desc.minFilter));
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, to_gl(desc.magFilter));
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, to_gl(desc.wrapS));
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, to_gl(desc.wrapT));
+        glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, to_gl(desc.minFilter));
+        glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, to_gl(desc.magFilter));
+        glTextureParameteri(id, GL_TEXTURE_WRAP_S, to_gl(desc.wrapS));
+        glTextureParameteri(id, GL_TEXTURE_WRAP_T, to_gl(desc.wrapT));
         if (desc.wrapS == TextureWrap::ClampToBorder || desc.wrapT == TextureWrap::ClampToBorder) {
-            glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, desc.borderColor);
+            glTextureParameterfv(id, GL_TEXTURE_BORDER_COLOR, desc.borderColor);
         }
 
-        glTexImage2D(GL_TEXTURE_2D, 0, (GLint)fmt.internalFormat,
-                     (GLsizei)desc.width, (GLsizei)desc.height, 0,
-                     fmt.pixelFormat, fmt.pixelType, pixels);
+        // Storage inmutable: el tamano y el formato quedan fijos. Es lo correcto
+        // para un attachment, y obliga a que Framebuffer::Resize recree la
+        // textura entera en vez de re-especificarla (ya lo hace).
+        //
+        // mipCount 1 cuando no se piden mipmaps; si se piden, la cadena completa.
+        u32 mips = 1u;
         if (desc.generateMipmaps) {
-            glGenerateMipmap(GL_TEXTURE_2D);
+            u32 lado = desc.width > desc.height ? desc.width : desc.height;
+            while (lado > 1u) { lado >>= 1; ++mips; }
+        }
+        glTextureStorage2D(id, (GLsizei)mips, fmt.internalFormat,
+                           (GLsizei)desc.width, (GLsizei)desc.height);
+
+        if (pixels != nullptr) {
+            // El default de UNPACK_ALIGNMENT es 4. Una fila RGB8 de ancho no
+            // multiplo de 4 no cae en esa alineacion (1023 * 3 = 3069, y
+            // 3069 % 4 = 1), y cada fila arranca corrida: es el sesgo diagonal.
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            glTextureSubImage2D(id, 0, 0, 0, (GLsizei)desc.width, (GLsizei)desc.height,
+                                fmt.pixelFormat, fmt.pixelType, pixels);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 4);   // lo dejamos como estaba
         }
 
-        glBindTexture(GL_TEXTURE_2D, 0);
+        if (desc.generateMipmaps) {
+            glGenerateTextureMipmap(id);
+        }
+
         return id;
     }
 
     void DestroyTexture(u32 texture) { glDeleteTextures(1, &texture); }
 
     void BindTexture2D(u32 texture, u32 unit) {
-        glActiveTexture(GL_TEXTURE0 + unit);
-        glBindTexture(GL_TEXTURE_2D, texture);
+        // glBindTextureUnit y no glActiveTexture + glBindTexture: la version
+        // vieja dejaba la unidad activa cambiada como efecto de borde, y quien
+        // llamara despues heredaba ese estado sin saberlo.
+        glBindTextureUnit(unit, texture);
     }
 
     u32 CreateTexture2DStorage(const Texture2DStorageDesc& desc) {
@@ -305,7 +499,27 @@ namespace efecom {
     }
 
     void DestroyFramebuffer(u32 framebuffer) { glDeleteFramebuffers(1, &framebuffer); }
-    void BindFramebuffer(u32 framebuffer)    { glBindFramebuffer(GL_FRAMEBUFFER, framebuffer); }
+
+    // Extent del backbuffer. Lo fija el motor en el init del contexto y en cada
+    // resize de ventana; en un backend Vulkan saldria del swapchain.
+    namespace { u32 g_presentWidth = 0u; u32 g_presentHeight = 0u; }
+
+    u32  GetPresentTarget() { return 0u; }   // en GL el backbuffer ES el FBO 0
+    void SetPresentExtent(u32 width, u32 height) {
+        g_presentWidth  = width;
+        g_presentHeight = height;
+    }
+
+    // Solo lo consume renderer::RenderTarget::Present(). No toca GL.
+    void GetPresentExtent(u32& outWidth, u32& outHeight) {
+        outWidth  = g_presentWidth;
+        outHeight = g_presentHeight;
+    }
+
+    void BindRenderTarget(u32 target, u32 width, u32 height) {
+        glBindFramebuffer(GL_FRAMEBUFFER, target);
+        glViewport(0, 0, (GLsizei)width, (GLsizei)height);
+    }
 
     void FramebufferColorTexture(u32 framebuffer, u32 texture) {
         glNamedFramebufferTexture(framebuffer, GL_COLOR_ATTACHMENT0, texture, 0);
@@ -323,6 +537,24 @@ namespace efecom {
 
     bool FramebufferComplete(u32 framebuffer) {
         return glCheckNamedFramebufferStatus(framebuffer, GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+    }
+
+    void ClearFramebuffer(u32 framebuffer, ClearMask mask) {
+        glDisable(GL_SCISSOR_TEST);
+
+        if ((u32)mask & (u32)ClearMask::Color) {
+            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+            const GLfloat cero[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+            glClearNamedFramebufferfv(framebuffer, GL_COLOR, 0, cero);
+            g_state.colorWrite[0] = g_state.colorWrite[1] =
+            g_state.colorWrite[2] = g_state.colorWrite[3] = true;
+        }
+        if ((u32)mask & (u32)ClearMask::Depth) {
+            glDepthMask(GL_TRUE);
+            const GLfloat uno = 1.0f;
+            glClearNamedFramebufferfv(framebuffer, GL_DEPTH, 0, &uno);
+            g_state.depthWrite = true;
+        }
     }
 
     u32 CreateDepthRenderbuffer(u32 width, u32 height) {

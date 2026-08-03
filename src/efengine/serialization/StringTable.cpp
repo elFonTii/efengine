@@ -31,7 +31,6 @@ namespace serialization {
     }
 
     bool StringTable::rebuildAfterRead() {
-        // se valida todo antes.
         if (m_offsets.size() < 2u)               return false;
         if (m_offsets.front() != 0u)             return false;
         if (m_offsets.back() != m_blob.size())   return false;

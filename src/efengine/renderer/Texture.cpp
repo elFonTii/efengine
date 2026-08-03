@@ -16,12 +16,12 @@ namespace renderer {
 
         i32 width = 0;
         i32 height = 0;
-        i32 channels = 0; // stbi_load lo setea por referencia
+        i32 channels = 0;
         u8* pixels = stbi_load(path, &width, &height, &channels, 0);
 
         if(pixels == null) {
             EF_LOG_ERROR("Texture::Create: fallo al cargar '%s': %s", path, stbi_failure_reason());
-            return std::nullopt; // Fallo recuperable
+            return std::nullopt;
         }
 
         // El formato del RHI determina a la vez cómo la guarda la GPU y el
@@ -62,7 +62,6 @@ namespace renderer {
         const u32 id = efecom::CreateTexture2D(desc, pixels);
         EF_ASSERT(id != 0, "Texture::Create: No hay contexto GL");
 
-        // Liberamos el buffer de CPU (ya está en GPU)
         stbi_image_free(pixels);
 
         return Texture(id, (u32)width, (u32)height);
@@ -70,7 +69,6 @@ namespace renderer {
     std::optional<Texture> Texture::CreateHDR(const char* path) {
         EF_ASSERT(path != null, "Texture::CreateHDR: Path no puede ser null");
 
-        // algo de que la proyección define la orientación
         stbi_set_flip_vertically_on_load(false);
 
         i32 width = 0, height = 0, channels = 0;
@@ -100,7 +98,6 @@ namespace renderer {
         return Texture(id, (u32)width, (u32)height);
     }
 
-    // Textura vacía para usar como color attachment de un framebuffer
     Texture Texture::CreateColorAttachment(u32 width, u32 height) {
         // Attachment HDR (pre-tonemapping)
         efecom::Texture2DDesc desc;

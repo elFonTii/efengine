@@ -15,10 +15,9 @@ namespace renderer {
         EF_ASSERT(m_id != 0, "ShadowMap::ShadowMap: No hay contexto GL");
 
         efecom::FramebufferDepthTexture(m_id, m_depth.id());
-        // Sin color attachment: no dibujamos ni leemos color.
         efecom::FramebufferDisableColor(m_id);
 
-        EF_ASSERT(efecom::FramebufferComplete(m_id),
+        EF_GPU_CHECK(efecom::FramebufferComplete(m_id),
                   "ShadowMap: framebuffer incompleto");
     }
 
@@ -41,14 +40,11 @@ namespace renderer {
         return *this;
     }
 
-    void ShadowMap::Bind() const {
-        efecom::BindFramebuffer(m_id);
-        efecom::SetViewport(0, 0, m_resolution, m_resolution);
+    RenderTarget ShadowMap::Target() const {
+        return RenderTarget(m_id, m_resolution, m_resolution);
     }
 
-    void ShadowMap::Unbind() const {
-        efecom::BindFramebuffer(0);
-    }
+    void ShadowMap::Bind() const { Target().Bind(); }
 
 }
 }
