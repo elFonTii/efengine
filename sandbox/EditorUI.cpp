@@ -371,8 +371,13 @@ namespace {
         }
 
         scene::Node& node = ctx.scene.Get(st.selected);
-        ImGui::Text("Nodo: %s", node.name.c_str());
-        ImGui::SameLine();
+
+        // Escribe directo sobre el nodo, sin confirmar y sin validar: el nombre
+        // es cosmetico. La identidad real es el NodeHandle y el .efe guarda el
+        // parent por indice, asi que un nombre vacio o repetido no rompe nada.
+        // Lo unico que se degrada es FindByName, que ya devuelve el primer match
+        // por contrato.
+        ImGui::InputText("Nombre", &node.name);
         if (ImGui::SmallButton("Focus")) FocusSelection(ctx);
         ImGui::TextDisabled("handle { index=%u, gen=%u }", node.self.index, node.self.generation);
 
