@@ -25,6 +25,7 @@ add_executable(efengine_tests
     renderer/PipelineState.test.cpp
     renderer/ShaderBlocks.test.cpp
     renderer/MaterialBlock.test.cpp
+    renderer/ProfilerStats.test.cpp
     resources/FileIO.test.cpp
     resources/ModelLoader.test.cpp
     resources/ShaderPreprocessor.test.cpp
