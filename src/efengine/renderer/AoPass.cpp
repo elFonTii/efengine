@@ -9,6 +9,7 @@
 #include <efengine/renderer/PipelineStates.h>
 #include <efengine/renderer/VertexArray.h>
 #include <efengine/scene/SceneGraph.h>
+#include <efengine/renderer/GpuProfiler.h>
 
 #include <utility>
 
@@ -74,40 +75,50 @@ namespace renderer {
         if (!m_settings.enabled) return;
 
         // -- 1. Prepass: normal view-space + profundidad lineal ----------------
-        m_normalFb.Bind();
-        // Negro con alfa 0: viewZ == 0 es el centinela de "aca no hay geometria".
-        m_renderer.Clear(0.0f, 0.0f, 0.0f, 0.0f);
+        {
+            EF_PROFILE_SCOPE("AO prepass");
 
-        const AoPrepassBlock prepass { view, projection };
-        m_prepassUbo.Update(&prepass, sizeof(prepass));
-        m_prepassUbo.BindTo(kPassBinding);
+            m_normalFb.Bind();
+            // Negro con alfa 0: viewZ == 0 es el centinela de "aca no hay geometria".
+            m_renderer.Clear(0.0f, 0.0f, 0.0f, 0.0f);
 
-        m_shaders.depthNormal->Bind();
-        for (const scene::RenderItem& item : scene.Renderables()) {
-            if (!item.model) continue;
-            // overrideShader SIN overrideState: asi cada material conserva su
-            // doubleSided. Forzar el estado dejaria las salas inward=1 (cascaras
-            // de espesor cero, que necesitan CullMode::None) fuera del target.
-            m_renderer.Submit(*item.model, *item.materials, item.world, m_shaders.depthNormal);
+            const AoPrepassBlock prepass { view, projection };
+            m_prepassUbo.Update(&prepass, sizeof(prepass));
+            m_prepassUbo.BindTo(kPassBinding);
+
+            m_shaders.depthNormal->Bind();
+            for (const scene::RenderItem& item : scene.Renderables()) {
+                if (!item.model) continue;
+                // overrideShader SIN overrideState: asi cada material conserva su
+                // doubleSided. Forzar el estado dejaria las salas inward=1 (cascaras
+                // de espesor cero, que necesitan CullMode::None) fuera del target.
+                m_renderer.Submit(*item.model, *item.materials, item.world, m_shaders.depthNormal);
+            }
         }
 
         // -- 2. Kernel de GTAO -------------------------------------------------
-        const AoPassBlock params = MakeAoPassBlock(view, projection, m_settings,
-                                                   m_aoA.width(), m_aoA.height(), 0);
-        m_gtaoUbo.Update(&params, sizeof(params));
-        m_gtaoUbo.BindTo(kPassBinding);
+        {
+            EF_PROFILE_SCOPE("AO kernel");
 
-        m_aoA.Bind();
-        efecom::ApplyPipelineState(FullscreenState());
-        m_normalFb.ColorTexture().Bind(0);
-        m_renderer.Draw(m_quad, *m_shaders.gtao);
+            const AoPassBlock params = MakeAoPassBlock(view, projection, m_settings,
+                                                       m_aoA.width(), m_aoA.height(), 0);
+            m_gtaoUbo.Update(&params, sizeof(params));
+            m_gtaoUbo.BindTo(kPassBinding);
 
-        m_resultInA = true;
+            m_aoA.Bind();
+            efecom::ApplyPipelineState(FullscreenState());
+            m_normalFb.ColorTexture().Bind(0);
+            m_renderer.Draw(m_quad, *m_shaders.gtao);
+
+            m_resultInA = true;
+        }
 
         // -- 3. Blur bilateral separable: A -> B (horizontal) -> A (vertical) --
         // Los modos de debug 3 y 4 saltean el blur: borronear el volcado del
         // prepass no significa nada, y la tabla de verificacion los lee crudos.
         if (m_settings.blur && m_settings.debugView < 3u) {
+            EF_PROFILE_SCOPE("AO blur");
+
             // La guia de profundidad es la misma en las dos pasadas.
             m_normalFb.ColorTexture().Bind(1);
 

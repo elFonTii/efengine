@@ -127,6 +127,7 @@ namespace application {
         if (!m_aoPass) EF_LOG_ERROR("Application: no se pudo crear el AoPass");
 
         m_window.SetEventListener(&m_input);
+        renderer::SetActiveProfiler(&m_profiler);
 
         EF_LOG_INFO("Application inicializada");
     }
@@ -142,6 +143,7 @@ namespace application {
         // depth a espaldas del RHI: el cache del backend quedo mintiendo.
         efecom::ResetPipelineStateCache();
         efecom::ResetFrameCounters();
+        m_profiler.BeginFrame(m_time.DeltaTime());
     }
 
     void Application::EndFrame() {
@@ -222,9 +224,12 @@ namespace application {
             m_skyboxPass.Draw(m_environment->env());
          }
 
-        for(const scene::RenderItem& item : scene.Renderables()) {
-            if(!item.model) { EF_LOG_WARNING("Se intenta renderizar un item sin modelo"); continue; }
-            m_renderer.Submit(*item.model, *item.materials, item.world);
+        {
+            EF_PROFILE_SCOPE("Forward");
+            for(const scene::RenderItem& item : scene.Renderables()) {
+                if(!item.model) { EF_LOG_WARNING("Se intenta renderizar un item sin modelo"); continue; }
+                m_renderer.Submit(*item.model, *item.materials, item.world);
+            }
         }
 
         // El volcado del target de captura va sobre la imagen HDR de la escena,

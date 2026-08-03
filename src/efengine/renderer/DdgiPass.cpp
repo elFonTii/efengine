@@ -15,6 +15,8 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
+#include <efengine/renderer/GpuProfiler.h>
+
 #include <chrono>
 #include <utility>
 
@@ -283,9 +285,12 @@ namespace renderer {
         efecom::SetClearColor(0.0f, 0.0f, 0.0f, kFarDistance);
         efecom::Clear(efecom::ClearMask::ColorDepth);
 
-        for (u32 slot = 0u; slot < m_range.count; ++slot) {
-            const u32 probe = (m_range.first + slot) % total;
-            CaptureProbe(scene, shadow, ibl, env, probe, slot);
+        {
+            EF_PROFILE_SCOPE("DDGI captura");
+            for (u32 slot = 0u; slot < m_range.count; ++slot) {
+                const u32 probe = (m_range.first + slot) % total;
+                CaptureProbe(scene, shadow, ibl, env, probe, slot);
+            }
         }
 
         // El blend. La captura escribio por rasterizacion y el compute la lee por
@@ -303,23 +308,27 @@ namespace renderer {
         const DdgiBlock block = MakeDdgiBlock(m_atlasGrid, blendSettings, m_range, true);
         m_renderer.SetDdgiBlock(block);
 
-        m_shaders.blendIrradiance->Bind();
-        m_capture.Bind(0);
-        m_irradiance.BindImage(0, 0, efecom::ImageAccess::ReadWrite,
-                               efecom::TextureFormat::RGBA16F);
-        efecom::DispatchCompute(m_range.count, 1u, 1u);
+        {
+            EF_PROFILE_SCOPE("DDGI blend");
 
-        // El segundo blend comparte el DdgiBlock que ya se subio: no hay que
-        // re-subirlo. Escribe otra imagen, asi que tampoco necesita barrier
-        // entre los dos dispatches.
-        m_shaders.blendDistance->Bind();
-        m_capture.Bind(0);
-        m_distance.BindImage(0, 0, efecom::ImageAccess::ReadWrite,
-                             efecom::TextureFormat::RG16F);
-        efecom::DispatchCompute(m_range.count, 1u, 1u);
+            m_shaders.blendIrradiance->Bind();
+            m_capture.Bind(0);
+            m_irradiance.BindImage(0, 0, efecom::ImageAccess::ReadWrite,
+                                   efecom::TextureFormat::RGBA16F);
+            efecom::DispatchCompute(m_range.count, 1u, 1u);
 
-        efecom::IssueMemoryBarrier(efecom::Barrier::ShaderImageAccess
-                                 | efecom::Barrier::TextureFetch);
+            // El segundo blend comparte el DdgiBlock que ya se subio: no hay que
+            // re-subirlo. Escribe otra imagen, asi que tampoco necesita barrier
+            // entre los dos dispatches.
+            m_shaders.blendDistance->Bind();
+            m_capture.Bind(0);
+            m_distance.BindImage(0, 0, efecom::ImageAccess::ReadWrite,
+                                 efecom::TextureFormat::RG16F);
+            efecom::DispatchCompute(m_range.count, 1u, 1u);
+
+            efecom::IssueMemoryBarrier(efecom::Barrier::ShaderImageAccess
+                                     | efecom::Barrier::TextureFetch);
+        }
 
         m_blendedOnce = true;
     }

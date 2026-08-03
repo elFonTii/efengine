@@ -7,6 +7,7 @@
 #include <utility>
 
 #include <algorithm>
+#include <efengine/renderer/GpuProfiler.h>
 
 namespace efengine {
 namespace renderer {
@@ -26,6 +27,7 @@ namespace renderer {
     }
 
 void BloomPass::Apply(const Texture& input, const RenderTarget& target) {
+    EF_PROFILE_SCOPE("Bloom");
     m_paramsUbo.BindTo(kPassBinding);
 
     // brightpass: escena full-res -> m_fboA (1/2 res)
