@@ -28,6 +28,14 @@ namespace sandbox {
         efengine::scene::NodeHandle sun;
         efengine::scene::NodeHandle selected;
 
+        // Reparent pedido por drag & drop, pendiente de aplicar. Mutar la
+        // jerarquia en medio de la recursion que la dibuja rompe el recorrido,
+        // asi que el drop solo anota y drawHierarchy aplica al final del frame.
+        // Child nulo = no hay pedido. Uno por frame alcanza: no se pueden soltar
+        // dos cosas a la vez.
+        efengine::scene::NodeHandle pendingReparentChild;
+        efengine::scene::NodeHandle pendingReparentParent;
+
         bool animate      = false;
         bool animateSun   = false;
         u32  spawnCounter = 0;

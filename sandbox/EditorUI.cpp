@@ -326,6 +326,37 @@ namespace {
             const bool open = ImGui::TreeNodeEx("nodo", flags, "%s %s%s", tag, node.name.c_str(), behTag);
             if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) st.selected = h;
 
+            // La raiz no puede arrastrarse: no tiene padre que cambiar.
+            // El payload es el NodeHandle crudo (indice + generacion): es un POD
+            // y ImGui se queda con una copia de los bytes.
+            if (h != ctx.scene.Root() && ImGui::BeginDragDropSource()) {
+                ImGui::SetDragDropPayload("EF_NODE", &h, sizeof(h));
+                ImGui::Text("%s", node.name.c_str());
+                ImGui::EndDragDropSource();
+            }
+
+            if (ImGui::BeginDragDropTarget()) {
+                // Se espia el payload SIN aceptarlo: si el drop crearia un ciclo
+                // (soltar sobre si mismo o sobre un descendiente) no se acepta, y
+                // asi ImGui tampoco ilumina el target. Rechazarlo despues, dentro
+                // del motor, dejaria al usuario soltando sin que pase nada.
+                const ImGuiPayload* espia = ImGui::GetDragDropPayload();
+                bool valido = false;
+                if (espia != nullptr && espia->IsDataType("EF_NODE")) {
+                    const scene::NodeHandle arrastrado =
+                        *static_cast<const scene::NodeHandle*>(espia->Data);
+                    valido = !ctx.scene.IsAncestorOrSelf(arrastrado, h);
+                }
+
+                if (valido) {
+                    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("EF_NODE")) {
+                        st.pendingReparentChild  = *static_cast<const scene::NodeHandle*>(p->Data);
+                        st.pendingReparentParent = h;
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+
             if (open && !node.children.empty()) {
                 const std::vector<scene::NodeHandle> kids = node.children;
                 for (scene::NodeHandle c : kids) {
@@ -336,6 +367,18 @@ namespace {
             ImGui::PopID();
         };
         drawNode(ctx.scene.Root());
+
+        // Recien aca es seguro tocar la jerarquia: el recorrido ya termino.
+        // Se revalidan los dos handles porque entre el drop y este punto podria
+        // haberse destruido cualquiera de los dos.
+        if (!st.pendingReparentChild.IsNull()) {
+            if (ctx.scene.IsValid(st.pendingReparentChild) &&
+                ctx.scene.IsValid(st.pendingReparentParent)) {
+                ctx.scene.SetParentKeepWorld(st.pendingReparentChild, st.pendingReparentParent);
+            }
+            st.pendingReparentChild  = scene::NodeHandle{};
+            st.pendingReparentParent = scene::NodeHandle{};
+        }
 
         ImGui::Separator();
 
