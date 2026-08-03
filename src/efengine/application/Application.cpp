@@ -141,6 +141,7 @@ namespace application {
         // ImGui_ImplOpenGL3_RenderDrawData del frame anterior piso blend, cull y
         // depth a espaldas del RHI: el cache del backend quedo mintiendo.
         efecom::ResetPipelineStateCache();
+        efecom::ResetFrameCounters();
     }
 
     void Application::EndFrame() {

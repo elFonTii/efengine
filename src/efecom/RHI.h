@@ -120,6 +120,29 @@ namespace efecom {
     // (el backend de ImGui lo hace en cada Render).
     void ResetPipelineStateCache();
 
+    // ── Contadores del frame ────────────────────────────────────────────────
+    // Viven en el RHI y no en el Renderer a proposito: aca abajo NO HAY FORMA
+    // de dibujar sin ser contado. Puesto un nivel mas arriba, cualquier camino
+    // de dibujo nuevo se escaparia de la cuenta por olvido.
+    struct FrameCounters {
+        u32 drawCalls  = 0u;
+        u32 triangles  = 0u;
+        u32 dispatches = 0u;
+
+        // Cuantas veces se PIDIO aplicar estado, y cuantas de esas no cambiaron
+        // absolutamente nada. La segunda es evidencia directa para el ciclo de
+        // densidad de draws: Renderer::Submit reaplica estado por malla.
+        u32 stateApplies   = 0u;
+        u32 stateRedundant = 0u;
+    };
+
+    void          ResetFrameCounters();
+    FrameCounters GetFrameCounters();
+
+    // Solo el contador de draws. Existe aparte porque el profiler lo lee dos
+    // veces por scope y no necesita copiar el struct entero.
+    u32 GetDrawCallCount();
+
     // ── Buffers (VBO / EBO) ────────────────────────────────────────────────
     // Buffer estático: crea y sube los datos de una vez. Sirve tanto para
     // vértices como para índices (el uso lo decide el vertex array).
@@ -243,6 +266,32 @@ namespace efecom {
     u32  CreateDepthRenderbuffer(u32 width, u32 height);
     void DestroyRenderbuffer(u32 renderbuffer);
     void FramebufferDepthRenderbuffer(u32 framebuffer, u32 renderbuffer);
+
+    // ── Consultas de marca de tiempo ────────────────────────────────────────
+    // Una consulta guarda UNA marca, no un intervalo: para medir un pase hacen
+    // falta dos, una antes y otra despues, y el tiempo es la resta.
+    //
+    // Se eligieron marcas y no el cronometro por bloque (GL_TIME_ELAPSED)
+    // porque ese ultimo NO SE PUEDE ANIDAR: solo puede haber uno activo a la
+    // vez, y un scope adentro de otro tiraria error de GL dejando los numeros
+    // mal EN SILENCIO. Dos marcas independientes se anidan sin problema.
+    bool TimestampQueriesSupported();
+
+    u32  CreateTimestampQuery();
+    void DestroyTimestampQuery(u32 query);
+
+    // Encola "sellame el reloj cuando llegues aca" en el stream de comandos. No
+    // bloquea: cuando esta funcion vuelve, la GPU seguramente todavia no llego.
+    void WriteTimestamp(u32 query);
+
+    // Si el resultado ya esta. NO bloquea. Hay que preguntar esto ANTES de
+    // TimestampNanos, siempre.
+    bool TimestampAvailable(u32 query);
+
+    // El valor sellado, en nanosegundos. Llamarla sin que Available haya dado
+    // true DETIENE LA CPU hasta que la GPU termine: el medidor se convierte en
+    // el cuello de botella y mide su propia interferencia.
+    u64  TimestampNanos(u32 query);
 
     // Draw (triángulos; índices u32)
     void DrawIndexed(u32 indexCount);
