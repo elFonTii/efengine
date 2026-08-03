@@ -13,6 +13,8 @@
 #include <efengine/renderer/DdgiSettings.h>
 #include <efengine/renderer/DdgiVolume.h>
 #include <efengine/renderer/AoPass.h>
+#include <efengine/renderer/GpuProfiler.h>
+#include <efecom/RHI.h>
 #include <efengine/renderer/AoSettings.h>
 #include <efengine/renderer/Bounds.h>
 #include <efengine/resources/SceneAssets.h>
@@ -313,6 +315,7 @@ namespace {
             ImGui::MenuItem("Materiales",       nullptr, &st.showMaterials);
             ImGui::MenuItem("Render",           nullptr, &st.showRender);
             ImGui::MenuItem("Overlay de debug", nullptr, &st.showStats);
+            ImGui::MenuItem("Rendimiento",      nullptr, &st.showPerf);
             ImGui::Separator();
             if (ImGui::MenuItem("Restablecer layout")) {
                 st.resetLayout = true;
@@ -715,6 +718,110 @@ namespace {
         }
     }
 
+    void drawPerfPanel(EditorContext& ctx) {
+        EditorState& st = ctx.state;
+
+        if (!ImGui::Begin("Rendimiento", &st.showPerf)) { ImGui::End(); return; }
+
+        const renderer::GpuProfiler& prof = ctx.app.GetProfiler();
+
+        if (!prof.supported()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f),
+                               "El driver no mide marcas de tiempo: no hay datos de GPU.");
+        }
+
+        // -- Placa y driver --
+        const efecom::DeviceInfo dev = efecom::GetDeviceInfo();
+        ImGui::TextDisabled("%s  |  %s", dev.renderer, dev.apiVersion);
+        ImGui::TextDisabled("%u x %u", ctx.app.GetWindow().GetWidth(),
+                                       ctx.app.GetWindow().GetHeight());
+
+        ImGui::Separator();
+
+        // -- Contadores del frame --
+        const efecom::FrameCounters c = efecom::GetFrameCounters();
+        ImGui::Text("Draws: %u    Triangulos: %u    Dispatch: %u", c.drawCalls, c.triangles, c.dispatches);
+        ImGui::Text("Cambios de estado: %u  (redundantes: %u)", c.stateApplies, c.stateRedundant);
+
+        ImGui::Separator();
+
+        // -- Vsync --
+        bool vsync = ctx.app.GetWindow().IsVSync();
+        if (ImGui::Checkbox("VSync", &vsync)) ctx.app.GetWindow().SetVSync(vsync);
+        if (vsync) {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.2f, 1.0f),
+                               "(el frame esta clavado al monitor: apagalo para medir)");
+        }
+
+        // -- El propio medidor --
+        // El profiler agrega ~24 llamadas de GL por frame. Es despreciable
+        // frente a las miles que estamos investigando, pero tiene que poder
+        // salir del medio: si un numero raro no cambia al apagarlo, no lo esta
+        // causando el medidor.
+        bool medir = prof.enabled();
+        if (ImGui::Checkbox("Medir", &medir)) ctx.app.GetProfiler().SetEnabled(medir);
+
+        ImGui::Separator();
+
+        // -- La lectura principal: quien manda, CPU o GPU --
+        const f32 gpu = prof.stats().TotalGpuMs();
+        const f32 cpu = prof.stats().TotalCpuMs();
+        ImGui::Text("GPU total: %6.3f ms", gpu);
+        ImGui::Text("CPU total: %6.3f ms", cpu);
+        if (cpu > gpu) {
+            ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.35f, 1.0f),
+                               "Manda la CPU: el cuello esta en ENVIAR el trabajo, no en dibujarlo.");
+        } else {
+            ImGui::TextColored(ImVec4(0.45f, 0.75f, 1.0f, 1.0f),
+                               "Manda la GPU: el cuello esta en el trabajo de la placa.");
+        }
+
+        ImGui::Separator();
+
+        // -- La tabla, en ORDEN DE FRAME. Ordenarla por costo haria saltar las
+        // -- filas entre corridas y volveria imposible comparar dos mediciones.
+        if (ImGui::BeginTable("pases", 4,
+                ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("Pase");
+            ImGui::TableSetupColumn("GPU ms");
+            ImGui::TableSetupColumn("CPU ms");
+            ImGui::TableSetupColumn("Draws");
+            ImGui::TableHeadersRow();
+
+            for (const renderer::PassRow& r : prof.stats().Rows()) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+
+                if (!r.present) {
+                    // Un pase apagado muestra guiones, NO el ultimo valor que
+                    // tuvo: arrastrarlo haria creer que sigue costando.
+                    ImGui::TextDisabled("%s", r.name);
+                    ImGui::TableNextColumn(); ImGui::TextDisabled("--");
+                    ImGui::TableNextColumn(); ImGui::TextDisabled("--");
+                    ImGui::TableNextColumn(); ImGui::TextDisabled("--");
+                    continue;
+                }
+
+                ImGui::Text("%s", r.name);
+                ImGui::TableNextColumn(); ImGui::Text("%6.3f", r.gpuMs);
+                ImGui::TableNextColumn(); ImGui::Text("%6.3f", r.cpuMs);
+                ImGui::TableNextColumn(); ImGui::Text("%.0f",  r.drawCalls);
+            }
+            ImGui::EndTable();
+        }
+
+        ImGui::Separator();
+
+        // -- El historico que FrameStats ya lleva --
+        const FrameStats& fs = st.stats;
+        ImGui::Text("Frame: %.2f ms  (%.0f FPS)", fs.AvgMs(), fs.AvgFps());
+        ImGui::PlotLines("##frame", fs.History(), fs.HistoryCount(), fs.HistoryOffset(),
+                         nullptr, 0.0f, FLT_MAX, ImVec2(0.0f, 60.0f));
+
+        ImGui::End();
+    }
+
     void drawRenderPanel(EditorContext& ctx) {
         EditorState& st = ctx.state;
 
@@ -927,6 +1034,7 @@ void DrawEditor(EditorContext& ctx) {
     if (ctx.state.showMaterials) DrawMaterialsPanel(ctx);
     if (ctx.state.showRender)    drawRenderPanel(ctx);
     if (ctx.state.showStats)     drawStatsOverlay(ctx, dockId);
+    if (ctx.state.showPerf)      drawPerfPanel(ctx);
 
     DrawSunGizmo(ctx, dockId);
 }

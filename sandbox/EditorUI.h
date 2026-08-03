@@ -62,6 +62,7 @@ namespace sandbox {
         bool showMaterials = true;
         bool showRender    = true;
         bool showStats     = true;
+        bool showPerf      = false;
 
         // Pedido de reconstruir el layout de paneles desde cero. Lo prende el menu
         // "Ventanas" y lo apaga el editor en el mismo frame en que lo atiende.
