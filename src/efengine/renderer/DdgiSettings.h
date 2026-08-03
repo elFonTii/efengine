@@ -24,12 +24,12 @@ namespace renderer {
         // exterior. De ahi salia el light leaking. Lo resuelve la clasificacion
         // por backfaces de abajo; el margen solo reduce cuantos probes la
         // necesitan.
-        DdgiGrid grid { glm::vec3(-3.0f, 0.5f, -3.0f),
-                        glm::vec3(1.5f, 1.0f, 1.5f),
-                        glm::ivec3(5, 4, 5) };
+        DdgiGrid grid { glm::vec3(-21.6f, -27.1f, -43.6f),
+                        glm::vec3(5.35f, 4.55f, 6.0f),
+                        glm::ivec3(10, 16, 18) };
 
         // -- Update --
-        u32  probesPerFrame = 10u;     // se clampea a [0, kMaxProbesPerFrame]
+        u32  probesPerFrame = 14u;     // se clampea a [0, kMaxProbesPerFrame]
         bool freeze         = false;   // congela el round-robin; el sampleo sigue
 
         // Cuanto del valor viejo se conserva. 0.4 y no el 0.97 de la referencia:
@@ -37,7 +37,7 @@ namespace renderer {
         // tardaba varios segundos en reaccionar a mover el sol -- que es
         // exactamente lo que uno hace mientras tunea. El precio es mas ruido
         // temporal, aceptable con la grilla y el conteo de esta escena.
-        f32  hysteresis     = 0.4f;
+        f32  hysteresis     = 0.7f;
 
         // -- Sampleo --
         f32 intensity          = 1.1f;
