@@ -47,45 +47,31 @@ namespace serialization {
         glm::vec2 uvOffset = glm::vec2(0.0f);
     };
 
-    struct MaterialBinding {            // por Array
-        u32 submeshNameStr = 0u;        // Mesh::materialName()
-        u32 materialIndex  = kInvalidIndex;
-    };
-
-    enum class MeshKind : u32 { Path = 0, Generator = 1 };
-
-    struct MeshRecord {
-        MeshKind kind = MeshKind::Path;
-        u32      str  = 0u;             // path del modelo, o nombre del generador
-        std::vector<u8>              genPayload;   // vacio si kind == Path
-        std::vector<MaterialBinding> bindings;
-    };
-
-    enum class LightKindId : u32 { Point = 0, Directional = 1 };
-
-    struct LightRecord {
-        LightKindId kind  = LightKindId::Point;
-        glm::vec3   color = glm::vec3(1.0f);
-    };
-
     struct BehaviorRecord {
         u32 typeNameStr = 0u;
         u32 enabled     = 1u;
         std::vector<u8> payload;
     };
 
-    namespace NodeFlags {
-        inline constexpr u32 HasMesh  = 1u << 0;
-        inline constexpr u32 HasLight = 1u << 1;
-    }
+    // Un adjunto cualquiera, visto por el contenedor: un nombre de tipo y un
+    // blob. El documento NO sabe que es una malla ni una luz -- eso lo sabe el
+    // ComponentRegistry. Un componente nuevo entra al .efe sin tocar este
+    // archivo.
+    //
+    // El payload va por Array, o sea con largo: un tipo que esta build no
+    // conoce se saltea con un warning. Hasta v4 mesh y light iban posicionales
+    // y sin tamano, asi que un adjunto desconocido desalineaba el nodo entero.
+    struct ComponentRecord {
+        u32 typeNameStr = 0u;
+        std::vector<u8> payload;
+    };
 
     struct NodeRecord {
         u32 nameStr = 0u;
         u32 parent  = kInvalidIndex;
         math::Transform local;
-        std::optional<MeshRecord>   mesh;
-        std::optional<LightRecord>  light;
-        std::vector<BehaviorRecord> behaviors;
+        std::vector<ComponentRecord> components;
+        std::vector<BehaviorRecord>  behaviors;
     };
 
     struct SceneDocument {
@@ -110,8 +96,12 @@ namespace serialization {
         if (version >= 3u) return 76u;
         return (version >= 2u) ? 72u : 52u;
     }
-    inline constexpr usize kMinEncodedNode     = 52u;   // 3*u32 + transform(36) + count
-    inline constexpr usize kMinEncodedBehavior = 12u;   // 2*u32 + count del payload
+    // 52 en las dos versiones, por casualidad util: v<=4 era
+    // 3*u32 (name, parent, flags) + transform(36) + count de behaviors, y v5 es
+    // 2*u32 (name, parent) + transform(36) + los counts de components y behaviors.
+    inline constexpr usize kMinEncodedNode      = 52u;
+    inline constexpr usize kMinEncodedBehavior  = 12u;   // 2*u32 + count del payload
+    inline constexpr usize kMinEncodedComponent =  8u;   // u32 + count del payload
 
     template <class Ar>
     void Serialize(Ar& ar, math::Transform& t) {
@@ -166,26 +156,6 @@ namespace serialization {
     }
 
     template <class Ar>
-    void Serialize(Ar& ar, MeshRecord& m) {
-        u32 kind = static_cast<u32>(m.kind);
-        ar.Field(kind);
-        m.kind = (kind == static_cast<u32>(MeshKind::Generator)) ? MeshKind::Generator
-                                                                : MeshKind::Path;
-        ar.Field(m.str);
-        ar.Array(m.genPayload);
-        ar.Array(m.bindings);
-    }
-
-    template <class Ar>
-    void Serialize(Ar& ar, LightRecord& l) {
-        u32 kind = static_cast<u32>(l.kind);
-        ar.Field(kind);
-        l.kind = (kind == static_cast<u32>(LightKindId::Directional))
-                     ? LightKindId::Directional : LightKindId::Point;
-        ar.Field(l.color);
-    }
-
-    template <class Ar>
     void Serialize(Ar& ar, BehaviorRecord& b) {
         ar.Field(b.typeNameStr);
         ar.Field(b.enabled);
@@ -193,32 +163,21 @@ namespace serialization {
     }
 
     template <class Ar>
+    void Serialize(Ar& ar, ComponentRecord& c) {
+        ar.Field(c.typeNameStr);
+        ar.Array(c.payload);
+    }
+
+    // v5 en adelante. Sin un solo 'if' por tipo de adjunto: los flags y los
+    // cuerpos de mesh/light que habia hasta v4 los decodifica el shim legacy de
+    // SceneDocument.cpp, que los sube a components.
+    template <class Ar>
     void Serialize(Ar& ar, NodeRecord& n) {
         ar.Field(n.nameStr);
         ar.Field(n.parent);
-
-        u32 flags = 0u;
-        if (n.mesh)  flags |= NodeFlags::HasMesh;
-        if (n.light) flags |= NodeFlags::HasLight;
-        ar.Field(flags);
-
         Serialize(ar, n.local);
-
-        if (flags & NodeFlags::HasMesh) {
-            if (!n.mesh) n.mesh.emplace();
-            Serialize(ar, *n.mesh);
-        } else {
-            n.mesh.reset();
-        }
-
-        if (flags & NodeFlags::HasLight) {
-            if (!n.light) n.light.emplace();
-            Serialize(ar, *n.light);
-        } else {
-            n.light.reset();
-        }
-
-        SerializeVector(ar, n.behaviors, kMinEncodedBehavior);
+        SerializeVector(ar, n.components, kMinEncodedComponent);
+        SerializeVector(ar, n.behaviors,  kMinEncodedBehavior);
     }
 
     bool WriteSceneDocument(SceneDocument& doc, std::vector<u8>& out);

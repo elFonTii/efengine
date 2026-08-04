@@ -1,9 +1,110 @@
 #include "efengine/serialization/SceneDocument.h"
 #include <efengine/core/Log.h>
+#include <efengine/serialization/ComponentPayloads.h>
+#include <optional>
 #include <utility>
 
 namespace efengine {
 namespace serialization {
+
+    // ---------------------------------------------------------------------------
+    // LEGACY v<=4 -- NO EXTENDER
+    //
+    // Hasta v4 el NodeRecord llevaba un bitfield de flags y los cuerpos de mesh y
+    // light incrustados, posicionales y sin tamano. Desde v5 son ComponentRecords
+    // como cualquier otro adjunto.
+    //
+    // Este es el unico lugar del motor que todavia sabe que existieron mesh y
+    // light como campos del formato. Decodifica el layout viejo y lo sube a
+    // components; de ahi en adelante el resto del pipeline no distingue un .efe
+    // v3 de uno v5. Un componente NUEVO no se agrega aca: se registra en el
+    // ComponentRegistry y ya.
+    //
+    // Los payloads se re-encodean con el mismo SerializePayload que usa el
+    // componente vivo, asi que salen byte a byte iguales al cuerpo original.
+    // ---------------------------------------------------------------------------
+    namespace legacy {
+
+        namespace NodeFlags {
+            inline constexpr u32 HasMesh  = 1u << 0;
+            inline constexpr u32 HasLight = 1u << 1;
+        }
+
+        struct NodeRecordV4 {
+            u32 nameStr = 0u;
+            u32 parent  = kInvalidIndex;
+            math::Transform local;
+            std::optional<MeshPayload>  mesh;
+            std::optional<LightPayload> light;
+            std::vector<BehaviorRecord> behaviors;
+        };
+
+        // Solo lectura: el writer nunca emite este layout.
+        inline void Serialize(BinaryReader& ar, NodeRecordV4& n) {
+            ar.Field(n.nameStr);
+            ar.Field(n.parent);
+
+            u32 flags = 0u;
+            ar.Field(flags);
+
+            serialization::Serialize(ar, n.local);
+
+            if (flags & NodeFlags::HasMesh) {
+                n.mesh.emplace();
+                SerializePayload(ar, *n.mesh);
+            }
+            if (flags & NodeFlags::HasLight) {
+                n.light.emplace();
+                SerializePayload(ar, *n.light);
+            }
+
+            SerializeVector(ar, n.behaviors, kMinEncodedBehavior);
+        }
+
+        // Re-encodea un payload viejo como el blob de un ComponentRecord.
+        template <class Payload>
+        ComponentRecord toComponent(Payload payload, const char* typeName, StringTable& strings) {
+            BinaryWriter w;
+            SerializePayload(w, payload);
+
+            ComponentRecord rec;
+            rec.typeNameStr = strings.Intern(typeName);
+            rec.payload     = w.Take();
+            return rec;
+        }
+
+        NodeRecord upgrade(NodeRecordV4& old, StringTable& strings) {
+            NodeRecord rec;
+            rec.nameStr   = old.nameStr;
+            rec.parent    = old.parent;
+            rec.local     = old.local;
+            rec.behaviors = std::move(old.behaviors);
+
+            // El orden importa: tiene que ser el mismo que el de registro en
+            // RegisterCoreComponents, o abrir y guardar un archivo viejo
+            // cambiaria los bytes de lugar sin cambiar la escena.
+            if (old.mesh) {
+                rec.components.push_back(
+                    toComponent(std::move(*old.mesh), kMeshComponentName, strings));
+            }
+            if (old.light) {
+                rec.components.push_back(
+                    toComponent(*old.light, kLightComponentName, strings));
+            }
+            return rec;
+        }
+
+        void parseNodes(BinaryReader& r, SceneDocument& out) {
+            std::vector<NodeRecordV4> viejos;
+            SerializeVector(r, viejos, kMinEncodedNode);
+            if (!r.Ok()) return;
+
+            out.nodes.clear();
+            out.nodes.reserve(viejos.size());
+            for (NodeRecordV4& v : viejos) out.nodes.push_back(upgrade(v, out.strings));
+        }
+
+    }
 
     void SceneDocument::Clear() {
         strings.Clear();
@@ -85,7 +186,13 @@ namespace serialization {
                     SerializeVector(r, out.materials, MinEncodedMaterial(r.Version()));
                     break;
                 case ChunkId::Nodes:
-                    SerializeVector(r, out.nodes, kMinEncodedNode);
+                    // La unica rama por version del layout de nodos. De aca para
+                    // abajo nadie mas distingue un archivo v3 de uno v5.
+                    if (r.Version() >= 5u) {
+                        SerializeVector(r, out.nodes, kMinEncodedNode);
+                    } else {
+                        legacy::parseNodes(r, out);
+                    }
                     break;
                 default:
                     // Chunk que el build no conoce se saltea entero

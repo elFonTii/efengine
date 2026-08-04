@@ -29,43 +29,24 @@ namespace serialization {
             u32                               sunFileIndex = kInvalidIndex;
         };
 
-        void extractMesh(ExtractCtx& ctx, const scene::MeshAttachment& att, NodeRecord& rec) {
-            rec.mesh.emplace();
-            MeshRecord& mesh = *rec.mesh;
+        // Un loop sobre el registro, sin un 'if' por tipo de adjunto. Que sabe
+        // hacer cada componente vive en su SerializeComponent, no aca.
+        void extractComponents(ExtractCtx& ctx, const scene::Node& node,
+                               scene::NodeHandle handle, NodeRecord& rec) {
+            for (const ComponentRegistry::Entry& entry : ctx.reg.components.All()) {
+                // Un writer nuevo por componente: el payload va como blob con
+                // largo, igual que el de un behavior.
+                BinaryWriter    payload;
+                ComponentWriter ar{ payload, ctx.doc.strings, ctx.assets, ctx.rm,
+                                    node.name.c_str() };
 
-            // Primero se pregunta si es una malla generada (la escena es su duena);
-            // si no, tiene que venir de un path del ResourceManager.
-            const u32 genIndex = ctx.assets.IndexOfGenerated(att.model);
-            if (genIndex != kInvalidIndex) {
-                mesh.kind       = MeshKind::Generator;
-                mesh.str        = ctx.doc.strings.Intern(ctx.assets.GeneratorNameAt(genIndex));
-                mesh.genPayload = ctx.assets.GeneratorPayloadAt(genIndex);
-            } else if (const std::string* path = ctx.rm.PathOf(att.model)) {
-                mesh.kind = MeshKind::Path;
-                mesh.str  = ctx.doc.strings.Intern(*path);
-            } else {
-                EF_LOG_WARNING("SceneSerializer: malla sin path ni generador, se omite");
-                rec.mesh.reset();
-                return;
+                if (!entry.write(ar, ctx.graph.Components(), handle.index)) continue;
+
+                ComponentRecord cr;
+                cr.typeNameStr = ctx.doc.strings.Intern(entry.name);
+                cr.payload     = payload.Take();
+                rec.components.push_back(std::move(cr));
             }
-
-            for (const auto& entry : att.materials) {
-                const u32 matIndex = ctx.assets.IndexOfMaterial(entry.second);
-                if (matIndex == kInvalidIndex) {
-                    EF_LOG_WARNING("SceneSerializer: el material del submesh '%s' no esta "
-                                   "en SceneAssets, se omite", entry.first.c_str());
-                    continue;
-                }
-                mesh.bindings.push_back(MaterialBinding{
-                    ctx.doc.strings.Intern(entry.first), matIndex });
-            }
-
-            // MaterialMap es unordered: sin ordenar, dos guardados dan bytes distintos.
-            std::sort(mesh.bindings.begin(), mesh.bindings.end(),
-                      [&ctx](const MaterialBinding& a, const MaterialBinding& b) {
-                          return ctx.doc.strings.View(a.submeshNameStr)
-                               < ctx.doc.strings.View(b.submeshNameStr);
-                      });
         }
 
         void extractBehaviors(ExtractCtx& ctx, const scene::Node& node, NodeRecord& rec) {
@@ -101,15 +82,7 @@ namespace serialization {
             rec.parent  = parentFileIndex;
             rec.local   = node.local;
 
-            if (const scene::MeshAttachment* mesh = ctx.graph.TryGet<scene::MeshAttachment>(handle)) {
-                extractMesh(ctx, *mesh, rec);
-            }
-            if (const scene::LightAttachment* light = ctx.graph.TryGet<scene::LightAttachment>(handle)) {
-                rec.light.emplace();
-                rec.light->kind  = (light->kind == scene::LightKind::Directional)
-                                       ? LightKindId::Directional : LightKindId::Point;
-                rec.light->color = light->color;
-            }
+            extractComponents(ctx, node, handle, rec);
             extractBehaviors(ctx, node, rec);
 
             // Se empuja ANTES de recursar: eso es lo que garantiza el pre-orden.
@@ -248,57 +221,27 @@ namespace serialization {
             handles.push_back(handle);
             outGraph.SetLocalTransform(handle, rec.local);
 
-            if (rec.mesh) {
-                const std::string ref(doc.strings.View(rec.mesh->str));
-                const renderer::Model* model = null;
-
-                if (rec.mesh->kind == MeshKind::Generator) {
-                    MeshGeneratorRegistry::CreateFn fn = reg.meshes.Find(ref);
-                    if (fn == null) {
-                        EF_LOG_WARNING("SceneSerializer: generador '%s' no registrado, "
-                                       "el nodo '%s' queda sin malla",
-                                       ref.c_str(), name.c_str());
-                    } else {
-                        BinaryReader payloadReader(rec.mesh->genPayload);
-                        std::unique_ptr<renderer::Model> generado = fn(payloadReader);
-                        if (generado == nullptr) {
-                            EF_LOG_WARNING("SceneSerializer: el generador '%s' no produjo "
-                                           "malla para '%s'", ref.c_str(), name.c_str());
-                        } else {
-                            const u32 idx = outAssets.AddGenerated(
-                                ref, rec.mesh->genPayload, std::move(generado));
-                            model = outAssets.GeneratedAt(idx);
-                        }
-                    }
-                } else {
-                    model = rm.GetModel(ref.c_str());
-                    if (model == null) {
-                        EF_LOG_WARNING("SceneSerializer: no se pudo cargar '%s', el nodo "
-                                       "'%s' queda sin malla", ref.c_str(), name.c_str());
-                    }
+            // Espejo de extractComponents: el mismo loop, sin un 'if' por tipo.
+            for (const ComponentRecord& cr : rec.components) {
+                const std::string typeName(doc.strings.View(cr.typeNameStr));
+                const ComponentRegistry::Entry* entry = reg.components.FindByName(typeName);
+                if (entry == null) {
+                    // El payload tiene largo propio, asi que saltearlo no
+                    // desalinea nada: el nodo se carga sin ese adjunto.
+                    EF_LOG_WARNING("SceneSerializer: componente '%s' no registrado, se saltea "
+                                   "(nodo '%s')", typeName.c_str(), name.c_str());
+                    continue;
                 }
 
-                if (model != null) {
-                    renderer::MaterialMap materials;
-                    for (const MaterialBinding& b : rec.mesh->bindings) {
-                        const renderer::Material* m = outAssets.MaterialAt(b.materialIndex);
-                        if (m == null) {
-                            EF_LOG_WARNING("SceneSerializer: binding con material %u "
-                                           "invalido en '%s'", b.materialIndex, name.c_str());
-                            continue;
-                        }
-                        materials[std::string(doc.strings.View(b.submeshNameStr))] = m;
-                    }
-                    outGraph.AttachMesh(handle, scene::MeshAttachment{ model,
-                                                                       std::move(materials) });
-                }
-            }
+                BinaryReader    payloadReader(cr.payload);
+                ComponentReader ar{ payloadReader, doc.strings, outAssets, rm,
+                                    reg.meshes, name.c_str() };
 
-            if (rec.light) {
-                const scene::LightKind kind = (rec.light->kind == LightKindId::Directional)
-                                                  ? scene::LightKind::Directional
-                                                  : scene::LightKind::Point;
-                outGraph.AttachLight(handle, scene::LightAttachment{ kind, rec.light->color });
+                if (!entry->read(ar, outGraph.Components(), handle.index)) continue;
+                if (!payloadReader.Ok()) {
+                    EF_LOG_WARNING("SceneSerializer: payload invalido para '%s' en '%s'",
+                                   typeName.c_str(), name.c_str());
+                }
             }
 
             for (const BehaviorRecord& br : rec.behaviors) {

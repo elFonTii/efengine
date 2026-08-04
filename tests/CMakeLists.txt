@@ -43,6 +43,7 @@ add_executable(efengine_tests
     serialization/EfeFile.test.cpp
     serialization/SceneDocument.test.cpp
     serialization/BehaviorRegistry.test.cpp
+    serialization/ComponentRegistry.test.cpp
     serialization/Truncation.test.cpp
     serialization/SceneSerializer.test.cpp
 )

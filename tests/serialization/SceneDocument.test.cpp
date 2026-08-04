@@ -1,6 +1,9 @@
+#include <cstring>
 #include <ostream>   // doctest lo necesita para stringificar los string_view del CHECK
 #include <doctest/doctest.h>
 #include <efengine/serialization/SceneDocument.h>
+#include <efengine/serialization/ComponentPayloads.h>
+#include <optional>
 #include <efengine/serialization/EfeFile.h>
 #include <vector>
 
@@ -8,6 +11,37 @@ using namespace efengine;
 using namespace efengine::serialization;
 
 namespace {
+
+    // Desde v5 el documento no sabe que es una malla: ve un nombre de tipo y un
+    // blob. Estos dos helpers arman y leen ese blob para poder seguir testeando
+    // el contenido, que es lo que estos tests siempre verificaron.
+    template <class Payload>
+    ComponentRecord componente(Payload p, const char* typeName, StringTable& strings) {
+        BinaryWriter w;
+        SerializePayload(w, p);
+
+        ComponentRecord rec;
+        rec.typeNameStr = strings.Intern(typeName);
+        rec.payload     = w.Take();
+        return rec;
+    }
+
+    template <class Payload>
+    Payload leerPayload(const ComponentRecord& rec) {
+        BinaryReader r(rec.payload);
+        Payload p;
+        SerializePayload(r, p);
+        return p;
+    }
+
+    // Busca el componente de un tipo en un nodo; null si no lo tiene.
+    const ComponentRecord* buscar(const NodeRecord& n, const StringTable& strings,
+                                  const char* typeName) {
+        for (const ComponentRecord& c : n.components) {
+            if (strings.View(c.typeNameStr) == typeName) return &c;
+        }
+        return null;
+    }
     // Documento de referencia usado por varios tests. Cubre las cuatro formas de nodo:
     // raiz pelada, malla por path, malla por generador, y luz; mas behaviors y jerarquia
     // de tres niveles.
@@ -63,11 +97,14 @@ namespace {
         rata.local.position = glm::vec3(1.0f, 2.0f, 3.0f);
         rata.local.rotation = glm::vec3(0.0f, 45.0f, 0.0f);
         rata.local.scale    = glm::vec3(10.0f);
-        rata.mesh.emplace();
-        rata.mesh->kind = MeshKind::Path;
-        rata.mesh->str  = sFbx;
-        rata.mesh->bindings.push_back(MaterialBinding{ sSub1, 0u });
-        rata.mesh->bindings.push_back(MaterialBinding{ sSub2, 0u });
+        {
+            MeshPayload mp;
+            mp.kind = MeshKind::Path;
+            mp.str  = sFbx;
+            mp.bindings.push_back(MaterialBinding{ sSub1, 0u });
+            mp.bindings.push_back(MaterialBinding{ sSub2, 0u });
+            rata.components.push_back(componente(std::move(mp), kMeshComponentName, d.strings));
+        }
         BehaviorRecord b0;
         b0.typeNameStr = sRotar;
         b0.enabled = 1u;
@@ -86,11 +123,14 @@ namespace {
         NodeRecord piso;
         piso.nameStr = sPiso;
         piso.parent  = 0u;
-        piso.mesh.emplace();
-        piso.mesh->kind = MeshKind::Generator;
-        piso.mesh->str  = sGen;
-        piso.mesh->genPayload = { 1u, 2u, 3u, 4u, 5u };   // largo impar a proposito: prueba el padding
-        piso.mesh->bindings.push_back(MaterialBinding{ sGround, 1u });
+        {
+            MeshPayload mp;
+            mp.kind = MeshKind::Generator;
+            mp.str  = sGen;
+            mp.genPayload = { 1u, 2u, 3u, 4u, 5u };   // largo impar a proposito: prueba el padding
+            mp.bindings.push_back(MaterialBinding{ sGround, 1u });
+            piso.components.push_back(componente(std::move(mp), kMeshComponentName, d.strings));
+        }
         d.nodes.push_back(piso);
 
         // --- nodo 4: luz direccional, dos behaviors, uno deshabilitado ---
@@ -98,9 +138,12 @@ namespace {
         sol.nameStr = sSol;
         sol.parent  = 0u;
         sol.local.rotation = glm::vec3(-70.15f, 56.3f, 0.0f);
-        sol.light.emplace();
-        sol.light->kind  = LightKindId::Directional;
-        sol.light->color = glm::vec3(3.0f);
+        {
+            LightPayload lp;
+            lp.kind  = LightKindId::Directional;
+            lp.color = glm::vec3(3.0f);
+            sol.components.push_back(componente(lp, kLightComponentName, d.strings));
+        }
         BehaviorRecord b1;
         b1.typeNameStr = sOrbit;
         b1.enabled = 0u;
@@ -126,6 +169,46 @@ namespace {
         CHECK(a.scale.x == doctest::Approx(b.scale.x));
         CHECK(a.scale.y == doctest::Approx(b.scale.y));
         CHECK(a.scale.z == doctest::Approx(b.scale.z));
+    }
+
+    // --- layout de nodo v<=4, a mano ---------------------------------------
+    // Hasta v4 el nodo llevaba un bitfield de flags y los cuerpos de mesh y luz
+    // incrustados. El writer de produccion ya no sabe emitirlo (desde v5 los
+    // adjuntos son components), asi que los tests de compatibilidad se lo
+    // arman ellos.
+    struct NodoV4 {
+        u32 nameStr = 0u;
+        u32 parent  = kInvalidIndex;
+        math::Transform local;
+        std::optional<MeshPayload>  mesh;
+        std::optional<LightPayload> light;
+        std::vector<BehaviorRecord> behaviors;
+    };
+
+    void escribirNodosV4(BinaryWriter& w, std::vector<NodoV4>& nodos) {
+        u32 count = static_cast<u32>(nodos.size());
+        w.Count(count, kMinEncodedNode);
+        for (NodoV4& n : nodos) {
+            w.Field(n.nameStr);
+            w.Field(n.parent);
+
+            u32 flags = 0u;
+            if (n.mesh)  flags |= 1u << 0;   // NodeFlags::HasMesh
+            if (n.light) flags |= 1u << 1;   // NodeFlags::HasLight
+            w.Field(flags);
+
+            Serialize(w, n.local);
+            if (n.mesh)  SerializePayload(w, *n.mesh);
+            if (n.light) SerializePayload(w, *n.light);
+            SerializeVector(w, n.behaviors, kMinEncodedBehavior);
+        }
+    }
+
+    std::vector<NodoV4> raizSolaV4(u32 nameStr) {
+        NodoV4 root;
+        root.nameStr = nameStr;
+        root.parent  = kInvalidIndex;
+        return { root };
     }
 
     // Arma a mano un .efe v1: header con version 1 y los records con el layout viejo
@@ -185,14 +268,10 @@ namespace {
         w.Field(cutoff);
         EndChunk(w, marker);
 
-        // NODE no cambio entre v1 y v2: se puede usar el helper de produccion.
+        // NODE con el layout de v1: flags + cuerpos incrustados.
         marker = BeginChunk(w, ChunkId::Nodes);
-        std::vector<NodeRecord> nodes;
-        NodeRecord root;
-        root.nameStr = sRoot;
-        root.parent  = kInvalidIndex;
-        nodes.push_back(root);
-        SerializeVector(w, nodes, kMinEncodedNode);
+        std::vector<NodoV4> nodes = raizSolaV4(sRoot);
+        escribirNodosV4(w, nodes);
         EndChunk(w, marker);
 
         return w.Take();
@@ -260,14 +339,10 @@ namespace {
         w.Field(normalStrength);
         EndChunk(w, marker);
 
-        // NODE no cambio entre v2 y v3: se puede usar el helper de produccion.
+        // NODE con el layout de v2: flags + cuerpos incrustados.
         marker = BeginChunk(w, ChunkId::Nodes);
-        std::vector<NodeRecord> nodes;
-        NodeRecord root;
-        root.nameStr = sRoot;
-        root.parent  = kInvalidIndex;
-        nodes.push_back(root);
-        SerializeVector(w, nodes, kMinEncodedNode);
+        std::vector<NodoV4> nodes = raizSolaV4(sRoot);
+        escribirNodosV4(w, nodes);
         EndChunk(w, marker);
 
         return w.Take();
@@ -336,14 +411,90 @@ namespace {
         w.Field(doubleSided);
         EndChunk(w, marker);
 
-        // NODE no cambio entre v3 y v4: se puede usar el helper de produccion.
+        // NODE con el layout de v3: flags + cuerpos incrustados.
         marker = BeginChunk(w, ChunkId::Nodes);
-        std::vector<NodeRecord> nodes;
-        NodeRecord root;
-        root.nameStr = sRoot;
-        root.parent  = kInvalidIndex;
-        nodes.push_back(root);
-        SerializeVector(w, nodes, kMinEncodedNode);
+        std::vector<NodoV4> nodes = raizSolaV4(sRoot);
+        escribirNodosV4(w, nodes);
+        EndChunk(w, marker);
+
+        return w.Take();
+    }
+
+    // Los payloads que se esperan del nodo 1 de documentoV4ConAdjuntos(), para
+    // comparar byte a byte contra lo que produjo el shim.
+    struct AdjuntosV4Esperados {
+        MeshPayload  mesh;
+        LightPayload light;
+    };
+
+    AdjuntosV4Esperados adjuntosEsperados(u32 sFbx, u32 sSub) {
+        AdjuntosV4Esperados e;
+        e.mesh.kind = MeshKind::Path;
+        e.mesh.str  = sFbx;
+        e.mesh.genPayload = { 7u, 8u, 9u };          // largo impar: ejercita el Align4
+        e.mesh.bindings.push_back(MaterialBinding{ sSub, 0u });
+        e.light.kind  = LightKindId::Directional;
+        e.light.color = glm::vec3(1.5f, 2.5f, 3.5f);
+        return e;
+    }
+
+    // Un .efe v4 cuyo nodo 1 tiene malla Y luz a la vez (flags == 3). Esa
+    // combinacion no existe en ninguna escena versionada, asi que es justo el
+    // caso que el formato viejo soportaba pero nadie ejercitaba. Sin materiales:
+    // lo que se testea es el layout del nodo, no el del material.
+    std::vector<u8> documentoV4ConAdjuntos() {
+        BinaryWriter w;
+
+        w.Bytes(kMagic, 4u);
+        u32 endian  = kEndianCheck;
+        u32 version = 4u;
+        u32 content = static_cast<u32>(ContentType::Scene);
+        u32 chunks  = 4u;
+        w.Field(endian);
+        w.Field(version);
+        w.Field(content);
+        w.Field(chunks);
+
+        StringTable strings;
+        const u32 sRoot = strings.Intern("root");
+        const u32 sAmbos = strings.Intern("malla_y_luz");
+        const u32 sFbx  = strings.Intern("assets/models/x.fbx");
+        const u32 sSub  = strings.Intern("submesh");
+
+        usize marker = BeginChunk(w, ChunkId::Strings);
+        strings.Serialize(w);
+        EndChunk(w, marker);
+
+        marker = BeginChunk(w, ChunkId::Settings);
+        f32 iblIntensity = 0.75f;
+        u32 primarySun   = 1u;
+        w.Field(iblIntensity);
+        w.Field(primarySun);
+        EndChunk(w, marker);
+
+        marker = BeginChunk(w, ChunkId::Materials);
+        u32 materialCount = 0u;
+        w.Count(materialCount, MinEncodedMaterial(4u));
+        EndChunk(w, marker);
+
+        marker = BeginChunk(w, ChunkId::Nodes);
+        const AdjuntosV4Esperados esperados = adjuntosEsperados(sFbx, sSub);
+
+        std::vector<NodoV4> nodes = raizSolaV4(sRoot);
+        NodoV4 ambos;
+        ambos.nameStr = sAmbos;
+        ambos.parent  = 0u;
+        ambos.local.position = glm::vec3(4.0f, 5.0f, 6.0f);
+        ambos.mesh  = esperados.mesh;
+        ambos.light = esperados.light;
+        BehaviorRecord b;
+        b.typeNameStr = sRoot;      // el nombre no importa aca, si que sobreviva
+        b.enabled = 0u;
+        b.payload = { 0xDEu, 0xADu };
+        ambos.behaviors.push_back(b);
+        nodes.push_back(ambos);
+
+        escribirNodosV4(w, nodes);
         EndChunk(w, marker);
 
         return w.Take();
@@ -397,39 +548,44 @@ TEST_CASE("EfeSceneDocument: round-trip completo campo por campo") {
     CHECK(dst.strings.View(dst.nodes[2].nameStr) == "nodo_hijo");
 
     // --- nodo 0: sin adjuntos ---
-    CHECK_FALSE(dst.nodes[0].mesh.has_value());
-    CHECK_FALSE(dst.nodes[0].light.has_value());
+    CHECK(dst.nodes[0].components.empty());
     CHECK(dst.nodes[0].behaviors.empty());
 
     // --- nodo 1: malla por path + bindings + transform + behavior ---
     checkTransformEq(dst.nodes[1].local, src.nodes[1].local);
-    REQUIRE(dst.nodes[1].mesh.has_value());
-    CHECK(dst.nodes[1].mesh->kind == MeshKind::Path);
-    CHECK(dst.strings.View(dst.nodes[1].mesh->str) == "assets/models/street_rat_4k.fbx");
-    CHECK(dst.nodes[1].mesh->genPayload.empty());
-    REQUIRE(dst.nodes[1].mesh->bindings.size() == 2u);
-    CHECK(dst.strings.View(dst.nodes[1].mesh->bindings[0].submeshNameStr) == "street_rat");
-    CHECK(dst.nodes[1].mesh->bindings[0].materialIndex == 0u);
-    CHECK(dst.strings.View(dst.nodes[1].mesh->bindings[1].submeshNameStr) == "street_rat_hair");
-    CHECK_FALSE(dst.nodes[1].light.has_value());
+    const ComponentRecord* cMalla = buscar(dst.nodes[1], dst.strings, kMeshComponentName);
+    REQUIRE(cMalla != null);
+    const MeshPayload mallaRata = leerPayload<MeshPayload>(*cMalla);
+    CHECK(mallaRata.kind == MeshKind::Path);
+    CHECK(dst.strings.View(mallaRata.str) == "assets/models/street_rat_4k.fbx");
+    CHECK(mallaRata.genPayload.empty());
+    REQUIRE(mallaRata.bindings.size() == 2u);
+    CHECK(dst.strings.View(mallaRata.bindings[0].submeshNameStr) == "street_rat");
+    CHECK(mallaRata.bindings[0].materialIndex == 0u);
+    CHECK(dst.strings.View(mallaRata.bindings[1].submeshNameStr) == "street_rat_hair");
+    CHECK(buscar(dst.nodes[1], dst.strings, kLightComponentName) == null);
     REQUIRE(dst.nodes[1].behaviors.size() == 1u);
     CHECK(dst.strings.View(dst.nodes[1].behaviors[0].typeNameStr) == "RotarY");
     CHECK(dst.nodes[1].behaviors[0].enabled == 1u);
     CHECK(dst.nodes[1].behaviors[0].payload == src.nodes[1].behaviors[0].payload);
 
     // --- nodo 3: malla por generador con payload de largo impar ---
-    REQUIRE(dst.nodes[3].mesh.has_value());
-    CHECK(dst.nodes[3].mesh->kind == MeshKind::Generator);
-    CHECK(dst.strings.View(dst.nodes[3].mesh->str) == "sandbox.plane");
-    CHECK(dst.nodes[3].mesh->genPayload == src.nodes[3].mesh->genPayload);
-    REQUIRE(dst.nodes[3].mesh->bindings.size() == 1u);
-    CHECK(dst.nodes[3].mesh->bindings[0].materialIndex == 1u);
+    const ComponentRecord* cGen = buscar(dst.nodes[3], dst.strings, kMeshComponentName);
+    REQUIRE(cGen != null);
+    const MeshPayload mallaPiso = leerPayload<MeshPayload>(*cGen);
+    CHECK(mallaPiso.kind == MeshKind::Generator);
+    CHECK(dst.strings.View(mallaPiso.str) == "sandbox.plane");
+    CHECK(mallaPiso.genPayload == std::vector<u8>{ 1u, 2u, 3u, 4u, 5u });
+    REQUIRE(mallaPiso.bindings.size() == 1u);
+    CHECK(mallaPiso.bindings[0].materialIndex == 1u);
 
     // --- nodo 4: luz + dos behaviors, uno deshabilitado ---
-    REQUIRE(dst.nodes[4].light.has_value());
-    CHECK(dst.nodes[4].light->kind == LightKindId::Directional);
-    CHECK(dst.nodes[4].light->color.x == doctest::Approx(3.0f));
-    CHECK_FALSE(dst.nodes[4].mesh.has_value());
+    const ComponentRecord* cLuz = buscar(dst.nodes[4], dst.strings, kLightComponentName);
+    REQUIRE(cLuz != null);
+    const LightPayload luzSol = leerPayload<LightPayload>(*cLuz);
+    CHECK(luzSol.kind == LightKindId::Directional);
+    CHECK(luzSol.color.x == doctest::Approx(3.0f));
+    CHECK(buscar(dst.nodes[4], dst.strings, kMeshComponentName) == null);
     REQUIRE(dst.nodes[4].behaviors.size() == 2u);
     CHECK(dst.nodes[4].behaviors[0].enabled == 0u);
     CHECK(dst.nodes[4].behaviors[0].payload == src.nodes[4].behaviors[0].payload);
@@ -664,4 +820,152 @@ TEST_CASE("SceneDocument: iblIntensity sobrevive el round-trip v2") {
     SceneDocument dst;
     REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), dst));
     CHECK(dst.iblIntensity == doctest::Approx(1.75f));
+}
+
+// ---------------------------------------------------------------------------
+// v<=4 -> v5: mesh y light dejan de ser campos del nodo y pasan a ser
+// componentes. Estos tests anclan el shim: si se rompe, los .efe versionados
+// (sandbox.efe es v3, house.efe es v4) dejan de cargar.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("SceneDocument: un nodo v4 con malla y luz sube a dos componentes") {
+    const std::vector<u8> bytes = documentoV4ConAdjuntos();
+
+    SceneDocument dst;
+    REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), dst));
+
+    REQUIRE(dst.nodes.size() == 2u);
+    CHECK(dst.nodes[0].components.empty());            // la raiz no tenia flags
+
+    const NodeRecord& n = dst.nodes[1];
+    REQUIRE(n.components.size() == 2u);
+
+    // El orden tiene que ser el de registro (malla, luz): si se invirtiera,
+    // abrir y guardar un archivo viejo moveria bytes sin cambiar la escena.
+    CHECK(dst.strings.View(n.components[0].typeNameStr) == kMeshComponentName);
+    CHECK(dst.strings.View(n.components[1].typeNameStr) == kLightComponentName);
+
+    // El resto del nodo cruza intacto.
+    CHECK(dst.strings.View(n.nameStr) == "malla_y_luz");
+    CHECK(n.parent == 0u);
+    CHECK(n.local.position.x == doctest::Approx(4.0f));
+    CHECK(n.local.position.z == doctest::Approx(6.0f));
+    REQUIRE(n.behaviors.size() == 1u);
+    CHECK(n.behaviors[0].enabled == 0u);
+    CHECK(n.behaviors[0].payload == std::vector<u8>{ 0xDEu, 0xADu });
+
+    CHECK(dst.iblIntensity == doctest::Approx(0.75f));
+    CHECK(dst.primarySunNode == 1u);
+}
+
+TEST_CASE("SceneDocument: el payload que produce el shim es el cuerpo v4 tal cual") {
+    const std::vector<u8> bytes = documentoV4ConAdjuntos();
+
+    SceneDocument dst;
+    REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), dst));
+    REQUIRE(dst.nodes.size() == 2u);
+    REQUIRE(dst.nodes[1].components.size() == 2u);
+
+    // Los indices de string sobreviven porque el shim reusa la tabla del
+    // documento: no re-internar nada es lo que mantiene los bytes iguales.
+    const u32 sFbx = dst.strings.Intern("assets/models/x.fbx");
+    const u32 sSub = dst.strings.Intern("submesh");
+    AdjuntosV4Esperados esperados = adjuntosEsperados(sFbx, sSub);
+
+    BinaryWriter wMesh;
+    SerializePayload(wMesh, esperados.mesh);
+    CHECK(dst.nodes[1].components[0].payload == wMesh.Buffer());
+
+    BinaryWriter wLuz;
+    SerializePayload(wLuz, esperados.light);
+    CHECK(dst.nodes[1].components[1].payload == wLuz.Buffer());
+
+    // Y decodifican a los valores originales.
+    const MeshPayload m = leerPayload<MeshPayload>(dst.nodes[1].components[0]);
+    CHECK(m.kind == MeshKind::Path);
+    CHECK(dst.strings.View(m.str) == "assets/models/x.fbx");
+    CHECK(m.genPayload == std::vector<u8>{ 7u, 8u, 9u });
+    REQUIRE(m.bindings.size() == 1u);
+    CHECK(dst.strings.View(m.bindings[0].submeshNameStr) == "submesh");
+
+    const LightPayload l = leerPayload<LightPayload>(dst.nodes[1].components[1]);
+    CHECK(l.kind == LightKindId::Directional);
+    CHECK(l.color.x == doctest::Approx(1.5f));
+    CHECK(l.color.z == doctest::Approx(3.5f));
+}
+
+TEST_CASE("SceneDocument: guardar un archivo v4 lo migra a v5 y queda estable") {
+    const std::vector<u8> viejos = documentoV4ConAdjuntos();
+
+    SceneDocument dst;
+    REQUIRE(ParseSceneDocument(viejos.data(), viejos.size(), dst));
+
+    std::vector<u8> nuevos;
+    REQUIRE(WriteSceneDocument(dst, nuevos));
+
+    // El writer siempre emite la version actual: abrir y guardar migra.
+    u32 version = 0u;
+    std::memcpy(&version, nuevos.data() + 8u, sizeof(u32));
+    CHECK(version == kCurrentVersion);
+
+    // Y el v5 resultante es punto fijo: releerlo y reescribirlo da lo mismo.
+    SceneDocument round;
+    REQUIRE(ParseSceneDocument(nuevos.data(), nuevos.size(), round));
+    std::vector<u8> otraVez;
+    REQUIRE(WriteSceneDocument(round, otraVez));
+    CHECK(otraVez == nuevos);
+}
+
+TEST_CASE("SceneDocument: un componente de tipo desconocido no desalinea el nodo") {
+    // Justo lo que el formato v<=4 no podia hacer: mesh y light iban
+    // posicionales y sin tamano, asi que un adjunto no reconocido se comia el
+    // resto del nodo. Con el payload dimensionado se puede saltear.
+    SceneDocument src;
+
+    NodeRecord root;
+    root.nameStr = src.strings.Intern("root");
+    root.parent  = kInvalidIndex;
+    src.nodes.push_back(root);
+
+    NodeRecord n;
+    n.nameStr = src.strings.Intern("del_futuro");
+    n.parent  = 0u;
+    n.local.position = glm::vec3(9.0f, 8.0f, 7.0f);
+
+    LightPayload lp;
+    lp.kind  = LightKindId::Point;
+    lp.color = glm::vec3(11.0f);
+    n.components.push_back(componente(lp, kLightComponentName, src.strings));
+
+    // Un componente que este build no conoce, con un payload de largo impar.
+    ComponentRecord futuro;
+    futuro.typeNameStr = src.strings.Intern("cliente.rigidbody");
+    futuro.payload     = { 1u, 2u, 3u, 4u, 5u, 6u, 7u };
+    n.components.push_back(futuro);
+
+    BehaviorRecord b;
+    b.typeNameStr = src.strings.Intern("Girar");
+    b.payload = { 0x11u, 0x22u };
+    n.behaviors.push_back(b);
+    src.nodes.push_back(n);
+
+    std::vector<u8> bytes;
+    REQUIRE(WriteSceneDocument(src, bytes));
+
+    SceneDocument dst;
+    REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), dst));
+
+    REQUIRE(dst.nodes.size() == 2u);
+    const NodeRecord& d = dst.nodes[1];
+
+    // El desconocido viaja entero, sin interpretarse.
+    REQUIRE(d.components.size() == 2u);
+    CHECK(dst.strings.View(d.components[1].typeNameStr) == "cliente.rigidbody");
+    CHECK(d.components[1].payload == std::vector<u8>{ 1u, 2u, 3u, 4u, 5u, 6u, 7u });
+
+    // Y lo que viene DESPUES del desconocido sigue alineado.
+    REQUIRE(d.behaviors.size() == 1u);
+    CHECK(dst.strings.View(d.behaviors[0].typeNameStr) == "Girar");
+    CHECK(d.behaviors[0].payload == std::vector<u8>{ 0x11u, 0x22u });
+    CHECK(d.local.position.x == doctest::Approx(9.0f));
 }

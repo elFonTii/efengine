@@ -22,7 +22,11 @@ namespace serialization {
     // MaterialRecord y cambia el significado del primer f32 del chunk SCNE
     // (ambientFactor -> iblIntensity). v3 agrega doubleSided al MaterialRecord.
     // v4 agrega uvTiling/uvOffset al MaterialRecord.
-    inline constexpr u32 kCurrentVersion      = 4u;
+    // v5 reemplaza el bitfield de flags + los cuerpos de mesh y light del
+    // NodeRecord por un array de componentes {nombre de tipo, payload con
+    // largo}: un adjunto de un tipo que este build no conoce se saltea en vez de
+    // desalinear el nodo. Los v<=4 los sube el shim de SceneDocument.cpp.
+    inline constexpr u32 kCurrentVersion      = 5u;
 
     // Version mas vieja que esta build todavia sabe leer. Se escribe SIEMPRE
     // kCurrentVersion: leer v1 es solo para no dejar ilegibles las escenas guardadas.

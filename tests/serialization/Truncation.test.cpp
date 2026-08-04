@@ -1,11 +1,24 @@
 #include <doctest/doctest.h>
 #include <efengine/serialization/SceneDocument.h>
+#include <efengine/serialization/ComponentPayloads.h>
+#include <utility>
 #include <vector>
 
 using namespace efengine;
 using namespace efengine::serialization;
 
 namespace {
+    template <class Payload>
+    ComponentRecord componente(Payload p, const char* typeName, StringTable& strings) {
+        BinaryWriter w;
+        SerializePayload(w, p);
+
+        ComponentRecord rec;
+        rec.typeNameStr = strings.Intern(typeName);
+        rec.payload     = w.Take();
+        return rec;
+    }
+
     // Documento chico pero con las cuatro formas de nodo, para que el archivo tenga
     // strings, materiales, bindings, payloads y luces que se puedan cortar por el medio.
     std::vector<u8> bytesValidos() {
@@ -39,9 +52,12 @@ namespace {
         NodeRecord conMalla;
         conMalla.nameStr = sSub;
         conMalla.parent  = 0u;
-        conMalla.mesh.emplace();
-        conMalla.mesh->str = sMalla;
-        conMalla.mesh->bindings.push_back(MaterialBinding{ sSub, 0u });
+        {
+            MeshPayload mp;
+            mp.str = sMalla;
+            mp.bindings.push_back(MaterialBinding{ sSub, 0u });
+            conMalla.components.push_back(componente(std::move(mp), kMeshComponentName, d.strings));
+        }
         BehaviorRecord b;
         b.typeNameStr = sBeh;
         b.payload = { 1u, 2u, 3u };
@@ -51,8 +67,11 @@ namespace {
         NodeRecord conLuz;
         conLuz.nameStr = sLuz;
         conLuz.parent  = 1u;
-        conLuz.light.emplace();
-        conLuz.light->kind = LightKindId::Directional;
+        {
+            LightPayload lp;
+            lp.kind = LightKindId::Directional;
+            conLuz.components.push_back(componente(lp, kLightComponentName, d.strings));
+        }
         d.nodes.push_back(conLuz);
 
         d.primarySunNode = 2u;
