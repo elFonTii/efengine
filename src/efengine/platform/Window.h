@@ -51,6 +51,12 @@ namespace platform {
 
             void SetEventListener(IEventListener* listener);
 
+            // El vsync clava el frame en el refresco del monitor: con esto
+            // prendido, ninguna optimizacion se ve en los milisegundos porque la
+            // diferencia se la come la espera del swap.
+            void SetVSync(bool enabled);
+            bool IsVSync() const { return m_vsync; }
+
 
         private:
         GLFWwindow* m_handle = null;
@@ -58,6 +64,7 @@ namespace platform {
         u32 m_height = 0;
         IEventListener* m_listener = null;
         bool m_cursorCaptured = false;
+        bool m_vsync = true;
 
         static void OnFramebufferResize(GLFWwindow* handle, int width, int height);
         static void OnCursorPos(GLFWwindow* handle, double xpos, double ypos);

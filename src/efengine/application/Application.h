@@ -20,6 +20,7 @@
 #include <efengine/renderer/DdgiDebugPass.h>
 #include <efengine/renderer/AoPass.h>
 #include <efengine/renderer/SceneLighting.h>
+#include <efengine/renderer/GpuProfiler.h>
 #include <optional>
 
 namespace efengine {
@@ -35,6 +36,7 @@ namespace application {
 
             platform::Window&   GetWindow()   { return m_window; }
             renderer::Renderer& GetRenderer() { return m_renderer; }
+            renderer::GpuProfiler& GetProfiler() { return m_profiler; }
             resources::ResourceManager& GetResources() { return m_resources; }
             core::Time& GetTime() { return m_time; }
             const platform::Input& GetInput() const { return m_input; }
@@ -72,6 +74,8 @@ namespace application {
             renderer::Context  m_context; // 2
             renderer::Framebuffer m_sceneFB; // 3
             renderer::Renderer m_renderer; // 4
+            // Despues de m_renderer: crea consultas de GL en el ctor.
+            renderer::GpuProfiler m_profiler;
             resources::ResourceManager m_resources; // 5
             application::DebugUI m_debugUI;
             renderer::VertexArray m_fullscreenQuad; // 6

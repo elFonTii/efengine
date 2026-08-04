@@ -152,6 +152,8 @@ namespace efecom {
         // lo escribe: un clear cambia las mascaras y el cache tiene que enterarse.
         PipelineState g_state;
         bool          g_stateValid = false;
+
+        FrameCounters g_counters;
     }
 
     void Clear(ClearMask mask) {
@@ -227,7 +229,19 @@ namespace efecom {
 
     void ResetPipelineStateCache() { g_stateValid = false; }
 
+    void ResetFrameCounters() { g_counters = FrameCounters{}; }
+
+    FrameCounters GetFrameCounters() { return g_counters; }
+
+    u32 GetDrawCallCount() { return g_counters.drawCalls; }
+
     void ApplyPipelineState(const PipelineState& s) {
+        ++g_counters.stateApplies;
+        // El operator== de PipelineState ya existe (RHI.h). Si el cache es
+        // valido y el estado pedido es identico al vigente, esta llamada no va a
+        // emitir una sola instruccion de GL: es puro overhead de CPU.
+        if (g_stateValid && s == g_state) ++g_counters.stateRedundant;
+
         const bool all = !g_stateValid;
 
         if (all || s.depthTest != g_state.depthTest) {
@@ -480,6 +494,7 @@ namespace efecom {
 
     // ── Compute ────────────────────────────────────────────────────────────
     void DispatchCompute(u32 groupsX, u32 groupsY, u32 groupsZ) {
+        ++g_counters.dispatches;
         glDispatchCompute(groupsX, groupsY, groupsZ);
     }
 
@@ -571,12 +586,57 @@ namespace efecom {
         glNamedFramebufferRenderbuffer(framebuffer, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, renderbuffer);
     }
 
+    // ── Consultas de marca de tiempo ───────────────────────────────────────
+    bool TimestampQueriesSupported() {
+        // GL_TIMESTAMP es core desde 3.3, pero un driver puede reportar cero
+        // bits de contador, que significa "la implemento pero no la mide". Ese,
+        // y no la version de GL, es el chequeo correcto.
+        GLint bits = 0;
+        glGetQueryiv(GL_TIMESTAMP, GL_QUERY_COUNTER_BITS, &bits);
+        return bits > 0;
+    }
+
+    u32 CreateTimestampQuery() {
+        u32 id = 0;
+        glCreateQueries(GL_TIMESTAMP, 1, &id);   // GL 4.5 DSA, igual que el resto del backend
+        EFCOM_ASSERT(id != 0, "CreateTimestampQuery: glCreateQueries fallo (sin contexto GL)");
+        return id;
+    }
+
+    void DestroyTimestampQuery(u32 query) {
+        if (query == 0) return;
+        glDeleteQueries(1, &query);
+    }
+
+    void WriteTimestamp(u32 query) {
+        if (query == 0) return;
+        glQueryCounter(query, GL_TIMESTAMP);
+    }
+
+    bool TimestampAvailable(u32 query) {
+        if (query == 0) return false;
+        GLint listo = GL_FALSE;
+        glGetQueryObjectiv(query, GL_QUERY_RESULT_AVAILABLE, &listo);
+        return listo == GL_TRUE;
+    }
+
+    u64 TimestampNanos(u32 query) {
+        if (query == 0) return 0ull;
+        GLuint64 nanos = 0;
+        glGetQueryObjectui64v(query, GL_QUERY_RESULT, &nanos);
+        return static_cast<u64>(nanos);
+    }
+
     // ── Draw ───────────────────────────────────────────────────────────────
     void DrawIndexed(u32 indexCount) {
+        ++g_counters.drawCalls;
+        g_counters.triangles += indexCount / 3u;
         glDrawElements(GL_TRIANGLES, (GLsizei)indexCount, GL_UNSIGNED_INT, nullptr);
     }
 
     void DrawArrays(u32 vertexCount) {
+        ++g_counters.drawCalls;
+        g_counters.triangles += vertexCount / 3u;
         glDrawArrays(GL_TRIANGLES, 0, (GLsizei)vertexCount);
     }
 
