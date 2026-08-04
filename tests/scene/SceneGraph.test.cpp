@@ -271,12 +271,12 @@ TEST_CASE("SceneGraph::DetachMesh saca la malla y deja hijos y luz intactos") {
     scene::NodeHandle hijo = g.CreateChild(h, "hijo");
     g.AttachMesh(h, { &model, {} });
     g.AttachLight(h, { scene::LightKind::Point, glm::vec3(1.0f) });
-    REQUIRE(g.Get(h).mesh.has_value());
+    REQUIRE(g.Has<scene::MeshAttachment>(h));
 
     g.DetachMesh(h);
 
-    CHECK_FALSE(g.Get(h).mesh.has_value());
-    CHECK(g.Get(h).light.has_value());          // la luz no se toca
+    CHECK_FALSE(g.Has<scene::MeshAttachment>(h));
+    CHECK(g.Has<scene::LightAttachment>(h));    // la luz no se toca
     REQUIRE(g.Get(h).children.size() == 1u);    // los hijos tampoco
     CHECK(g.Get(h).children[0] == hijo);
 }
@@ -302,7 +302,55 @@ TEST_CASE("SceneGraph::DetachMesh es no-op con handle invalido o nodo sin malla"
     g.DetachMesh(scene::NodeHandle{});          // handle nulo: no debe abortar
     scene::NodeHandle h = g.CreateNode("pelado");
     g.DetachMesh(h);
-    CHECK_FALSE(g.Get(h).mesh.has_value());
+    CHECK_FALSE(g.Has<scene::MeshAttachment>(h));
+}
+
+TEST_CASE("SceneGraph: un indice reusado no hereda los adjuntos del nodo muerto") {
+    scene::SceneGraph g;
+    renderer::Model model = MakeEmptyModelSG();
+
+    scene::NodeHandle viejo = g.CreateNode("conMalla");
+    g.AttachMesh(viejo, { &model, {} });
+    g.AttachLight(viejo, { scene::LightKind::Point, glm::vec3(1.0f) });
+    const u32 indice = viejo.index;
+
+    g.Destroy(viejo);
+    scene::NodeHandle nuevo = g.CreateNode("pelado");
+    REQUIRE(nuevo.index == indice);             // el free list reciclo la ranura
+
+    CHECK_FALSE(g.Has<scene::MeshAttachment>(nuevo));
+    CHECK_FALSE(g.Has<scene::LightAttachment>(nuevo));
+
+    g.UpdateWorldTransforms();
+    CHECK(g.Renderables().empty());
+    CHECK(g.PointLights().empty());
+}
+
+TEST_CASE("SceneGraph::DetachLight saca la luz y deja la malla intacta") {
+    scene::SceneGraph g;
+    renderer::Model model = MakeEmptyModelSG();
+
+    scene::NodeHandle h = g.CreateNode("ambos");
+    g.AttachMesh(h, { &model, {} });
+    g.AttachLight(h, { scene::LightKind::Point, glm::vec3(1.0f) });
+
+    g.DetachLight(h);
+
+    CHECK_FALSE(g.Has<scene::LightAttachment>(h));
+    CHECK(g.Has<scene::MeshAttachment>(h));
+
+    g.UpdateWorldTransforms();
+    CHECK(g.PointLights().empty());
+    CHECK(g.Renderables().size() == 1u);
+}
+
+TEST_CASE("SceneGraph::DetachLight es no-op con handle invalido o nodo sin luz") {
+    scene::SceneGraph g;
+
+    g.DetachLight(scene::NodeHandle{});
+    scene::NodeHandle h = g.CreateNode("pelado");
+    g.DetachLight(h);
+    CHECK_FALSE(g.Has<scene::LightAttachment>(h));
 }
 
 // ---------------------------------------------------------------------------

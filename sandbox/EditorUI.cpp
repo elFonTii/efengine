@@ -344,9 +344,13 @@ namespace {
                 flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
             if (h == st.selected) flags |= ImGuiTreeNodeFlags_Selected;
 
-            // Marca de que adjunto tiene el nodo: malla, luz, o si es solo transform.
-            const char* tag = node.mesh ? "[M]" : (node.light ? "[L]" : "[T]");
-            // Los behaviors no son exclusivos con malla/luz, van como sufijo aparte.
+            // Marca de que adjuntos tiene el nodo. Malla y luz NO son exclusivas:
+            // el ternario de antes escondia la luz de un nodo que tenia las dos.
+            const bool tieneMalla = ctx.scene.Has<scene::MeshAttachment>(h);
+            const bool tieneLuz   = ctx.scene.Has<scene::LightAttachment>(h);
+            const char* tag = tieneMalla ? (tieneLuz ? "[ML]" : "[M]")
+                                         : (tieneLuz ? "[L]"  : "[T]");
+            // Los behaviors tampoco son exclusivos, van como sufijo aparte.
             const char* behTag = node.behaviors.empty() ? "" : " [B]";
 
             ImGui::PushID((int)h.index);
@@ -486,13 +490,15 @@ namespace {
             }
         }
 
-        if (node.light) {
+        if (scene::LightAttachment* light = ctx.scene.TryGet<scene::LightAttachment>(st.selected)) {
             ImGui::SeparatorText("Luz");
-            const char* kindName = node.light->kind == scene::LightKind::Point ? "Point" : "Directional";
-            ImGui::TextDisabled("tipo: %s", kindName);
-            const f32 maxInt = node.light->kind == scene::LightKind::Point ? 20000.0f : 20.0f;
-            const f32 speed  = node.light->kind == scene::LightKind::Point ? 10.0f    : 0.05f;
-            ImGui::DragFloat3("Color/Int", glm::value_ptr(node.light->color), speed, 0.0f, maxInt);
+            const bool esPunto = light->kind == scene::LightKind::Point;
+            ImGui::TextDisabled("tipo: %s", esPunto ? "Point" : "Directional");
+            const f32 maxInt = esPunto ? 20000.0f : 20.0f;
+            const f32 speed  = esPunto ? 10.0f    : 0.05f;
+            // Se escribe en el sitio, adentro del array del store. Vale mientras
+            // no se adjunte ni se saque una luz en este mismo frame de UI.
+            ImGui::DragFloat3("Color/Int", glm::value_ptr(light->color), speed, 0.0f, maxInt);
         }
         }
 
@@ -1001,8 +1007,9 @@ void FocusSelection(EditorContext& ctx) {
     // node.worldMatrix es derivado y se recalcula en scene.Update(), que en el
     // loop corre DESPUES de esto: se usa la matriz del frame anterior. Un frame
     // de retraso en un encuadre no se percibe.
-    if (node.mesh && node.mesh->model && node.mesh->model->bounds().Valid()) {
-        const renderer::AABB mundo = node.mesh->model->bounds().Transformed(node.worldMatrix);
+    const scene::MeshAttachment* mesh = ctx.scene.TryGet<scene::MeshAttachment>(st.selected);
+    if (mesh && mesh->model && mesh->model->bounds().Valid()) {
+        const renderer::AABB mundo = mesh->model->bounds().Transformed(node.worldMatrix);
         ctx.controller.Focus(mundo.Center(), mundo.Radius());
     } else {
         // Nodo pelado, luz, o modelo sin submeshes: no hay AABB del que sacar

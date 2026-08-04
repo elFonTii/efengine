@@ -21,6 +21,12 @@ namespace scene {
             m_slots[index].generation = 0;
         }
 
+        // Los componentes viven fuera del Slot, asi que "slot.node = Node{}" no
+        // los limpia: hay que borrarlos a mano o el inquilino nuevo hereda los
+        // adjuntos del muerto que uso este indice antes.
+        m_components.Reserve(m_slots.size());
+        m_components.ResetNode(index);
+
         Slot& slot = m_slots[index];
         slot.alive = true;
         if(slot.generation == 0) { slot.generation = 1; }
@@ -134,18 +140,19 @@ namespace scene {
     }
 
     void SceneGraph::AttachMesh(NodeHandle handle, MeshAttachment mesh) {
-        EF_ASSERT(IsValid(handle), "SceneGraph::AttachMesh: handle invalido");
-        m_slots[handle.index].node.mesh = std::move(mesh);
+        Attach<MeshAttachment>(handle, std::move(mesh));
     }
 
     void SceneGraph::DetachMesh(NodeHandle handle) {
-        if (!IsValid(handle)) return;
-        m_slots[handle.index].node.mesh.reset();
+        Detach<MeshAttachment>(handle);
     }
 
     void SceneGraph::AttachLight(NodeHandle handle, LightAttachment light) {
-        EF_ASSERT(IsValid(handle), "SceneGraph::AttachLight: handle invalido");
-        m_slots[handle.index].node.light = light;
+        Attach<LightAttachment>(handle, light);
+    }
+
+    void SceneGraph::DetachLight(NodeHandle handle) {
+        Detach<LightAttachment>(handle);
     }
 
     Behavior* SceneGraph::AttachBehavior(NodeHandle handle, std::unique_ptr<Behavior> behavior) {
@@ -190,12 +197,13 @@ namespace scene {
 
         // Sol: direccion desde el world del nodo primario; color desde su adjunto.
         if (IsValid(m_primarySun)) {
-            const Node& sun = m_slots[m_primarySun.index].node;
-            if (sun.light && sun.light->kind == LightKind::Directional) {
+            const Node&             sun   = m_slots[m_primarySun.index].node;
+            const LightAttachment*  light = m_components.TryGet<LightAttachment>(m_primarySun.index);
+            if (light != null && light->kind == LightKind::Directional) {
                 // w=0 anula la traslacion: una direccion no tiene posicion.
                 glm::vec3 fwd = glm::vec3(sun.worldMatrix * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f));
                 if (glm::length(fwd) > 0.0f) m_sun.direction = glm::normalize(fwd);
-                m_sun.color = sun.light->color;
+                m_sun.color = light->color;
             }
         }
     }
@@ -208,12 +216,15 @@ namespace scene {
             node.worldDirty = false;
         }
 
-        if (node.mesh && node.mesh->model) {
-            m_renderables.push_back(RenderItem{ node.worldMatrix, node.mesh->model, &node.mesh->materials });
+        const MeshAttachment* mesh = m_components.TryGet<MeshAttachment>(handle.index);
+        if (mesh != null && mesh->model != null) {
+            m_renderables.push_back(RenderItem{ node.worldMatrix, mesh->model, &mesh->materials });
         }
-        if (node.light && node.light->kind == LightKind::Point) {
+
+        const LightAttachment* light = m_components.TryGet<LightAttachment>(handle.index);
+        if (light != null && light->kind == LightKind::Point) {
             // La columna 3 de la matriz world es la traslacion.
-            m_pointLights.push_back(renderer::PointLight{ glm::vec3(node.worldMatrix[3]), node.light->color });
+            m_pointLights.push_back(renderer::PointLight{ glm::vec3(node.worldMatrix[3]), light->color });
         }
 
         for (NodeHandle child : node.children) {
@@ -245,6 +256,7 @@ namespace scene {
             }
             slot.node = Node{};     // libera los behaviors
         }
+        m_components.Clear();       // y esto libera los adjuntos
 
         // Se hace pop_back, asi se comienza desde el indice 0 (root node)
         m_freeList.clear();
@@ -272,6 +284,10 @@ namespace scene {
         slot.generation++;
         m_freeList.push_back(handle.index);
         slot.node.behaviors.clear();
+        // Sin esto la malla y su MaterialMap sobreviven en un indice muerto
+        // hasta que allocate() lo reuse. Con los adjuntos afuera del Node no
+        // alcanza con limpiar el Slot.
+        m_components.ResetNode(handle.index);
     }
 
     bool SceneGraph::IsValid(NodeHandle handle) const {

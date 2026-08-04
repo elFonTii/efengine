@@ -1,8 +1,11 @@
 #pragma once
 #include <efengine/scene/Node.h>
+#include <efengine/scene/Components.h>
+#include <efengine/scene/ComponentStore.h>
 #include <efengine/renderer/PointLight.h>
 #include <efengine/renderer/DirectionalLight.h>
 #include <efengine/renderer/Bounds.h>
+#include <efengine/core/Assert.h>
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -64,15 +67,51 @@ namespace scene {
             // Transforms
             void UpdateWorldTransforms();
 
-            // Adjuntos
+            // Adjuntos (componentes)
+            //
+            // La forma generica: un tipo nuevo de adjunto no agrega metodos aca.
+            // Attach assertea con handle invalido (adjuntar a un nodo muerto es
+            // un bug del caller); Detach y las consultas son no-op silencioso,
+            // porque la UI puede preguntar por un nodo que ya se destruyo.
+            template <class T>
+            void Attach(NodeHandle handle, T value) {
+                EF_ASSERT(IsValid(handle), "SceneGraph::Attach: handle invalido");
+                m_components.Set<T>(handle.index, std::move(value));
+            }
+
+            template <class T>
+            void Detach(NodeHandle handle) {
+                if (!IsValid(handle)) return;
+                m_components.Remove<T>(handle.index);
+            }
+
+            // El puntero apunta adentro del array del store: no sobrevive a un
+            // Attach/Detach de ESE tipo, ni a Clear. Ver ComponentStore.h.
+            template <class T>
+            T* TryGet(NodeHandle handle) {
+                if (!IsValid(handle)) return null;
+                return m_components.TryGet<T>(handle.index);
+            }
+
+            template <class T>
+            const T* TryGet(NodeHandle handle) const {
+                if (!IsValid(handle)) return null;
+                return m_components.TryGet<T>(handle.index);
+            }
+
+            template <class T>
+            bool Has(NodeHandle handle) const { return TryGet<T>(handle) != null; }
+
+            // El serializador recorre el store por tipo registrado, sin conocerlos.
+            ComponentStore&       Components()       { return m_components; }
+            const ComponentStore& Components() const { return m_components; }
+
+            // Envoltorios por comodidad sobre los dos componentes del motor. No
+            // hacen nada que Attach<T>/Detach<T> no haga.
             void AttachMesh(NodeHandle handle, MeshAttachment mesh);
-
-            // Saca la malla del nodo. No toca hijos, luz ni behaviors. Handle
-            // invalido o nodo sin malla: no-op silencioso (la UI puede pedirlo
-            // sobre un nodo que ya se destruyo).
             void DetachMesh(NodeHandle handle);
-
             void AttachLight(NodeHandle handle, LightAttachment light);
+            void DetachLight(NodeHandle handle);
 
             // Behaviors
             Behavior* AttachBehavior(NodeHandle handle, std::unique_ptr<Behavior> behavior);
@@ -110,6 +149,7 @@ namespace scene {
             
             std::vector<Slot> m_slots;
             std::vector<u32>  m_freeList;
+            ComponentStore    m_components;   // paralelo a m_slots, por indice de nodo
             NodeHandle        m_root;
 
             // Estado juntado por UpdateWorldTransforms

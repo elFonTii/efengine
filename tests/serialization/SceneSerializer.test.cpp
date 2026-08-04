@@ -135,11 +135,13 @@ TEST_CASE("EfeSceneSerializer: round-trip de jerarquia, transforms, luces y beha
     CHECK(glm::vec3(destino.Get(hijo).worldMatrix[3]).y == doctest::Approx(52.0f));  // 2 + 5*10
 
     // --- luces ---
-    REQUIRE(destino.Get(luz).light.has_value());
-    CHECK(destino.Get(luz).light->kind == scene::LightKind::Point);
-    CHECK(destino.Get(luz).light->color.x == doctest::Approx(5000.0f));
-    REQUIRE(destino.Get(sol).light.has_value());
-    CHECK(destino.Get(sol).light->kind == scene::LightKind::Directional);
+    const scene::LightAttachment* luzPunto = destino.TryGet<scene::LightAttachment>(luz);
+    REQUIRE(luzPunto != null);
+    CHECK(luzPunto->kind == scene::LightKind::Point);
+    CHECK(luzPunto->color.x == doctest::Approx(5000.0f));
+    const scene::LightAttachment* luzSol = destino.TryGet<scene::LightAttachment>(sol);
+    REQUIRE(luzSol != null);
+    CHECK(luzSol->kind == scene::LightKind::Directional);
 
     // --- sol primario ---
     CHECK(destino.PrimarySun() == sol);
@@ -209,7 +211,7 @@ TEST_CASE("EfeSceneSerializer: un behavior con tipo no registrado se saltea al c
 
     CHECK(destino.Get(actor).behaviors.size() == 1u);   // el conocido si se cargo
     CHECK(destino.Get(luz).behaviors.empty());          // el desconocido se salteo
-    CHECK(destino.Get(luz).light.has_value());          // y el resto del nodo quedo intacto
+    CHECK(destino.Has<scene::LightAttachment>(luz));    // y el resto del nodo quedo intacto
 }
 
 TEST_CASE("EfeSceneSerializer: un behavior sin registrar al guardar no rompe el archivo") {

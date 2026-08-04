@@ -101,12 +101,14 @@ namespace serialization {
             rec.parent  = parentFileIndex;
             rec.local   = node.local;
 
-            if (node.mesh) extractMesh(ctx, *node.mesh, rec);
-            if (node.light) {
+            if (const scene::MeshAttachment* mesh = ctx.graph.TryGet<scene::MeshAttachment>(handle)) {
+                extractMesh(ctx, *mesh, rec);
+            }
+            if (const scene::LightAttachment* light = ctx.graph.TryGet<scene::LightAttachment>(handle)) {
                 rec.light.emplace();
-                rec.light->kind  = (node.light->kind == scene::LightKind::Directional)
+                rec.light->kind  = (light->kind == scene::LightKind::Directional)
                                        ? LightKindId::Directional : LightKindId::Point;
-                rec.light->color = node.light->color;
+                rec.light->color = light->color;
             }
             extractBehaviors(ctx, node, rec);
 

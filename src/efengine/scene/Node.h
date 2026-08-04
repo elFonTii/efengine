@@ -2,31 +2,17 @@
 #include <efengine/scene/NodeHandle.h>
 #include <efengine/scene/Behavior.h>
 #include <efengine/math/Transform.h>
-#include <efengine/renderer/Model.h>
-#include <efengine/renderer/Material.h>
 
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
-#include <optional>
 #include <memory>
 
 namespace efengine {
 namespace scene {
-    enum class LightKind { Point, Directional };
-
-    struct MeshAttachment { 
-        const renderer::Model* model = nullptr;
-        renderer::MaterialMap  materials;
-    };
-
-    struct LightAttachment {
-        LightKind kind = LightKind::Point;
-        glm::vec3 color { 1.0f };
-    };
 
     class Node {
-        public: 
+        public:
             NodeHandle self;
             std::string name;
 
@@ -37,9 +23,10 @@ namespace scene {
             NodeHandle              parent;
             std::vector<NodeHandle> children;
 
-            // con esta estructura podemos expandir a X attachments (scripts, colliders, etc...)
-            std::optional<MeshAttachment> mesh;
-            std::optional<LightAttachment> light;
+            // Los adjuntos (mesh, light, y los que vengan) NO estan aca: viven en
+            // el ComponentStore del SceneGraph, indexados por self.index. Un tipo
+            // nuevo de adjunto no toca este archivo. Los behaviors si se quedan:
+            // son polimorficos y con dueno unico, no datos planos por nodo.
             std::vector<std::unique_ptr<Behavior>> behaviors;
 
             Node()                       = default;

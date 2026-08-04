@@ -32,6 +32,7 @@ add_executable(efengine_tests
     resources/ResourceManager.test.cpp
     resources/SceneAssets.test.cpp
     scene/NodeHandle.test.cpp
+    scene/ComponentStore.test.cpp
     scene/SceneGraph.test.cpp
     scene/Camera.test.cpp
     scene/CameraController.test.cpp

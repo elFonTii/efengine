@@ -261,12 +261,11 @@ void DrawMeshSection(EditorContext& ctx, scene::NodeHandle handle) {
     EditorState& st = ctx.state;
     if (!ctx.scene.IsValid(handle)) return;
 
-    scene::Node& node = ctx.scene.Get(handle);
-
     ImGui::SeparatorText("Malla");
 
-    if (node.mesh && node.mesh->model) {
-        const std::string* path = ctx.rm.PathOf(node.mesh->model);
+    scene::MeshAttachment* mesh = ctx.scene.TryGet<scene::MeshAttachment>(handle);
+    if (mesh && mesh->model) {
+        const std::string* path = ctx.rm.PathOf(mesh->model);
         ImGui::TextDisabled("%s", path ? path->c_str() : "(malla generada)");
 
         if (ImGui::Button("Quitar malla")) {
@@ -278,8 +277,10 @@ void DrawMeshSection(EditorContext& ctx, scene::NodeHandle handle) {
             ImGui::TextDisabled("(no se puede volver a adjuntar desde el editor)");
         }
 
-        for (const std::string& submesh : nombresDeSubmesh(*node.mesh->model)) {
-            dibujarComboDeMaterial(ctx, *node.mesh, submesh);
+        // 'mesh' apunta adentro del store; nada de aca adelante adjunta ni saca
+        // componentes, asi que sigue siendo valido hasta el final de la seccion.
+        for (const std::string& submesh : nombresDeSubmesh(*mesh->model)) {
+            dibujarComboDeMaterial(ctx, *mesh, submesh);
         }
         return;
     }
