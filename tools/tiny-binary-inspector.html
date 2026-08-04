@@ -118,6 +118,9 @@ function reader(dv,off){
     vec3(){return [this.f32(),this.f32(),this.f32()]},
     floats(n){const a=[];for(let i=0;i<n;i++)a.push(this.f32());return a},
     tag(){let s='';for(let i=0;i<4;i++)s+=String.fromCharCode(dv.getUint8(p+i));p+=4;return s},
+    // Los Array<T> del formato padean a 4 despues de los datos. Sin esto, un
+    // payload de largo no multiplo de 4 desalinea todo lo que viene despues.
+    align4(){p=(p+3)&~3},
   };
 }
 const fnum=v=>{const s=+v.toFixed(4);return String(s)};
@@ -127,7 +130,10 @@ const I=v=>`<span class="i">${v}</span>`;
 const STRREF=(S,i)=>i>=0&&i<S.length?`<span class="s" title="str #${i}">${esc(S[i])||'&quot;&quot;'}</span>`:`<span class="d">str#${i}??</span>`;
 
 /* ---------- enums conocidos (ajustar si el motor cambia) ---------- */
-const NODE_TYPES={0:'empty',1:'mesh',2:'light'};
+// Hasta v4 el nodo llevaba un bitfield de flags (bit0 malla, bit1 luz) y los
+// cuerpos incrustados; desde v5 lleva un array de {nombre de tipo, payload}.
+const NODE_FLAG_MESH=1, NODE_FLAG_LIGHT=2;
+const COMP_MESH='efengine.mesh', COMP_LIGHT='efengine.light';
 const LIGHT_TYPES={0:'point',1:'directional'};
 const TEX_SLOTS={0:'diffuse',1:'normal',2:'ao',3:'roughness',4:'metallic',5:'displacement'};
 const MESH_SRC={0:'archivo',1:'primitiva'};
@@ -166,7 +172,7 @@ function render(file,dv){
       if(c.tag==='STRT') body=viewSTRT(S);
       else if(c.tag==='SCNE') body=viewSCNE(dv,c,S);
       else if(c.tag==='MATL') body=viewMATL(dv,c,S);
-      else if(c.tag==='NODE') body=viewNODE(dv,c,S);
+      else if(c.tag==='NODE') body=viewNODE(dv,c,S,ver);
       else body=`<div class="note">Chunk desconocido — hexdump crudo:</div>`+hexdump(dv,c.payload,c.size);
     }catch(e){
       body=`<div class="note" style="color:var(--bad)">Error parseando este chunk (${esc(e.message)}) — hexdump crudo:</div>`+hexdump(dv,c.payload,c.size);
@@ -238,27 +244,66 @@ function viewMATL(dv,c,S){
 }
 
 /* ---------- NODE ---------- */
-function viewNODE(dv,c,S){
+
+// Lee un Array<u8> del formato: u32 de largo, los bytes, y el padding a 4.
+// Los muestra como floats, que es lo que suelen ser los params de un generador.
+// Ojo con el padding: saltear solo los floats enteros deja el cursor corrido
+// cuando el largo no es multiplo de 4, y de ahi en adelante se lee basura.
+function readPayloadFloats(r){
+  const bs=r.u32(), start=r.pos;
+  const fl=r.floats(bs>>2);
+  r.pos=start+bs; r.align4();
+  return fl;
+}
+
+// El cuerpo de una malla, igual en el payload de v5 que incrustado en v<=4.
+function readMesh(r){
+  const m={kind:COMP_MESH,src:r.u32(),path:r.u32()};
+  m.params=readPayloadFloats(r);
+  const mc=r.u32(); m.mats=[];
+  for(let k=0;k<mc;k++) m.mats.push([r.u32(),r.u32()]); // [submesh_str, mat_idx]
+  r.align4();
+  return m;
+}
+
+function readLight(r){
+  return {kind:COMP_LIGHT,lightType:r.u32(),color:r.vec3()};
+}
+
+function viewNODE(dv,c,S,ver){
   const r=reader(dv,c.payload);
   const n=r.u32();
   const nodes=[];
   for(let i=0;i<n;i++){
-    const nd={idx:i,name:r.u32(),parent:r.i32(),type:r.u32(),
-              pos:r.vec3(),rot:r.vec3(),scale:r.vec3(),children:[]};
-    if(nd.type===1){ // mesh
-      nd.src=r.u32(); nd.path=r.u32();
-      const bs=r.u32(); nd.params=r.floats(bs>>2);
-      const mc=r.u32(); nd.mats=[];
-      for(let k=0;k<mc;k++) nd.mats.push([r.u32(),r.u32()]); // [submesh_str, mat_idx]
-    }else if(nd.type===2){ // light
-      nd.lightType=r.u32(); nd.color=r.vec3();
-    }else if(nd.type!==0){
-      throw new Error(`tipo de nodo desconocido ${nd.type} en nodo ${i} (offset 0x${r.pos.toString(16)})`);
+    const nd={idx:i,name:r.u32(),parent:r.i32(),comps:[],scripts:[],children:[]};
+
+    if(ver>=5){
+      nd.pos=r.vec3(); nd.rot=r.vec3(); nd.scale=r.vec3();
+      const cc=r.u32();
+      for(let k=0;k<cc;k++){
+        const tn=r.u32(), bs=r.u32(), start=r.pos;
+        const name=(tn>=0&&tn<S.length)?S[tn]:null;
+        // Un tipo que este visor no conoce igual se puede saltear: el payload
+        // trae su propio largo. Es lo que v<=4 no permitia.
+        if(name===COMP_MESH)       nd.comps.push(readMesh(r));
+        else if(name===COMP_LIGHT) nd.comps.push(readLight(r));
+        else                       nd.comps.push({kind:'unk',nameStr:tn,size:bs});
+        r.pos=start+bs; r.align4();
+      }
+    }else{
+      const flags=r.u32();
+      nd.pos=r.vec3(); nd.rot=r.vec3(); nd.scale=r.vec3();
+      // Son flags, NO un enum excluyente: un nodo puede tener malla Y luz.
+      if(flags&NODE_FLAG_MESH)  nd.comps.push(readMesh(r));
+      if(flags&NODE_FLAG_LIGHT) nd.comps.push(readLight(r));
+      const resto=flags&~(NODE_FLAG_MESH|NODE_FLAG_LIGHT);
+      if(resto) throw new Error(`flags de nodo desconocidos 0x${resto.toString(16)} en nodo ${i} (offset 0x${r.pos.toString(16)})`);
     }
-    const sc=r.u32(); nd.scripts=[];
+
+    const sc=r.u32();
     for(let k=0;k<sc;k++){
-      const sn=r.u32(), fl=r.u32(), bs=r.u32();
-      nd.scripts.push({name:sn,flag:fl,params:r.floats(bs>>2)});
+      const sn=r.u32(), fl=r.u32();
+      nd.scripts.push({name:sn,flag:fl,params:readPayloadFloats(r)});
     }
     nodes.push(nd);
   }
@@ -271,24 +316,34 @@ function viewNODE(dv,c,S){
   });
   const ONE=v=>v[0]===1&&v[1]===1&&v[2]===1, ZERO=v=>!v[0]&&!v[1]&&!v[2];
   function nodeHtml(nd){
-    const t=NODE_TYPES[nd.type]??'unk';
+    // La etiqueta sale de lo que el nodo TIENE, no de un enum: malla y luz no
+    // son excluyentes y antes la que perdia el ternario quedaba invisible.
+    const tieneMalla=nd.comps.some(x=>x.kind===COMP_MESH);
+    const tieneLuz  =nd.comps.some(x=>x.kind===COMP_LIGHT);
+    const t=nd.comps.some(x=>x.kind==='unk')?'unk'
+           :tieneMalla?(tieneLuz?'mesh light':'mesh')
+           :tieneLuz?'light':'empty';
+    const etiqueta=tieneMalla?(tieneLuz?'mesh+light':'mesh'):tieneLuz?'light':(t==='unk'?'unk':'empty');
     let props='';
     if(!ZERO(nd.pos))   props+=`<div>pos ${V3(nd.pos)}</div>`;
     if(!ZERO(nd.rot))   props+=`<div>rot ${V3(nd.rot)}</div>`;
     if(!ONE(nd.scale))  props+=`<div>scale ${V3(nd.scale)}</div>`;
-    if(nd.type===1){
-      props+=`<div>${MESH_SRC[nd.src]??('src '+nd.src)} → ${STRREF(S,nd.path)}`+
-        (nd.params.length?` <span class="d">params</span> [${nd.params.map(F).join(', ')}]`:'')+`</div>`;
-      nd.mats.forEach(([sm,mi])=>props+=`<div>mat: ${STRREF(S,sm)} → ${I('#'+mi)}</div>`);
-    }
-    if(nd.type===2){
-      props+=`<div><span class="guess" title="enum ${nd.lightType} — mapeo inferido">${LIGHT_TYPES[nd.lightType]??('light '+nd.lightType)}</span> · color/intensidad ${V3(nd.color)}</div>`;
-    }
+    nd.comps.forEach(cp=>{
+      if(cp.kind===COMP_MESH){
+        props+=`<div>${MESH_SRC[cp.src]??('src '+cp.src)} → ${STRREF(S,cp.path)}`+
+          (cp.params.length?` <span class="d">params</span> [${cp.params.map(F).join(', ')}]`:'')+`</div>`;
+        cp.mats.forEach(([sm,mi])=>props+=`<div>mat: ${STRREF(S,sm)} → ${I('#'+mi)}</div>`);
+      }else if(cp.kind===COMP_LIGHT){
+        props+=`<div><span class="guess" title="enum ${cp.lightType} — mapeo inferido">${LIGHT_TYPES[cp.lightType]??('light '+cp.lightType)}</span> · color/intensidad ${V3(cp.color)}</div>`;
+      }else{
+        props+=`<div><span class="d">componente</span> ${STRREF(S,cp.nameStr)} <span class="d">(${cp.size} bytes, sin interpretar)</span></div>`;
+      }
+    });
     nd.scripts.forEach(sc=>props+=`<div>script ${STRREF(S,sc.name)}`+
       (sc.flag?` <span class="d">flag ${sc.flag}</span>`:'')+
       (sc.params.length?` [${sc.params.map(F).join(', ')}]`:'')+`</div>`);
     return `<div class="node"><span class="o">#${nd.idx}</span> <span class="nodename">${STRREF(S,nd.name)}</span>`+
-      `<span class="ntype ${t}">${t}</span>`+
+      `<span class="ntype ${t}">${etiqueta}</span>`+
       (props?`<div class="props">${props}</div>`:'')+`</div>`+
       (nd.children.length?`<ul>${nd.children.map(ch=>`<li>${nodeHtml(ch)}</li>`).join('')}</ul>`:'');
   }
