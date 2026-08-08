@@ -151,7 +151,10 @@ glad_add_library(glad STATIC API gl:core=4.5)
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
     set(DOXYGEN_INPUT_DIR  ${CMAKE_SOURCE_DIR})
-    set(DOXYGEN_OUTPUT_DIR ${CMAKE_SOURCE_DIR}/docs)
+    # La salida es artefacto generado: va al directorio de build, no al árbol de
+    # fuentes. `docs/` en el repo es el sitio del proyecto (docs/index.html), que
+    # sí se versiona y es lo que sirve GitHub Pages.
+    set(DOXYGEN_OUTPUT_DIR ${CMAKE_BINARY_DIR}/docs)
     set(DOXYFILE_IN  ${CMAKE_SOURCE_DIR}/cmake/Doxyfile.in)
     set(DOXYFILE_OUT ${CMAKE_BINARY_DIR}/Doxyfile)
 
