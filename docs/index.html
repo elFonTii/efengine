@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>efengine — motor gráfico en C++17 y OpenGL 4.5</title>
+<meta name="description" content="efengine es un motor gráfico forward escrito desde cero en C++17 y OpenGL 4.5, como proyecto de aprendizaje de largo plazo. Visión, estado actual y roadmap.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="efengine — motor gráfico en C++17 y OpenGL 4.5">
+<meta property="og:description" content="Un motor forward escrito desde cero como proyecto de aprendizaje de largo plazo. Visión, estado actual y roadmap.">
+<meta property="og:image" content="https://github.com/user-attachments/assets/e50cc748-67d5-40ce-b03f-daafa469b616">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23131417'/><rect x='6' y='6' width='20' height='20' fill='%23f0a04b'/><rect x='12' y='12' width='8' height='8' fill='%23131417'/></svg>">
+<style>
+/* ---------------------------------------------------------------------------
+   efengine — sitio del proyecto.
+   Un solo archivo, CSS inline, cero JavaScript, cero dependencias externas.
+   Lo único que se pide a la red son las dos capturas de pantalla del motor.
+   El look acompaña al objetivo estético del motor: superficies planas, sin
+   degradados ni sombras suaves. La jerarquía la hace la tipografía.
+--------------------------------------------------------------------------- */
+
+/* Paleta clara: definición completa. El modo oscuro solo redefine los tokens. */
+:root {
+  --bg:          #f4f2ee;
+  --bg-alt:      #e9e6df;
+  --surface:     #ffffff;
+  --border:      #d3cdc1;
+  --border-soft: #e0dbd1;
+  --text:        #16140f;
+  --dim:         #57524a;
+  --accent:      #a8461a;
+  --accent-bg:   #f6e6dc;
+  --ink:         #ffffff;
+
+  --ok:          #2f6b34;
+  --ok-bg:       #e0eddf;
+  --now:         #8a5a08;
+  --now-bg:      #f5e9d2;
+  --next:        #4a5568;
+  --next-bg:     #e5e7ea;
+  --explore:     #5a3d8c;
+  --explore-bg:  #eae4f4;
+
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --wrap: 1080px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:          #131417;
+    --bg-alt:      #191b1f;
+    --surface:     #1d1f24;
+    --border:      #31353d;
+    --border-soft: #24272d;
+    --text:        #eceef2;
+    --dim:         #9aa1ad;
+    --accent:      #f0a04b;
+    --accent-bg:   #2a2119;
+    --ink:         #131417;
+
+    --ok:          #7fc98a;
+    --ok-bg:       #1a251c;
+    --now:         #f0a04b;
+    --now-bg:      #2a2119;
+    --next:        #9aa6bd;
+    --next-bg:     #1e2128;
+    --explore:     #b79ce6;
+    --explore-bg:  #241f2e;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.65;
+  overflow-x: hidden;
+}
+
+/* --- Tipografía ---------------------------------------------------------- */
+
+h1, h2, h3 { line-height: 1.2; font-weight: 650; letter-spacing: -0.015em; margin: 0; }
+h1 { font-size: clamp(2.4rem, 7vw, 3.6rem); letter-spacing: -0.035em; }
+h2 { font-size: clamp(1.5rem, 4vw, 2rem); }
+h3 { font-size: 1.08rem; font-weight: 650; }
+p  { margin: 0 0 1rem; max-width: 68ch; }
+a  { color: var(--accent); text-underline-offset: 2px; }
+a:hover { text-decoration: none; }
+code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--bg-alt);
+  border: 1px solid var(--border-soft);
+  padding: 0.05em 0.35em;
+  color: var(--text);
+}
+strong { font-weight: 650; }
+
+.lead { font-size: clamp(1.06rem, 2.4vw, 1.24rem); color: var(--dim); max-width: 62ch; }
+.small { font-size: 0.9rem; }
+
+/* --- Estructura ---------------------------------------------------------- */
+
+.wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 clamp(1.1rem, 4vw, 2.5rem); }
+
+section { padding: clamp(3rem, 7vw, 5.5rem) 0; border-top: 1px solid var(--border); }
+section.tinted { background: var(--bg-alt); }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 0.7rem;
+}
+
+.section-head { margin-bottom: clamp(1.8rem, 4vw, 2.6rem); }
+.section-head p { margin-top: 0.8rem; }
+
+/* --- Nav ----------------------------------------------------------------- */
+
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+nav .wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1.25rem;
+  padding-top: 0.7rem;
+  padding-bottom: 0.7rem;
+}
+nav .mark {
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  text-decoration: none;
+  margin-right: auto;
+}
+nav a.link {
+  font-size: 0.87rem;
+  color: var(--dim);
+  text-decoration: none;
+}
+nav a.link:hover { color: var(--accent); }
+
+/* --- Portada ------------------------------------------------------------- */
+
+header.hero { padding: clamp(3.2rem, 9vw, 6rem) 0 clamp(2.4rem, 6vw, 4rem); }
+header.hero h1 { margin-bottom: 1.2rem; }
+header.hero .lead { margin-bottom: 1.6rem; }
+
+.badges { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 2rem; }
+.badge {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--dim);
+  padding: 0.22rem 0.6rem;
+}
+
+.actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 2.8rem; }
+.actions a {
+  font-size: 0.92rem;
+  text-decoration: none;
+  border: 1px solid var(--border);
+  padding: 0.5rem 1rem;
+  color: var(--text);
+  background: var(--surface);
+}
+.actions a:hover { border-color: var(--accent); color: var(--accent); }
+.actions a.primary { background: var(--accent); border-color: var(--accent); color: var(--ink); }
+.actions a.primary:hover { color: var(--ink); opacity: 0.88; }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.stat { padding: 1.1rem 1.2rem; border-right: 1px solid var(--border); }
+.stat:last-child { border-right: 0; }
+.stat b { display: block; font-size: 1.6rem; font-weight: 650; letter-spacing: -0.02em; }
+.stat span { font-size: 0.83rem; color: var(--dim); }
+@media (max-width: 700px) {
+  .stat { border-right: 0; border-bottom: 1px solid var(--border); }
+  .stat:last-child { border-bottom: 0; }
+}
+
+/* --- Figuras ------------------------------------------------------------- */
+
+figure { margin: 0; border: 1px solid var(--border); background: var(--surface); }
+figure img { display: block; width: 100%; height: auto; background: var(--bg-alt); }
+figcaption {
+  font-size: 0.85rem;
+  color: var(--dim);
+  padding: 0.7rem 1rem;
+  border-top: 1px solid var(--border);
+}
+.shots { display: grid; gap: 1.2rem; grid-template-columns: 1fr; }
+@media (min-width: 900px) { .shots { grid-template-columns: 1fr 1fr; } }
+
+/* --- Rejillas y tarjetas ------------------------------------------------- */
+
+.grid-2 { display: grid; gap: 1.2rem; grid-template-columns: 1fr; }
+@media (min-width: 820px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+
+.grid-cards { display: grid; gap: 1.2rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+/* Cuatro tarjetas quedan 3 + 1 huérfana con auto-fit; en pantalla ancha van 2×2. */
+@media (min-width: 820px) { .grid-cards.two-up { grid-template-columns: 1fr 1fr; } }
+
+.card {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 1.3rem 1.4rem;
+}
+.card h3 { margin-bottom: 0.55rem; }
+.card p:last-child, .card ul:last-child { margin-bottom: 0; }
+.card ul { margin: 0.5rem 0 0; padding-left: 1.1rem; }
+.card li { margin-bottom: 0.3rem; color: var(--dim); font-size: 0.94rem; }
+.card li strong { color: var(--text); font-weight: 600; }
+
+.card.is { border-left: 3px solid var(--accent); }
+.card.isnt { border-left: 3px solid var(--border); }
+
+/* Lista de principios numerada, plana. */
+.rules { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+.rules li {
+  display: grid;
+  grid-template-columns: 2.4rem 1fr;
+  gap: 0 0.5rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.rules .n { font-family: var(--mono); font-size: 0.82rem; color: var(--accent); padding-top: 0.22rem; }
+.rules b { display: block; font-weight: 650; }
+.rules span.d { color: var(--dim); font-size: 0.94rem; }
+
+/* Cadena de pases del frame. */
+.passes { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.9rem; }
+.passes li {
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--dim);
+  padding: 0.25rem 0.55rem;
+}
+.passes ol, ul.passes { margin: 0; padding: 0; }
+
+/* --- Pilares ------------------------------------------------------------- */
+
+.pillar { border: 1px solid var(--border); background: var(--surface); padding: 1.5rem; margin-bottom: 1.2rem; }
+.pillar > .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.7rem; margin-bottom: 0.9rem; }
+.pillar .num { font-family: var(--mono); font-size: 0.8rem; color: var(--accent); }
+.pillar .detail { display: grid; gap: 1.2rem; grid-template-columns: 1fr; margin-top: 1.1rem; }
+@media (min-width: 820px) { .pillar .detail { grid-template-columns: 1fr 1fr; } }
+.pillar .detail h4 {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  font-family: var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-weight: 600;
+}
+.pillar .detail p, .pillar .detail ul { font-size: 0.94rem; color: var(--dim); margin: 0; }
+.pillar .detail ul { padding-left: 1.1rem; }
+.pillar .detail li { margin-bottom: 0.28rem; }
+.pillar .detail code { font-size: 0.84em; }
+
+/* --- Chips de estado ----------------------------------------------------- */
+
+.chip {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.14rem 0.5rem;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.chip.ok      { color: var(--ok);      background: var(--ok-bg); }
+.chip.now     { color: var(--now);     background: var(--now-bg); }
+.chip.next    { color: var(--next);    background: var(--next-bg); }
+.chip.explore { color: var(--explore); background: var(--explore-bg); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 0.9rem; margin-bottom: 2rem; font-size: 0.87rem; color: var(--dim); }
+.legend span.item { display: inline-flex; align-items: center; gap: 0.45rem; }
+
+/* --- Roadmap ------------------------------------------------------------- */
+
+.lane { border: 1px solid var(--border); background: var(--surface); margin-bottom: 1.2rem; }
+.lane > h3 {
+  padding: 0.9rem 1.3rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-alt);
+}
+.lane > h3 small { display: block; font-weight: 400; font-size: 0.85rem; color: var(--dim); margin-top: 0.15rem; letter-spacing: 0; }
+.lane ul { list-style: none; margin: 0; padding: 0; }
+.lane li {
+  display: grid;
+  grid-template-columns: 7.2rem 1fr;
+  gap: 0.4rem 0.9rem;
+  padding: 0.85rem 1.3rem;
+  border-bottom: 1px solid var(--border-soft);
+  align-items: start;
+}
+.lane li:last-child { border-bottom: 0; }
+.lane li .what { font-size: 0.96rem; }
+.lane li .what em { display: block; font-style: normal; color: var(--dim); font-size: 0.88rem; margin-top: 0.15rem; }
+.lane li .what a.iss { font-family: var(--mono); font-size: 0.8rem; text-decoration: none; }
+@media (max-width: 620px) {
+  .lane li { grid-template-columns: 1fr; }
+}
+
+.note {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-bg);
+  padding: 1rem 1.2rem;
+  margin: 0 0 2rem;
+}
+.note p { margin: 0; }
+
+/* --- Sección de IA ------------------------------------------------------- */
+
+.split { display: grid; gap: 1.2rem; grid-template-columns: 1fr; }
+@media (min-width: 860px) { .split { grid-template-columns: 1fr 1fr; } }
+
+.who { border: 1px solid var(--border); background: var(--surface); }
+.who h3 { padding: 0.85rem 1.3rem; border-bottom: 1px solid var(--border); background: var(--bg-alt); }
+.who h3 small { display: block; font-weight: 400; font-size: 0.83rem; color: var(--dim); margin-top: 0.15rem; }
+.who ul { margin: 0; padding: 1rem 1.3rem 1.2rem 2.3rem; }
+.who li { margin-bottom: 0.45rem; font-size: 0.95rem; }
+.who li:last-child { margin-bottom: 0; }
+
+.quote {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  padding: 1.4rem 1.5rem;
+  margin: 0 0 2rem;
+  font-size: clamp(1.02rem, 2.4vw, 1.18rem);
+}
+.quote p:last-child { margin-bottom: 0; }
+
+/* --- Pie ----------------------------------------------------------------- */
+
+footer { border-top: 1px solid var(--border); padding: 2.8rem 0 3.5rem; color: var(--dim); font-size: 0.9rem; }
+footer .links { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-bottom: 1.5rem; }
+footer p { max-width: 72ch; }
+
+/* Respeta a quien pidió menos movimiento (acá casi no hay, pero por las dudas). */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="mark" href="#top">efengine</a>
+    <a class="link" href="#alcance">Alcance</a>
+    <a class="link" href="#principios">Principios</a>
+    <a class="link" href="#estado">Estado</a>
+    <a class="link" href="#vision">Visión</a>
+    <a class="link" href="#roadmap">Roadmap</a>
+    <a class="link" href="#ia">IA</a>
+    <a class="link" href="https://github.com/elFonTii/efengine">Repositorio</a>
+  </div>
+</nav>
+
+<main id="top">
+
+<!-- ====================== 1 · PORTADA ====================== -->
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Proyecto en desarrollo · C++17 · OpenGL 4.5 Core</p>
+    <h1>efengine</h1>
+    <p class="lead">
+      Un motor gráfico <em>forward renderer</em> escrito desde cero, sin framework de
+      base y sin atajos, con un objetivo declarado: <strong>alto impacto visual</strong>
+      a través de iluminación global. Es un proyecto de aprendizaje de largo plazo,
+      hecho en el tiempo libre, y esta página existe para dejar por escrito hacia
+      dónde va.
+    </p>
+
+    <div class="badges">
+      <span class="badge">GLFW 3.4</span>
+      <span class="badge">GLAD 2</span>
+      <span class="badge">GLM</span>
+      <span class="badge">Assimp</span>
+      <span class="badge">Dear ImGui</span>
+      <span class="badge">doctest + CTest</span>
+    </div>
+
+    <div class="actions">
+      <a class="primary" href="https://github.com/elFonTii/efengine">Ver el repositorio</a>
+      <a href="https://github.com/elFonTii/efengine#readme">Referencia técnica</a>
+      <a href="https://github.com/elFonTii/efengine/issues">Issues abiertos</a>
+      <a href="https://github.com/elFonTii/efengine/releases">Releases</a>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b>~19.300</b><span>líneas de C++ propias</span></div>
+      <div class="stat"><b>9</b><span>módulos estáticos, RHI incluido</span></div>
+      <div class="stat"><b>32</b><span>shaders GLSL propios</span></div>
+      <div class="stat"><b>12</b><span>pases por frame</span></div>
+    </div>
+  </div>
+</header>
+
+<!-- ====================== CAPTURAS ====================== -->
+<section class="tinted">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Dónde está hoy</p>
+      <h2>El motor corriendo</h2>
+    </div>
+    <div class="shots">
+      <figure>
+        <img loading="lazy" width="1916" height="1026"
+             src="https://github.com/user-attachments/assets/e50cc748-67d5-40ce-b03f-daafa469b616"
+             alt="Captura del editor de efengine: una escena interior iluminada con IBL y DDGI, con los paneles de jerarquía, inspector y ajustes de render alrededor del viewport.">
+        <figcaption>IBL + DDGI — iluminación indirecta por probes sobre imagen de entorno.</figcaption>
+      </figure>
+      <figure>
+        <img loading="lazy" width="1919" height="1031"
+             src="https://github.com/user-attachments/assets/5144fd21-405d-4fd4-ac80-02e6f254d224"
+             alt="Captura del editor de efengine mostrando una escena con tonemapping HDR, bloom, antialiasing FXAA y sombras direccionales proyectadas.">
+        <figcaption>HDR tonemap, bloom, FXAA y sombras direccionales.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== 2 · ALCANCE ====================== -->
+<section id="alcance">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Alcance</p>
+      <h2>Qué es y qué no es</h2>
+      <p>
+        Un proyecto de hobby se muere de dos formas: por abandono, o por crecer hasta
+        dejar de ser abarcable. Contra lo segundo, la única defensa es escribir el
+        límite antes de necesitarlo.
+      </p>
+    </div>
+
+    <div class="grid-2">
+      <article class="card is">
+        <h3>efengine es…</h3>
+        <ul>
+          <li><strong>Un motor escrito desde cero.</strong> Las dependencias resuelven ventanas, matemáticas, carga de formatos y UI de herramientas. El render es propio.</li>
+          <li><strong>Una excusa seria para aprender.</strong> El objetivo real es entender rendering, arquitectura de software y C++ moderno haciéndolos, no leyéndolos.</li>
+          <li><strong>Una apuesta por la iluminación.</strong> La ambición declarada está en la luz indirecta: IBL, DDGI, y lo que venga después.</li>
+          <li><strong>Un campo de pruebas con reglas duras.</strong> RAII en todo, sin excepciones, sin punteros crudos dueños de nada.</li>
+        </ul>
+      </article>
+
+      <article class="card isnt">
+        <h3>efengine no es…</h3>
+        <ul>
+          <li><strong>Un motor de alto rendimiento.</strong> Está dicho en el README y se sostiene: cuando hay que elegir entre claridad y milisegundos, gana la claridad.</li>
+          <li><strong>Un producto.</strong> No hay usuarios que captar, ni licencias que vender, ni una fecha de lanzamiento que cumplir.</li>
+          <li><strong>Un competidor de Unreal o Unity.</strong> Comparar tendría el mismo sentido que comparar un banco de carpintería con una fábrica de muebles.</li>
+          <li><strong>Un proyecto con fechas.</strong> Se avanza cuando hay tiempo. El roadmap tiene orden, no calendario.</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== 3 · PRINCIPIOS ====================== -->
+<section id="principios" class="tinted">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Principios</p>
+      <h2>Cinco reglas que no se negocian</h2>
+      <p>
+        El README las detalla en quince reglas <em>MUST</em>. Condensadas, son cinco
+        decisiones tomadas de antemano para no volver a discutirlas en cada archivo.
+        Aplican igual a todo el código nuevo, lo escriba quien lo escriba.
+      </p>
+    </div>
+
+    <ul class="rules">
+      <li>
+        <span class="n">01</span>
+        <span>
+          <b>RAII siempre.</b>
+          <span class="d">Se adquiere en el constructor y se libera en el destructor. Nada de <code>init()</code> y <code>shutdown()</code> manuales como API principal: si el objeto existe, funciona.</span>
+        </span>
+      </li>
+      <li>
+        <span class="n">02</span>
+        <span>
+          <b>El motor compila sin excepciones.</b>
+          <span class="d">Los errores de programación van a <code>EF_ASSERT</code>; los fallos esperados vuelven como valor de retorno y decide quien llamó. Nada aborta por sorpresa.</span>
+        </span>
+      </li>
+      <li>
+        <span class="n">03</span>
+        <span>
+          <b>Prohibido <code>new</code> y <code>delete</code> crudos.</b>
+          <span class="d">La propiedad es por valor o por <code>unique_ptr</code>. Un puntero crudo es siempre un observador, nunca un dueño, y nunca libera nada.</span>
+        </span>
+      </li>
+      <li>
+        <span class="n">04</span>
+        <span>
+          <b>Ninguna llamada <code>gl*</code> fuera de <code>efecom</code>.</b>
+          <span class="d">El RHI es la única superficie que habla con la GPU. Si falta una operación se agrega al RHI; OpenGL no se filtra al resto del motor. Es lo que hace pensable un backend distinto.</span>
+        </span>
+      </li>
+      <li>
+        <span class="n">05</span>
+        <span>
+          <b>Una clase, una responsabilidad, su <code>.h</code> y su <code>.cpp</code>.</b>
+          <span class="d">Incluso cuando es trivial. La consistencia vale más que el ahorro de archivos, porque es lo que permite encontrar las cosas seis meses después.</span>
+        </span>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ====================== 4 · ESTADO ACTUAL ====================== -->
+<section id="estado">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Estado actual</p>
+      <h2>Lo que ya funciona</h2>
+      <p>
+        Nada de esta lista es aspiracional: todo compila, corre y se ve en el editor.
+        Lo que todavía no existe vive más abajo, en la visión y el roadmap, marcado
+        como tal.
+      </p>
+    </div>
+
+    <div class="grid-cards two-up">
+      <article class="card">
+        <h3>Iluminación y render</h3>
+        <ul>
+          <li><strong>PBR</strong> con reflectancia Cook-Torrance, luz direccional y hasta cuatro luces puntuales.</li>
+          <li><strong>IBL completo</strong>: proyección de HDRI equirectangular a cubemap, convolución de irradiancia, prefiltrado GGX y BRDF LUT — todo por compute shaders, todo precómputo.</li>
+          <li><strong>DDGI</strong>: iluminación global dinámica por volumen de probes, con captura, blend de irradiancia y distancia, y visualización de probes para depurar.</li>
+          <li><strong>GTAO</strong> con prepass de profundidad y normales, y denoise propio.</li>
+          <li><strong>Sombras direccionales</strong> por shadow map, con caja ortográfica y bias ajustables en vivo.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Post-proceso</h3>
+        <ul>
+          <li>La escena se resuelve en un framebuffer <strong>HDR <code>RGBA16F</code></strong>.</li>
+          <li><strong>Bloom</strong> (brightpass, blur, composición), <strong>tonemap</strong> y <strong>FXAA</strong>.</li>
+          <li>Todo encadenado en <code>PostChain</code> con ping-pong entre dos framebuffers de trabajo; el último pase escribe al backbuffer.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Arquitectura</h3>
+        <ul>
+          <li><strong>RHI propio</strong> (<code>efecom</code>): handles opacos, sin tipos de OpenGL a la vista, sin depender del resto del motor.</li>
+          <li><strong>Scene graph</strong> por handles con generación: destruir un nodo invalida sus referencias viejas en lugar de leer basura.</li>
+          <li><strong>Behaviors</strong> por nodo, serializables junto con la escena.</li>
+          <li><strong>Formato <code>.efe</code></strong>: binario propio, versionado y chunkeado, con reglas de compatibilidad explícitas y un lector hostil por defecto que rechaza archivos truncados en vez de reservar gigabytes.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Herramientas y calidad</h3>
+        <ul>
+          <li><strong>Editor</strong> sobre ImGui con layout dockeado: jerarquía, inspector, materiales editables en vivo, catálogo de assets y guardado de escenas.</li>
+          <li><strong>Profiler de GPU</strong> por pase, con anillo de consultas de tiempo y promedios.</li>
+          <li><strong>Inspector binario</strong> de archivos <code>.efe</code> que corre en el navegador.</li>
+          <li><strong>Tests</strong> con doctest y CTest sobre todo lo que no necesita GPU, y CI que compila Debug y Release en cada push.</li>
+        </ul>
+      </article>
+    </div>
+
+    <div class="card" style="margin-top:1.2rem">
+      <h3>Los doce pases de un frame</h3>
+      <p class="small" style="color:var(--dim);margin-bottom:0">
+        En este orden, y cada uno con su medición de tiempo en GPU:
+      </p>
+      <ul class="passes">
+        <li>Sombras</li><li>AO prepass</li><li>AO kernel</li><li>AO blur</li>
+        <li>DDGI captura</li><li>DDGI blend</li><li>Forward</li><li>Skybox</li>
+        <li>Bloom</li><li>Tonemap</li><li>FXAA</li><li>ImGui</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== 5 · VISIÓN ====================== -->
+<section id="vision" class="tinted">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Visión</p>
+      <h2>Tres pilares</h2>
+      <p>
+        Hasta acá, efengine hizo el camino que hace todo motor: geometría, materiales,
+        luz directa, luz indirecta. Lo que sigue es lo que le daría carácter propio.
+        Ninguno de los tres está implementado — son direcciones, y se enuncian acá
+        justamente para poder discutirlas antes de escribir una línea.
+      </p>
+    </div>
+
+    <!-- Pilar 1 -->
+    <article class="pillar">
+      <div class="head">
+        <span class="num">Pilar 01</span>
+        <h3>Del mundo real al motor</h3>
+        <span class="chip explore">Exploración</span>
+      </div>
+      <p>
+        Poder salir con el teléfono, fotografiar un objeto o una superficie, y tenerlo
+        adentro del motor como malla y set PBR usable — en minutos, no en una tarde de
+        trabajo manual. La escasez de un proyecto de una sola persona no es la técnica:
+        es el contenido. Un motor sin assets no se puede ni mirar.
+      </p>
+      <div class="detail">
+        <div>
+          <h4>Qué implica</h4>
+          <ul>
+            <li>Ingesta desde fotogrametría o escaneo, con decimado y retopología para bajar de millones de triángulos a algo renderizable.</li>
+            <li>Unwrap de UVs y bake del detalle del <em>high-poly</em> al normal map del <em>low-poly</em>.</li>
+            <li><strong>Deiluminación del albedo</strong>: sacarle a la foto la luz con la que fue tomada. Es el paso difícil y el que decide si el asset se ve bien bajo cualquier iluminación o solo bajo la suya.</li>
+            <li>Derivar roughness, AO y height a partir del material capturado.</li>
+            <li>Empaquetar el resultado como un asset del motor, con su material listo.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Sobre qué se apoya</h4>
+          <ul>
+            <li><code>MaterialDef</code> ya describe los ocho mapas con su espacio de color, los escalares y el <code>uvTiling</code>/<code>uvOffset</code> compartido: es exactamente la salida que el pipeline tendría que producir.</li>
+            <li><code>SceneAssets</code> ya es dueño de los materiales y permite reemplazarlos sin mover su dirección en memoria — o sea, sin invalidar lo que ya los apunta.</li>
+            <li>El formato <code>.efe</code> ya serializa todo eso, versionado.</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
+    <!-- Pilar 2 -->
+    <article class="pillar">
+      <div class="head">
+        <span class="num">Pilar 02</span>
+        <h3>Un estilo plano</h3>
+        <span class="chip explore">Exploración</span>
+      </div>
+      <p>
+        No fotorrealismo: un look plano y estilizado, deliberado, montado
+        <em>encima</em> de un pipeline físicamente correcto. La gracia está en la
+        tensión — tener luz indirecta calculada de verdad y después decidir mostrarla
+        en bandas planas es muy distinto de dibujar bandas planas desde el principio.
+      </p>
+      <div class="detail">
+        <div>
+          <h4>Qué implica</h4>
+          <ul>
+            <li>Un camino de shading alternativo en el pase forward, conviviendo con el PBR y no reemplazándolo.</li>
+            <li>Cuantización controlada de la iluminación: cuántas bandas, dónde caen los cortes, qué pasa en las transiciones.</li>
+            <li>Tratamiento de contornos y control de paleta.</li>
+            <li>Parámetros nuevos en el material — lo que significa subir la versión del formato <code>.efe</code> y respetar sus reglas de compatibilidad.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>La pregunta abierta</h4>
+          <p>
+            ¿Qué le hace un shading plano a la luz de DDGI? El aporte indirecto es
+            suave y de baja frecuencia por naturaleza; cuantizarlo puede tirar abajo
+            justamente aquello que costó calcular, o puede ser lo que le dé al estilo
+            plano una profundidad que el <em>toon shading</em> clásico no tiene. No hay
+            respuesta todavía, y averiguarla es parte del atractivo.
+          </p>
+        </div>
+      </div>
+    </article>
+
+    <!-- Pilar 3 -->
+    <article class="pillar">
+      <div class="head">
+        <span class="num">Pilar 03</span>
+        <h3>Cielo, volumétricos y clima</h3>
+        <span class="chip explore">Exploración</span>
+      </div>
+      <p>
+        Nubes volumétricas, niebla y lluvia, pero como <strong>un solo sistema</strong>
+        y no como tres efectos sueltos que casualmente están prendidos a la vez. Un
+        estado de clima gobierna a todos: si sube la cobertura de nubes, baja la luz
+        del sol, se espesa la niebla y empieza a llover. Eso es lo que separa un efecto
+        de una atmósfera.
+      </p>
+      <div class="detail">
+        <div>
+          <h4>Qué implica</h4>
+          <ul>
+            <li>Un pase volumétrico nuevo, por <em>ray-marching</em>, antes del post-proceso.</li>
+            <li>Nubes y niebla compartiendo el mismo medio participativo, en vez de dos implementaciones que se pisan.</li>
+            <li>Nubes que proyecten sombra sobre la escena, y que reciban la luz del sol que ellas mismas están tapando.</li>
+            <li>Lluvia: partículas, y el efecto sobre las superficies — mojado, oscurecimiento, especular alto.</li>
+            <li>El estado de clima como dato de la escena, serializado en el <code>.efe</code> junto con todo lo demás.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Por qué acá y no antes</h4>
+          <p>
+            Un volumétrico honesto se apoya en cosas que el motor recién ahora tiene:
+            un pipeline HDR con tonemapping, un sistema de sombras del sol al que
+            engancharse, y un profiler por pase para ver el costo real de cada paso de
+            <em>marching</em> en vez de adivinarlo. Hacerlo antes hubiera sido construir
+            sobre arena.
+          </p>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ====================== 6 · ROADMAP ====================== -->
+<section id="roadmap">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Roadmap</p>
+      <h2>El orden, no el calendario</h2>
+    </div>
+
+    <div class="note">
+      <p>
+        <strong>Acá no hay fechas, y es a propósito.</strong> Este proyecto avanza en
+        el tiempo libre que sobra, así que cualquier fecha que escribiera hoy sería
+        una fecha inventada, y una fecha inventada envejece peor que no tener ninguna.
+        Lo que sí hay es <em>orden</em>: qué habilita qué, y por qué algunas cosas
+        tienen que pasar antes que otras. Los ítems enlazan a su issue en GitHub, que
+        es donde vive la discusión real.
+      </p>
+    </div>
+
+    <div class="legend">
+      <span class="item"><span class="chip ok">Hecho</span> corre hoy</span>
+      <span class="item"><span class="chip now">En curso</span> se está trabajando</span>
+      <span class="item"><span class="chip next">Próximo</span> decidido, sin empezar</span>
+      <span class="item"><span class="chip explore">Explorando</span> sin diseño cerrado</span>
+    </div>
+
+    <!-- Carril: rendering -->
+    <div class="lane">
+      <h3>Rendering
+        <small>La línea principal: primero que la luz esté bien, después que sea barata.</small>
+      </h3>
+      <ul>
+        <li>
+          <span><span class="chip ok">Hecho</span></span>
+          <span class="what">PBR, IBL, sombras direccionales, bloom, tonemap y FXAA
+            <em>La base sobre la que se apoya todo lo demás.</em></span>
+        </li>
+        <li>
+          <span><span class="chip ok">Hecho</span></span>
+          <span class="what">Iluminación indirecta con DDGI y oclusión ambiental GTAO
+            <em>El salto más grande hasta ahora. <a class="iss" href="https://github.com/elFonTii/efengine/issues/35">#35</a></em></span>
+        </li>
+        <li>
+          <span><span class="chip now">En curso</span></span>
+          <span class="what">Optimización del render, guiada por el profiler por pase
+            <em>Bajar el costo de GTAO <a class="iss" href="https://github.com/elFonTii/efengine/issues/59">#59</a> y de DDGI <a class="iss" href="https://github.com/elFonTii/efengine/issues/56">#56</a>, y evaluar probes de 16×16 <a class="iss" href="https://github.com/elFonTii/efengine/issues/54">#54</a>.</em></span>
+        </li>
+        <li>
+          <span><span class="chip next">Próximo</span></span>
+          <span class="what">Sombras por cascada
+            <em>Lo que hace que una escena grande deje de elegir entre sombras nítidas cerca y sombras existentes lejos. <a class="iss" href="https://github.com/elFonTii/efengine/issues/55">#55</a></em></span>
+        </li>
+        <li>
+          <span><span class="chip next">Próximo</span></span>
+          <span class="what">Probes de reflexión para emisivos y luces
+            <em>Hoy un emisivo ilumina pero no se refleja donde debería. <a class="iss" href="https://github.com/elFonTii/efengine/issues/64">#64</a></em></span>
+        </li>
+        <li>
+          <span><span class="chip next">Próximo</span></span>
+          <span class="what">Migración de forward a Forward+
+            <em>Deliberadamente después de la optimización: primero medir, después cambiar de arquitectura de luces. <a class="iss" href="https://github.com/elFonTii/efengine/issues/65">#65</a></em></span>
+        </li>
+        <li>
+          <span><span class="chip explore">Explorando</span></span>
+          <span class="what">Tonemapping local en lugar del global actual
+            <em>Analizar si vale lo que cuesta. <a class="iss" href="https://github.com/elFonTii/efengine/issues/50">#50</a></em></span>
+        </li>
+        <li>
+          <span><span class="chip explore">Explorando</span></span>
+          <span class="what">Nubes y niebla volumétrica con sistema de clima
+            <em>Pilar 03. Necesita Forward+ y las cascadas resueltas antes.</em></span>
+        </li>
+        <li>
+          <span><span class="chip explore">Explorando</span></span>
+          <span class="what">Camino de shading plano
+            <em>Pilar 02. Toca el pase forward y el formato de materiales.</em></span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Carril: arquitectura -->
+    <div class="lane">
+      <h3>Arquitectura y RHI
+        <small>Las decisiones que hay que tomar temprano porque después no se pueden retrofitear.</small>
+      </h3>
+      <ul>
+        <li>
+          <span><span class="chip ok">Hecho</span></span>
+          <span class="what">RHI que aísla OpenGL detrás de handles opacos
+            <em>El módulo <code>efecom</code> es la única superficie que habla con la GPU <a class="iss" href="https://github.com/elFonTii/efengine/issues/30">#30</a></em></span>
+        </li>
+        <li>
+          <span><span class="chip ok">Hecho</span></span>
+          <span class="what">Profiler de GPU por pase
+            <em>Sin medición, optimizar es adivinar.</em></span>
+        </li>
+        <li>
+          <span><span class="chip next">Próximo</span></span>
+          <span class="what">RHI de modelo implícito a explícito
+            <em>El cambio más urgente del roadmap, no por impacto visual sino porque es el único que no se puede hacer más tarde: es la puerta a DX12 y Vulkan. <a class="iss" href="https://github.com/elFonTii/efengine/issues/57">#57</a></em></span>
+        </li>
+        <li>
+          <span><span class="chip next">Próximo</span></span>
+          <span class="what">Limpieza de includes a rutas relativas
+            <em>Deuda chica, molesta y acumulativa. <a class="iss" href="https://github.com/elFonTii/efengine/issues/13">#13</a></em></span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Carril: contenido -->
+    <div class="lane">
+      <h3>Contenido y herramientas
+        <small>De qué se llena el motor, y con qué se lo llena.</small>
+      </h3>
+      <ul>
+        <li>
+          <span><span class="chip ok">Hecho</span></span>
+          <span class="what">El formato de escena <code>.efe</code> con su editor y su catálogo de assets
+            <em>La escena del sandbox se carga de disco, no se arma a mano en código.</em></span>
+        </li>
+        <li>
+          <span><span class="chip next">Próximo</span></span>
+          <span class="what">Refactor y expansión del motor de serialización
+            <em>Prerrequisito de casi todo lo demás: cada feature nueva quiere guardar algo. <a class="iss" href="https://github.com/elFonTii/efengine/issues/48">#48</a></em></span>
+        </li>
+        <li>
+          <span><span class="chip explore">Explorando</span></span>
+          <span class="what">Terreno procedural, construido en CPU y desplazado en GPU
+            <em>Prueba de concepto. <a class="iss" href="https://github.com/elFonTii/efengine/issues/29">#29</a></em></span>
+        </li>
+        <li>
+          <span><span class="chip explore">Explorando</span></span>
+          <span class="what">Pipeline de fotogrametría
+            <em>Pilar 01. Depende de que la serialización aguante materiales más ricos.</em></span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Carril: simulación -->
+    <div class="lane">
+      <h3>Simulación
+        <small>Lo que haría falta si esto alguna vez tuviera que correr un juego.</small>
+      </h3>
+      <ul>
+        <li>
+          <span><span class="chip explore">Explorando</span></span>
+          <span class="what">Colisiones con el Teorema del Eje Separador
+            <em><a class="iss" href="https://github.com/elFonTii/efengine/issues/43">#43</a></em></span>
+        </li>
+        <li>
+          <span><span class="chip explore">Explorando</span></span>
+          <span class="what">Arquitectura cliente-servidor
+            <em>Investigación abierta, sin compromiso de implementarla. <a class="iss" href="https://github.com/elFonTii/efengine/issues/52">#52</a></em></span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Carril: investigación -->
+    <div class="lane">
+      <h3>Investigación
+        <small>Issues que no son tareas: son preguntas abiertas que hay que entender antes de codear.</small>
+      </h3>
+      <ul>
+        <li>
+          <span><span class="chip explore">Abierto</span></span>
+          <span class="what">Por qué se usan matrices 4×4 y qué hace la coordenada homogénea W
+            <em><a class="iss" href="https://github.com/elFonTii/efengine/issues/15">#15</a></em></span>
+        </li>
+        <li>
+          <span><span class="chip explore">Abierto</span></span>
+          <span class="what">El modelo de reflectancia Cook-Torrance por dentro
+            <em>Está implementado; entenderlo del todo es otra cosa. <a class="iss" href="https://github.com/elFonTii/efengine/issues/12">#12</a></em></span>
+        </li>
+        <li>
+          <span><span class="chip explore">Abierto</span></span>
+          <span class="what">¿Envolver los tipos de GLM en tipos propios, o no preocuparse?
+            <em>Decisión postergada a conciencia. <a class="iss" href="https://github.com/elFonTii/efengine/issues/10">#10</a></em></span>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== 7 · IA ====================== -->
+<section id="ia" class="tinted">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Método</p>
+      <h2>Cómo entra la IA acá</h2>
+      <p>
+        Esta sección está porque omitirla sería deshonesto. efengine se desarrolla en
+        pareja: una persona y un agente. Lo que sigue es el reparto real, las reglas
+        que lo hacen funcionar, y dónde falla.
+      </p>
+    </div>
+
+    <div class="quote">
+      <p>
+        No soy un experto en rendering 3D. Buena parte de este motor la fui aprendiendo
+        sobre la marcha, y el proyecto existe justamente por eso. La IA acá no está para
+        saltearme el aprendizaje: está para acortar la distancia entre no entender algo
+        y entenderlo.
+      </p>
+    </div>
+
+    <div class="split">
+      <div class="who">
+        <h3>La persona <small>dueña del proyecto</small></h3>
+        <ul>
+          <li>Escribe el <strong>código del motor</strong>.</li>
+          <li>Decide <strong>arquitectura, alcance y el orden del roadmap</strong>.</li>
+          <li>Da el <strong>sí o el no final</strong> sobre cualquier propuesta.</li>
+          <li>Diseña el pipeline de render; los shaders los escribe el agente, pero la forma del pipeline no se delega.</li>
+        </ul>
+      </div>
+      <div class="who">
+        <h3>El agente <small>Claude Code, en CLI y en el editor</small></h3>
+        <ul>
+          <li>Escribe <strong>planes y especificaciones</strong> antes de tocar código.</li>
+          <li>Mantiene el <strong>motor de serialización</strong>, el <strong>tooling</strong>, el <strong>build</strong> y los <strong>tests</strong>.</li>
+          <li>Mantiene la <strong>UI del editor</strong> y escribe los <strong>shaders GLSL</strong>.</li>
+          <li>Modelos según la tarea: los más capaces para diseño, planes y trabajo largo; los más rápidos para ejecución mecánica y de alto volumen.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="grid-cards" style="margin-top:1.2rem">
+      <article class="card">
+        <h3>Las reglas que lo sostienen</h3>
+        <ul>
+          <li><strong>Plan antes de código.</strong> Nada grande se implementa sin una spec y un plan por fases revisados y aprobados. La discusión pasa cuando cambiarla es barato.</li>
+          <li><strong>Los principios MUST aplican a los dos.</strong> No hay una vara para el código humano y otra para el generado.</li>
+          <li><strong>Fase por fase se decide quién escribe el C++.</strong> No hay una división fija que después nadie respete.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Cómo se usa para aprender</h3>
+        <ul>
+          <li><strong>La explicación antes que el parche.</strong> Cuando algo no se entiende, lo primero que se pide es por qué, no el diff.</li>
+          <li><strong>Los issues son un cuaderno.</strong> Por eso hay issues que son preguntas y no tareas: la coordenada W, Cook-Torrance, si conviene envolver GLM. Quedan escritos para volver a leerlos.</li>
+          <li><strong>El código generado se lee como material de estudio</strong>, no como una caja negra que ya anda.</li>
+          <li><strong>No se mergea lo que no se entiende.</strong> Es la regla que impide que el motor se convierta en un lugar ajeno.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>Dónde falla</h3>
+        <ul>
+          <li><strong>El GLSL sutil.</strong> Un shader casi correcto compila igual y se ve casi bien; el error aparece en un ángulo, con una roughness, a una hora del día.</li>
+          <li><strong>Todo lo que necesita GPU no se testea.</strong> El CI corre sin GPU, así que los tests cubren lo que puede cubrir: matemática de transforms y sombras, ciclo de vida de los handles, y el formato <code>.efe</code> completo, incluidos archivos truncados y corruptos.</li>
+          <li><strong>El resto lo cubre el ojo.</strong> Por eso el editor, el profiler por pase y la visualización de probes de DDGI son herramientas de verificación, no lujos.</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="links">
+      <a href="https://github.com/elFonTii/efengine">Repositorio</a>
+      <a href="https://github.com/elFonTii/efengine#readme">README técnico</a>
+      <a href="https://github.com/elFonTii/efengine/issues">Issues</a>
+      <a href="https://github.com/elFonTii/efengine/releases">Releases</a>
+    </div>
+    <p>
+      Los shaders del repositorio son propios. Los modelos, texturas PBR y HDRIs que
+      aparecen en las capturas son assets de terceros, usados únicamente para las
+      escenas de demostración.
+    </p>
+    <p>
+      Esta página se sirve desde <code>docs/</code> del propio repositorio y se edita
+      como un archivo más del proyecto.
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

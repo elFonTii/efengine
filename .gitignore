@@ -26,8 +26,11 @@ Thumbs.db
 conan/
 vcpkg_installed/
 
-# Document Directory
-docs/
+# Documentación generada por Doxygen. Hoy el target 'docs' escribe en
+# build/docs/html, pero una config vieja la dejaba acá: se sigue ignorando para
+# que no se cuele. OJO: docs/ NO se ignora entero — ahí vive el sitio del
+# proyecto (docs/index.html), que se versiona y lo sirve GitHub Pages.
+docs/html/
 
 # Layout de paneles que ImGui guarda al salir. Es preferencia local de cada uno;
 # el layout por defecto lo arma ensureDefaultLayout() en sandbox/EditorUI.cpp.

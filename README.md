@@ -1,5 +1,8 @@
 # efengine
 
+> **Página del proyecto:** [elfontii.github.io/efengine](https://elfontii.github.io/efengine/) — la visión, el estado actual y el roadmap.
+> Este README es la referencia técnica: cómo compilarlo y cómo usar la API.
+
 Es un motor gráfico forward renderer en **C++17 / OpenGL 4.5 Core**,  construido desde cero como proyecto de aprendizaje y a largo plazo. Compila sin excepciones, se prohiben los `new`/`delete` crudos y patrón RAII en todos los subsistemas. robustez y escalabilidad son los pilares. efengine pretende ser un motor con un alto impacto visual implementando e innovando en técnicas de iluminación global. efengine NO pretende ser un motor de alto rendimiento.
 
 - **Ventanas e input:** GLFW 3.4
@@ -107,7 +110,7 @@ Opciones:
 |---|---|---|
 | `EFENGINE_BUILD_TESTS` | `ON` | Compila los tests (doctest + CTest). Apagable si se embebe el motor. |
 
-Con Doxygen instalado, `cmake --build build --target docs` genera la documentación en `docs/html`.
+Con Doxygen instalado, `cmake --build build --target docs` genera la documentación en `build/docs/html`.
 
 ---
 
