@@ -660,12 +660,16 @@ a:focus-visible {
   <div class="wrap">
     <div class="section-head">
       <p class="eyebrow">Visión</p>
-      <h2>Tres pilares</h2>
+      <h2>La mayor fidelidad gráfica posible</h2>
       <p>
-        Hasta acá, efengine hizo el camino que hace todo motor: geometría, materiales,
-        luz directa, luz indirecta. Lo que sigue es lo que le daría carácter propio.
-        Ninguno de los tres está implementado — son direcciones, y se enuncian acá
-        justamente para poder discutirlas antes de escribir una línea.
+        efengine no persigue un look propio: persigue que la imagen se parezca a
+        la realidad tanto como pueda lograrlo una persona sola en su tiempo libre.
+        La referencia declarada es <strong>Decima</strong> — se adoptan sus
+        técnicas, no la forma de su pipeline. Los tres pilares de abajo no son
+        tres direcciones sueltas: son los tres instrumentos de esa única meta.
+        Sin contenido capturado del mundo real, la mejor iluminación del mundo
+        ilumina cajas. Sin arquitectura de luces, la fidelidad no entra en un
+        frame. Sin atmósfera, la escena es un diorama.
       </p>
     </div>
 
@@ -673,14 +677,15 @@ a:focus-visible {
     <article class="pillar">
       <div class="head">
         <span class="num">Pilar 01</span>
-        <h3>Del mundo real al motor</h3>
+        <h3>El contenido — del mundo real al motor</h3>
         <span class="chip explore">Exploración</span>
       </div>
       <p>
-        Poder salir con el teléfono, fotografiar un objeto o una superficie, y tenerlo
-        adentro del motor como malla y set PBR usable — en minutos, no en una tarde de
-        trabajo manual. La escasez de un proyecto de una sola persona no es la técnica:
-        es el contenido. Un motor sin assets no se puede ni mirar.
+        La fidelidad empieza en la captura. Poder salir con el teléfono,
+        fotografiar un objeto o una superficie, y tenerlo adentro del motor como
+        malla y set PBR usable — en minutos, no en una tarde de trabajo manual.
+        Ninguna técnica de iluminación salva a una escena hecha de cubos con
+        textura de ladrillo.
       </p>
       <div class="detail">
         <div>
@@ -708,35 +713,49 @@ a:focus-visible {
     <article class="pillar">
       <div class="head">
         <span class="num">Pilar 02</span>
-        <h3>Un estilo plano</h3>
-        <span class="chip explore">Exploración</span>
+        <h3>La luz — Forward+ clustered</h3>
+        <span class="chip next">Próximo</span>
       </div>
       <p>
-        No fotorrealismo: un look plano y estilizado, deliberado, montado
-        <em>encima</em> de un pipeline físicamente correcto. La gracia está en la
-        tensión — tener luz indirecta calculada de verdad y después decidir mostrarla
-        en bandas planas es muy distinto de dibujar bandas planas desde el principio.
+        Hoy el motor ilumina con cuatro luces puntuales en un UBO de tamaño fijo.
+        La fidelidad que persigue el pilar 01 necesita dos órdenes de magnitud
+        más, y eso no se resuelve subiendo el número: se resuelve dividiendo el
+        volumen de la cámara en <em>froxels</em> y calculando, en un compute
+        previo, qué luces tocan cada uno. Es la técnica de Decima, sobre un
+        pipeline forward que se conserva a propósito.
       </p>
       <div class="detail">
         <div>
           <h4>Qué implica</h4>
           <ul>
-            <li>Un camino de shading alternativo en el pase forward, conviviendo con el PBR y no reemplazándolo.</li>
-            <li>Cuantización controlada de la iluminación: cuántas bandas, dónde caen los cortes, qué pasa en las transiciones.</li>
-            <li>Tratamiento de contornos y control de paleta.</li>
-            <li>Parámetros nuevos en el material — lo que significa subir la versión del formato <code>.efe</code> y respetar sus reglas de compatibilidad.</li>
+            <li>Froxels 3D culleados en compute, con <strong>slicing exponencial</strong>: la cámara corre <code>near 0.1 / far 5000</code> y un grid lineal en ese rango deja el 99&nbsp;% de los froxels en los primeros metros. Grid de arranque 16×9×24.</li>
+            <li><strong>Storage buffers en el RHI</strong>, que hoy solo expone UBOs. La lista de luces y la lista de índices por froxel no entran en un UBO.</li>
+            <li><strong>Luces con radio e intensidad.</strong> Hoy <code>PointLight</code> es <code>{ position, color }</code> y la caída es <code>1/d²</code> sin corte: sin radio no hay nada que cullear, porque toda luz alcanza todo froxel.</li>
+            <li>Compartir el <em>depth prepass</em> que el pase de AO ya dibuja y después descarta.</li>
+            <li>Después, en orden: cascadas de sombra, TAA — que jubila a FXAA — y area lights con LTC.</li>
           </ul>
         </div>
         <div>
-          <h4>La pregunta abierta</h4>
-          <p>
-            ¿Qué le hace un shading plano a la luz de DDGI? El aporte indirecto es
-            suave y de baja frecuencia por naturaleza; cuantizarlo puede tirar abajo
-            justamente aquello que costó calcular, o puede ser lo que le dé al estilo
-            plano una profundidad que el <em>toon shading</em> clásico no tiene. No hay
-            respuesta todavía, y averiguarla es parte del atractivo.
-          </p>
+          <h4>Lo que ya juega a favor</h4>
+          <ul>
+            <li>El compute ya está en producción: IBL usa cuatro computes y DDGI usa dos. El motor sabe <em>ejecutar</em> compute; lo que le falta es <em>transportar datos estructurados</em>.</li>
+            <li><code>ShadowMath</code> ya está escrito pensando en cascadas, y es matemática pura con tests que no tocan la GPU. Un <code>ClusterMath</code> cae en el mismo molde.</li>
+            <li>El <em>depth prepass</em> ya se paga: el pase de AO dibuja la escena entera y tira la profundidad. Compartirla no cuesta un pase nuevo.</li>
+            <li>El profiler por pase permite medir la migración desde el primer día en vez de a ojo.</li>
+          </ul>
         </div>
+      </div>
+      <div class="note">
+        <p>
+          <strong>Dos cosas que no van a pasar, y conviene decirlas.</strong> El
+          <em>async compute</em> de Decima no existe en OpenGL: no hay colas que
+          exponer, y aproximarlo reordenando el frame es esperanza, no control.
+          Y el motor <strong>no va a deferred</strong>: <code>pbr.frag</code> tiene
+          ocho samplers, POM de hasta 32 taps, DDGI y bent normals, y eso no entra
+          en un G-buffer compacto sin rediseñar el sistema de materiales entero.
+          Forward+ conserva esa libertad, y el culling clustered es idéntico en
+          los dos.
+        </p>
       </div>
     </article>
 
@@ -744,15 +763,15 @@ a:focus-visible {
     <article class="pillar">
       <div class="head">
         <span class="num">Pilar 03</span>
-        <h3>Cielo, volumétricos y clima</h3>
+        <h3>La atmósfera — cielo, volumétricos y clima</h3>
         <span class="chip explore">Exploración</span>
       </div>
       <p>
         Nubes volumétricas, niebla y lluvia, pero como <strong>un solo sistema</strong>
         y no como tres efectos sueltos que casualmente están prendidos a la vez. Un
         estado de clima gobierna a todos: si sube la cobertura de nubes, baja la luz
-        del sol, se espesa la niebla y empieza a llover. Eso es lo que separa un efecto
-        de una atmósfera.
+        del sol, se espesa la niebla y empieza a llover. El aire entre las cosas
+        también es fidelidad — sin él, la escena es un diorama.
       </p>
       <div class="detail">
         <div>
@@ -766,13 +785,14 @@ a:focus-visible {
           </ul>
         </div>
         <div>
-          <h4>Por qué acá y no antes</h4>
+          <h4>De qué depende</h4>
           <p>
-            Un volumétrico honesto se apoya en cosas que el motor recién ahora tiene:
-            un pipeline HDR con tonemapping, un sistema de sombras del sol al que
-            engancharse, y un profiler por pase para ver el costo real de cada paso de
-            <em>marching</em> en vez de adivinarlo. Hacerlo antes hubiera sido construir
-            sobre arena.
+            El <em>ray-marching</em> necesita <strong>texturas 3D</strong>, y el
+            RHI no tiene ninguna. Y las nubes a resolución reducida —el patrón
+            reproyectado que es lo que hace barata la técnica— necesitan
+            <strong>TAA</strong>, que a su vez necesita MRT y matrices de mundo
+            previas por nodo. O sea que este pilar no depende de sí mismo:
+            depende de que el pilar 02 haya terminado su cadena.
           </p>
         </div>
       </div>
