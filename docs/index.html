@@ -829,7 +829,7 @@ a:focus-visible {
     <!-- Carril: rendering -->
     <div class="lane">
       <h3>Rendering
-        <small>La línea principal: primero que la luz esté bien, después que sea barata.</small>
+        <small>La línea principal. El próximo salto es de arquitectura: de cuatro luces en un UBO a froxels culleados en compute.</small>
       </h3>
       <ul>
         <li>
@@ -849,8 +849,22 @@ a:focus-visible {
         </li>
         <li>
           <span><span class="chip next">Próximo</span></span>
+          <span class="what">Migración a Forward+ clustered
+            <em>El pilar 02, y el salto de arquitectura más grande que queda. <a class="iss" href="https://github.com/elFonTii/efengine/issues/65">#65</a></em>
+            <ul class="passes">
+              <li>storage buffers</li><li>luces con radio</li><li>depth prepass compartido</li><li>ClusterPass</li>
+            </ul>
+          </span>
+        </li>
+        <li>
+          <span><span class="chip next">Próximo</span></span>
           <span class="what">Sombras por cascada
-            <em>Lo que hace que una escena grande deje de elegir entre sombras nítidas cerca y sombras existentes lejos. <a class="iss" href="https://github.com/elFonTii/efengine/issues/55">#55</a></em></span>
+            <em>Lo que hace que una escena grande deje de elegir entre sombras nítidas cerca y sombras existentes lejos. No depende de Forward+. <a class="iss" href="https://github.com/elFonTii/efengine/issues/55">#55</a></em></span>
+        </li>
+        <li>
+          <span><span class="chip next">Próximo</span></span>
+          <span class="what">TAA, que jubila a FXAA
+            <em>No se apila encima de FXAA: lo reemplaza. El costo no está en el resolve, está en los motion vectors — jitter en la proyección, matrices de mundo previas por nodo y MRT. Y es prerrequisito duro del pilar 03.</em></span>
         </li>
         <li>
           <span><span class="chip next">Próximo</span></span>
@@ -858,24 +872,19 @@ a:focus-visible {
             <em>Hoy un emisivo ilumina pero no se refleja donde debería. <a class="iss" href="https://github.com/elFonTii/efengine/issues/64">#64</a></em></span>
         </li>
         <li>
-          <span><span class="chip next">Próximo</span></span>
-          <span class="what">Migración de forward a Forward+
-            <em>Deliberadamente después de la optimización: primero medir, después cambiar de arquitectura de luces. <a class="iss" href="https://github.com/elFonTii/efengine/issues/65">#65</a></em></span>
+          <span><span class="chip explore">Explorando</span></span>
+          <span class="what">Nubes y niebla volumétrica con sistema de clima
+            <em>Pilar 03. Necesita texturas 3D en el RHI y TAA resuelto antes.</em></span>
+        </li>
+        <li>
+          <span><span class="chip explore">Explorando</span></span>
+          <span class="what">Area lights rect/tube con LTC
+            <em>Un sistema de shading aparte que comparte el buffer culleado. Necesita LUTs horneadas: serían el primer asset binario de datos de shader del motor.</em></span>
         </li>
         <li>
           <span><span class="chip explore">Explorando</span></span>
           <span class="what">Tonemapping local en lugar del global actual
             <em>Analizar si vale lo que cuesta. <a class="iss" href="https://github.com/elFonTii/efengine/issues/50">#50</a></em></span>
-        </li>
-        <li>
-          <span><span class="chip explore">Explorando</span></span>
-          <span class="what">Nubes y niebla volumétrica con sistema de clima
-            <em>Pilar 03. Necesita Forward+ y las cascadas resueltas antes.</em></span>
-        </li>
-        <li>
-          <span><span class="chip explore">Explorando</span></span>
-          <span class="what">Camino de shading plano
-            <em>Pilar 02. Toca el pase forward y el formato de materiales.</em></span>
         </li>
       </ul>
     </div>
@@ -895,6 +904,11 @@ a:focus-visible {
           <span><span class="chip ok">Hecho</span></span>
           <span class="what">Profiler de GPU por pase
             <em>Sin medición, optimizar es adivinar.</em></span>
+        </li>
+        <li>
+          <span><span class="chip next">Próximo</span></span>
+          <span class="what">Storage buffers en el RHI
+            <em>El paso cero de Forward+: autocontenido, no toca ni un shader existente, y bloquea todo lo que viene después. Hoy el RHI solo expone UBOs.</em></span>
         </li>
         <li>
           <span><span class="chip next">Próximo</span></span>
