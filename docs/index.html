@@ -20,35 +20,45 @@
    degradados ni sombras suaves. La jerarquía la hace la tipografía.
 --------------------------------------------------------------------------- */
 
-/* Paleta clara: definición completa. El modo oscuro solo redefine los tokens. */
+/* Paleta. Los neutros son grises con sesgo frío — el color del cromo de una
+   herramienta— y el único acento es ámbar, que es el color de lo que el motor
+   calcula: luz. Los dos temas comparten el mismo tono de acento y solo cambian
+   de fondo, así que el acento nunca pelea con la base.
+
+   Tres estados de tema, no dos: quien elige explícitamente deja una marca
+   data-theme en la raíz; quien deja "sistema" no deja ninguna y solo lo separa
+   prefers-color-scheme. Los tokens se definen para los tres casos y los
+   componentes SIEMPRE leen tokens, nunca colores literales. */
 :root {
-  --bg:          #f4f2ee;
-  --bg-alt:      #e9e6df;
+  --bg:          #eef0f3;
+  --bg-alt:      #e2e6ec;
   --surface:     #ffffff;
-  --border:      #d3cdc1;
-  --border-soft: #e0dbd1;
-  --text:        #16140f;
-  --dim:         #57524a;
-  --accent:      #a8461a;
-  --accent-bg:   #f6e6dc;
+  --border:      #c7cdd7;
+  --border-soft: #dce1e8;
+  --text:        #14161a;
+  --dim:         #535a66;
+  --accent:      #8a5310;
+  --accent-bg:   #f0e9dd;
   --ink:         #ffffff;
 
-  --ok:          #2f6b34;
-  --ok-bg:       #e0eddf;
-  --now:         #8a5a08;
-  --now-bg:      #f5e9d2;
-  --next:        #4a5568;
-  --next-bg:     #e5e7ea;
-  --explore:     #5a3d8c;
-  --explore-bg:  #eae4f4;
+  --ok:          #2c6a3a;
+  --ok-bg:       #dfe9e1;
+  --now:         #8a5310;
+  --now-bg:      #f0e9dd;
+  --next:        #414b59;
+  --next-bg:     #e0e4ea;
+  --explore:     #55408a;
+  --explore-bg:  #e5e3f0;
 
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --wrap: 1080px;
 }
 
+/* Tema oscuro por preferencia del sistema. El :not() hace que una elección
+   explícita de tema claro le gane a un sistema en oscuro. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg:          #131417;
     --bg-alt:      #191b1f;
     --surface:     #1d1f24;
@@ -71,6 +81,29 @@
   }
 }
 
+/* Tema oscuro elegido a mano: gana también sobre un sistema en claro. */
+:root[data-theme="dark"] {
+  --bg:          #131417;
+  --bg-alt:      #191b1f;
+  --surface:     #1d1f24;
+  --border:      #31353d;
+  --border-soft: #24272d;
+  --text:        #eceef2;
+  --dim:         #9aa1ad;
+  --accent:      #f0a04b;
+  --accent-bg:   #2a2119;
+  --ink:         #131417;
+
+  --ok:          #7fc98a;
+  --ok-bg:       #1a251c;
+  --now:         #f0a04b;
+  --now-bg:      #2a2119;
+  --next:        #9aa6bd;
+  --next-bg:     #1e2128;
+  --explore:     #b79ce6;
+  --explore-bg:  #241f2e;
+}
+
 * { box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; }
@@ -87,7 +120,7 @@ body {
 
 /* --- Tipografía ---------------------------------------------------------- */
 
-h1, h2, h3 { line-height: 1.2; font-weight: 650; letter-spacing: -0.015em; margin: 0; }
+h1, h2, h3 { line-height: 1.2; font-weight: 650; letter-spacing: -0.015em; margin: 0; text-wrap: balance; }
 h1 { font-size: clamp(2.4rem, 7vw, 3.6rem); letter-spacing: -0.035em; }
 h2 { font-size: clamp(1.5rem, 4vw, 2rem); }
 h3 { font-size: 1.08rem; font-weight: 650; }
@@ -196,7 +229,7 @@ header.hero .lead { margin-bottom: 1.6rem; }
 }
 .stat { padding: 1.1rem 1.2rem; border-right: 1px solid var(--border); }
 .stat:last-child { border-right: 0; }
-.stat b { display: block; font-size: 1.6rem; font-weight: 650; letter-spacing: -0.02em; }
+.stat b { display: block; font-size: 1.6rem; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .stat span { font-size: 0.83rem; color: var(--dim); }
 @media (max-width: 700px) {
   .stat { border-right: 0; border-bottom: 1px solid var(--border); }
@@ -367,6 +400,12 @@ figcaption {
 footer { border-top: 1px solid var(--border); padding: 2.8rem 0 3.5rem; color: var(--dim); font-size: 0.9rem; }
 footer .links { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-bottom: 1.5rem; }
 footer p { max-width: 72ch; }
+
+/* El foco de teclado tiene que verse: se navega con Tab por una página larga. */
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
 
 /* Respeta a quien pidió menos movimiento (acá casi no hay, pero por las dudas). */
 @media (prefers-reduced-motion: reduce) {
