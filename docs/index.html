@@ -439,11 +439,11 @@ a:focus-visible {
     <p class="eyebrow">Proyecto en desarrollo · C++17 · OpenGL 4.5 Core</p>
     <h1>efengine</h1>
     <p class="lead">
-      Un motor gráfico <em>forward renderer</em> escrito desde cero, sin framework de
-      base y sin atajos, con un objetivo declarado: <strong>alto impacto visual</strong>
-      a través de iluminación global. Es un proyecto de aprendizaje de largo plazo,
-      hecho en el tiempo libre, y esta página existe para dejar por escrito hacia
-      dónde va.
+      Un motor gráfico escrito desde cero, sin framework de base y sin atajos,
+      con un objetivo declarado: <strong>la mayor fidelidad gráfica posible</strong>.
+      La iluminación es el camino, no la meta. Es un proyecto de aprendizaje de
+      largo plazo, hecho en el tiempo libre, y esta página existe para dejar por
+      escrito hacia dónde va.
     </p>
 
     <div class="badges">
@@ -463,7 +463,7 @@ a:focus-visible {
     </div>
 
     <div class="stats">
-      <div class="stat"><b>~19.300</b><span>líneas de C++ propias</span></div>
+      <div class="stat"><b>18.432</b><span>líneas de C++ propias</span></div>
       <div class="stat"><b>9</b><span>módulos estáticos, RHI incluido</span></div>
       <div class="stat"><b>32</b><span>shaders GLSL propios</span></div>
       <div class="stat"><b>12</b><span>pases por frame</span></div>
@@ -514,7 +514,7 @@ a:focus-visible {
         <ul>
           <li><strong>Un motor escrito desde cero.</strong> Las dependencias resuelven ventanas, matemáticas, carga de formatos y UI de herramientas. El render es propio.</li>
           <li><strong>Una excusa seria para aprender.</strong> El objetivo real es entender rendering, arquitectura de software y C++ moderno haciéndolos, no leyéndolos.</li>
-          <li><strong>Una apuesta por la iluminación.</strong> La ambición declarada está en la luz indirecta: IBL, DDGI, y lo que venga después.</li>
+          <li><strong>Una apuesta por la fidelidad.</strong> La ambición declarada es que la imagen se parezca a la realidad: fotogrametría para el contenido, luz indirecta para la escena, atmósfera para el aire entre las cosas.</li>
           <li><strong>Un campo de pruebas con reglas duras.</strong> RAII en todo, sin excepciones, sin punteros crudos dueños de nada.</li>
         </ul>
       </article>
@@ -522,7 +522,7 @@ a:focus-visible {
       <article class="card isnt">
         <h3>efengine no es…</h3>
         <ul>
-          <li><strong>Un motor de alto rendimiento.</strong> Está dicho en el README y se sostiene: cuando hay que elegir entre claridad y milisegundos, gana la claridad.</li>
+          <li><strong>Un motor optimizado por deporte.</strong> El rendimiento no es la meta: es el peaje. Forward+ no entra por los FPS — entra porque sin culling no hay cientos de luces, y sin cientos de luces no hay fidelidad. Cuando la pelea es solo por milisegundos, sigue ganando la claridad.</li>
           <li><strong>Un producto.</strong> No hay usuarios que captar, ni licencias que vender, ni una fecha de lanzamiento que cumplir.</li>
           <li><strong>Un competidor de Unreal o Unity.</strong> Comparar tendría el mismo sentido que comparar un banco de carpintería con una fábrica de muebles.</li>
           <li><strong>Un proyecto con fechas.</strong> Se avanza cuando hay tiempo. El roadmap tiene orden, no calendario.</li>
@@ -602,7 +602,7 @@ a:focus-visible {
       <article class="card">
         <h3>Iluminación y render</h3>
         <ul>
-          <li><strong>PBR</strong> con reflectancia Cook-Torrance, luz direccional y hasta cuatro luces puntuales.</li>
+          <li><strong>PBR</strong> con reflectancia Cook-Torrance, luz direccional y hasta cuatro luces puntuales — un techo cableado en tres lugares, y exactamente el límite que el pilar 02 de la visión viene a romper.</li>
           <li><strong>IBL completo</strong>: proyección de HDRI equirectangular a cubemap, convolución de irradiancia, prefiltrado GGX y BRDF LUT — todo por compute shaders, todo precómputo.</li>
           <li><strong>DDGI</strong>: iluminación global dinámica por volumen de probes, con captura, blend de irradiancia y distancia, y visualización de probes para depurar.</li>
           <li><strong>GTAO</strong> con prepass de profundidad y normales, y denoise propio.</li>
@@ -646,8 +646,9 @@ a:focus-visible {
         En este orden, y cada uno con su medición de tiempo en GPU:
       </p>
       <ul class="passes">
-        <li>Sombras</li><li>AO prepass</li><li>AO kernel</li><li>AO blur</li>
-        <li>DDGI captura</li><li>DDGI blend</li><li>Forward</li><li>Skybox</li>
+        <li>Sombras</li><li>DDGI captura</li><li>DDGI blend</li>
+        <li>AO prepass</li><li>AO kernel</li><li>AO blur</li>
+        <li>Skybox</li><li>Forward</li>
         <li>Bloom</li><li>Tonemap</li><li>FXAA</li><li>ImGui</li>
       </ul>
     </div>
