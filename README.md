@@ -11,6 +11,13 @@ Es un motor gráfico forward renderer en **C++17 / OpenGL 4.5 Core**,  construid
 - **Tests:** doctest + CTest
 
 ---
+### 2026-16-08
+DDGI Probes optimization + Chebyshev
+<img width="1917" height="1030" alt="image" src="https://github.com/user-attachments/assets/9e8f7c81-a2cd-4df3-a34d-abf739c1656d" />
+
+<img width="1913" height="1027" alt="image" src="https://github.com/user-attachments/assets/6b49b2e6-f322-4a49-a1cf-74097fc0ac5b" />
+
+
 ### 2026-30-07
 IBL + DDGI
 <img width="1916" height="1026" alt="image" src="https://github.com/user-attachments/assets/e50cc748-67d5-40ce-b03f-daafa469b616" />
