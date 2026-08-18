@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>efe inspector — efengine</title>
+<title>efe editor — efengine</title>
 <style>
 :root{
   --bg:#14171e; --panel:#1b2029; --panel2:#20262f; --line:#2b3340;
   --ink:#d8dee9; --dim:#7c8798;
   --tag:#e8a33d;    /* chunk tags / offsets */
-  --str:#5cc8d7;    /* string refs */
+  --str:#5cc8d7;    /* strings */
   --num:#c792ea;    /* floats */
   --int:#9ac86f;    /* enteros / enums */
   --bad:#e06c75;
@@ -17,11 +17,12 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;line-height:1.55}
-header{display:flex;align-items:baseline;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 header h1{font-size:15px;font-weight:600;letter-spacing:.04em}
 header h1 b{color:var(--tag)}
 #fileinfo{color:var(--dim);font-size:12px}
-#fileinfo .ok{color:var(--int)} #fileinfo .err{color:var(--bad)}
+#fileinfo .ok{color:var(--int)} #fileinfo .err{color:var(--bad)} #fileinfo .mod{color:var(--tag)}
+header .spacer{flex:1}
 main{padding:18px 20px;max-width:1100px}
 #drop{border:1.5px dashed var(--line);border-radius:8px;padding:56px 24px;text-align:center;color:var(--dim);cursor:pointer;transition:border-color .15s,background .15s}
 #drop.hover{border-color:var(--tag);background:var(--panel)}
@@ -37,22 +38,20 @@ section.chunk.closed>.body{display:none}
 table{border-collapse:collapse;width:100%}
 th{color:var(--dim);font-weight:500;text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:3px 12px 6px 0}
 td{padding:2.5px 12px 2.5px 0;vertical-align:top;white-space:nowrap}
-tr+tr td{border-top:1px solid #232a35}
 .s{color:var(--str)} .n{color:var(--num)} .i{color:var(--int)} .o{color:var(--tag)} .d{color:var(--dim)}
-.vec{color:var(--num)} .vec i{color:var(--dim);font-style:normal;margin:0 2px}
 .pill{display:inline-block;border:1px solid var(--line);border-radius:4px;padding:0 6px;font-size:11px;color:var(--dim);margin-right:6px}
-.guess{border-bottom:1px dotted var(--dim);cursor:help}
 .tree{list-style:none}
 .tree li{padding-left:0}
-.tree .node{padding:5px 0;border-top:1px solid #232a35}
+.tree .node{padding:7px 0;border-top:1px solid #232a35}
 .tree > li:first-child > .node{border-top:none}
 .tree ul{list-style:none;padding-left:22px;border-left:1px solid var(--line);margin-left:6px}
 .nodename{color:var(--ink);font-weight:600}
 .ntype{font-size:11px;border-radius:4px;padding:0 6px;margin-left:8px}
 .ntype.mesh{background:#243421;color:var(--int)} .ntype.light{background:#33301e;color:var(--tag)}
-.ntype.empty{background:#262c36;color:var(--dim)} .ntype.unk{background:#3a2226;color:var(--bad)}
-.props{color:var(--dim);font-size:12px;margin-top:2px}
-.props div{padding:1px 0}
+.ntype.empty{background:#262c36;color:var(--dim)}
+.props{color:var(--dim);font-size:12px;margin-top:4px}
+.props .row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:2px 0}
+.props .lbl{color:var(--dim);min-width:52px;display:inline-block}
 .hex{font-size:12px;line-height:1.5;color:var(--dim);white-space:pre}
 .hex .a{color:var(--tag)} .hex .t{color:var(--str)}
 .legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--dim);font-size:11px;padding:10px 0 0}
@@ -61,13 +60,42 @@ tr+tr td{border-top:1px solid #232a35}
 .legend .li::before{color:var(--int)} .legend .lo::before{color:var(--tag)}
 .note{color:var(--dim);font-size:12px;margin:6px 0 10px}
 .note b{color:var(--ink);font-weight:600}
-#err{color:var(--bad);padding:14px;display:none}
+#err{color:var(--bad);padding:14px;display:none;white-space:pre-wrap}
+
+/* ---- controles de edición ---- */
+input,select{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:4px;
+  font-family:var(--mono);font-size:12px;padding:2px 6px;outline:none}
+input:focus,select:focus{border-color:var(--tag)}
+input.num{width:74px;color:var(--num);text-align:right}
+input.str{color:var(--str);min-width:180px}
+input.name{color:var(--ink);font-weight:600;min-width:140px}
+input[type=color]{width:34px;height:22px;padding:0;vertical-align:middle}
+select{color:var(--int)}
+button{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:5px;
+  font-family:var(--mono);font-size:12px;padding:4px 12px;cursor:pointer;transition:border-color .12s,background .12s}
+button:hover{border-color:var(--tag)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--tag);color:#14171e;border-color:var(--tag);font-weight:600}
+button.mini{padding:1px 7px;font-size:11px}
+button.danger{color:var(--bad)}
+button.danger:hover{border-color:var(--bad)}
+.matcard{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:0 0 12px;background:var(--panel2)}
+.matcard h3{font-size:12px;color:var(--tag);margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.grid{display:grid;grid-template-columns:max-content 1fr;gap:4px 10px;align-items:center}
+.grid .k{color:var(--dim);font-size:11px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.vecrow input{margin-right:4px}
+.small{font-size:11px;color:var(--dim)}
+.warn{color:var(--tag)}
 </style>
 </head>
 <body>
 <header>
-  <h1><b>efe</b> inspector <span class="d">· efengine</span></h1>
+  <h1><b>efe</b> editor <span class="d">· efengine</span></h1>
   <span id="fileinfo">sin archivo</span>
+  <span class="spacer"></span>
+  <button id="reload" hidden>recargar</button>
+  <button id="download" class="primary" hidden>descargar .efe</button>
 </header>
 <main>
   <div id="drop">arrastrá un <kbd>.efe</kbd> acá, o hacé click para elegirlo</div>
@@ -75,17 +103,40 @@ tr+tr td{border-top:1px solid #232a35}
   <div id="err"></div>
   <div id="out"></div>
   <div class="legend" id="legend" style="display:none">
-    <span class="ls">string (índice → STRT)</span>
+    <span class="ls">string</span>
     <span class="ln">float32</span>
     <span class="li">entero / enum</span>
-    <span class="lo">offset / tamaño</span>
+    <span class="lo">offset / índice</span>
   </div>
 </main>
 <script>
 'use strict';
 const $=s=>document.querySelector(s);
 const drop=$('#drop'), fi=$('#fi'), out=$('#out'), err=$('#err'), info=$('#fileinfo');
+const btnDownload=$('#download'), btnReload=$('#reload');
 
+/* ---------- constantes del formato (fuente: src/efengine/serialization) ---------- */
+const MAGIC='EFE1';
+const ENDIAN=0x01020304;
+const VERSION=1;
+const CONTENT_SCENE=1;
+const INVALID=0xFFFFFFFF;           // kInvalidIndex
+const NODE_HAS_MESH=1, NODE_HAS_LIGHT=2;
+
+const TEX_SLOTS   ={0:'albedo',1:'normal',2:'ao',3:'roughness',4:'metallic',5:'height',6:'opacity'};
+const COLOR_SPACES={0:'linear',1:'sRGB'};
+const LIGHT_KINDS ={0:'point',1:'directional'};
+const MESH_KINDS  ={0:'path',1:'generator'};
+
+/* estado global */
+let DOC=null;              // documento editable
+let FILENAME='escena.efe';
+let ORIG_STRINGS=[];       // tabla de strings original (se preserva el orden para round-trip byte-idéntico)
+let UNKNOWN_CHUNKS=[];     // chunks que este editor no conoce; se re-emiten crudos
+let LAST_BUFFER=null;      // para "recargar"
+let DIRTY=false;
+
+/* ---------- carga de archivo ---------- */
 drop.onclick=()=>fi.click();
 fi.onchange=()=>fi.files[0]&&load(fi.files[0]);
 ['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('hover')}));
@@ -93,230 +144,596 @@ fi.onchange=()=>fi.files[0]&&load(fi.files[0]);
 drop.addEventListener('drop',ev=>ev.dataTransfer.files[0]&&load(ev.dataTransfer.files[0]));
 document.body.addEventListener('dragover',e=>e.preventDefault());
 document.body.addEventListener('drop',e=>{e.preventDefault();e.dataTransfer.files[0]&&load(e.dataTransfer.files[0])});
+btnReload.onclick=()=>{ if(LAST_BUFFER) parseAndRender(FILENAME, new DataView(LAST_BUFFER.slice(0))); };
+btnDownload.onclick=downloadEfe;
 
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function load(file){
+  FILENAME=file.name;
   const r=new FileReader();
-  r.onload=()=>{try{render(file,new DataView(r.result))}catch(e){fail(file,e)}};
+  r.onload=()=>{ LAST_BUFFER=r.result; parseAndRender(file.name, new DataView(r.result)); };
   r.readAsArrayBuffer(file);
 }
-function fail(file,e){
+function fail(name,e){
   out.innerHTML=''; $('#legend').style.display='none';
+  btnDownload.hidden=true;
   err.style.display='block';
-  err.textContent=`No se pudo parsear ${file.name}: ${e.message}. Revisá el hexdump con otro visor o ajustá el parser si cambió el formato.`;
+  err.textContent=`No se pudo parsear ${name}: ${e.message}`;
   console.error(e);
 }
+function parseAndRender(name,dv){
+  try{
+    DOC=parseEfe(dv);
+    DIRTY=false;
+    render();
+  }catch(e){ fail(name,e); }
+}
 
-/* ---------- lector secuencial ---------- */
+/* ---------- lector secuencial (espeja BinaryReader) ---------- */
 function reader(dv,off){
-  let p=off;
+  let p=off|0;
+  const base=dv.byteOffset;
   return {
     get pos(){return p}, set pos(v){p=v},
     u32(){const v=dv.getUint32(p,true);p+=4;return v},
     i32(){const v=dv.getInt32(p,true);p+=4;return v},
     f32(){const v=dv.getFloat32(p,true);p+=4;return v},
     vec3(){return [this.f32(),this.f32(),this.f32()]},
-    floats(n){const a=[];for(let i=0;i<n;i++)a.push(this.f32());return a},
     tag(){let s='';for(let i=0;i<4;i++)s+=String.fromCharCode(dv.getUint8(p+i));p+=4;return s},
+    align4(){ while(p%4!==0)p++; },
+    bytes(n){ const u=new Uint8Array(dv.buffer.slice(base+p,base+p+n)); p+=n; return u; },
   };
 }
 const fnum=v=>{const s=+v.toFixed(4);return String(s)};
-const F=v=>`<span class="n">${fnum(v)}</span>`;
-const V3=v=>`<span class="vec">(${fnum(v[0])}<i>,</i>${fnum(v[1])}<i>,</i>${fnum(v[2])})</span>`;
-const I=v=>`<span class="i">${v}</span>`;
-const STRREF=(S,i)=>i>=0&&i<S.length?`<span class="s" title="str #${i}">${esc(S[i])||'&quot;&quot;'}</span>`:`<span class="d">str#${i}??</span>`;
+// Valor "lindo" para mostrar en inputs sin perder el f32 exacto guardado en el modelo.
+const prettyF=v=>{ if(!isFinite(v))return '0'; const s=+v.toFixed(6); return String(s); };
 
-/* ---------- enums conocidos (ajustar si el motor cambia) ---------- */
-const NODE_TYPES={0:'empty',1:'mesh',2:'light'};
-const LIGHT_TYPES={0:'point',1:'directional'};
-const TEX_SLOTS={0:'diffuse',1:'normal',2:'ao',3:'roughness',4:'metallic',5:'displacement'};
-const MESH_SRC={0:'archivo',1:'primitiva'};
-
-function render(file,dv){
-  err.style.display='none'; out.innerHTML='';
+/* ============================================================== PARSER ========= */
+function parseEfe(dv){
   const size=dv.byteLength;
   const r=reader(dv,0);
   const magic=r.tag();
-  if(magic!=='EFE1') throw new Error(`magic inválido: "${magic}" (esperaba EFE1)`);
-  const bom=r.u32();               // 0x01020304 escrito en little-endian
-  const bomOk=bom===0x01020304;
-  const ver=r.u32(), flags=r.u32(), nchunks=r.u32();
-  info.innerHTML=`${esc(file.name)} · ${size} bytes · EFE1 v${ver} · `+
-    (bomOk?`<span class="ok">little-endian ✓</span>`:`<span class="err">BOM raro: 0x${bom.toString(16)}</span>`)+
-    ` · ${nchunks} chunks`;
+  if(magic!==MAGIC) throw new Error(`magic inválido: "${magic}" (esperaba ${MAGIC})`);
+  const endian=r.u32();
+  if(endian!==ENDIAN) throw new Error(`endianness distinta (leyó 0x${endian.toString(16)})`);
+  const version=r.u32();
+  if(version!==VERSION) throw new Error(`versión ${version} no soportada (este editor lee v${VERSION})`);
+  const content=r.u32();
+  if(content!==CONTENT_SCENE) throw new Error(`contentType ${content}: este editor solo maneja escenas (1)`);
+  const nchunks=r.u32();
 
   // directorio de chunks
-  const chunks=[];
-  let p=r.pos;
+  const chunks=[]; let p=r.pos;
   for(let i=0;i<nchunks;i++){
+    if(p+8>size) throw new Error(`chunk ${i}: header fuera del archivo`);
     const rr=reader(dv,p);
     const tag=rr.tag(), csize=rr.u32();
-    chunks.push({tag,off:p,payload:p+8,size:csize});
+    if(p+8+csize>size) throw new Error(`chunk "${tag}": byteSize ${csize} se pasa del archivo`);
+    chunks.push({tag,payload:p+8,size:csize});
     p+=8+csize;
   }
-  if(p!==size) note(`⚠ los chunks terminan en ${p} pero el archivo mide ${size} bytes — hay ${size-p} bytes sin mapear.`);
 
-  // STRT primero (todo lo demás lo referencia)
   const strt=chunks.find(c=>c.tag==='STRT');
-  const S=strt?parseSTRT(dv,strt):[];
+  if(!strt) throw new Error('falta el chunk STRT');
+  const S=parseSTRT(dv,strt);
+  ORIG_STRINGS=S.slice();
+
+  const doc={ ambientFactor:0.08, primarySunNode:INVALID, materials:[], nodes:[] };
+  UNKNOWN_CHUNKS=[];
+  const strview=i=>(i>=0&&i<S.length)?S[i]:'';
 
   for(const c of chunks){
-    let body, meta=`payload 0x${c.payload.toString(16)}–0x${(c.payload+c.size).toString(16)} · ${c.size} bytes`;
-    try{
-      if(c.tag==='STRT') body=viewSTRT(S);
-      else if(c.tag==='SCNE') body=viewSCNE(dv,c,S);
-      else if(c.tag==='MATL') body=viewMATL(dv,c,S);
-      else if(c.tag==='NODE') body=viewNODE(dv,c,S);
-      else body=`<div class="note">Chunk desconocido — hexdump crudo:</div>`+hexdump(dv,c.payload,c.size);
-    }catch(e){
-      body=`<div class="note" style="color:var(--bad)">Error parseando este chunk (${esc(e.message)}) — hexdump crudo:</div>`+hexdump(dv,c.payload,c.size);
-    }
-    const sec=document.createElement('section');
-    sec.className='chunk';
-    sec.innerHTML=`<h2><span class="tag">${esc(c.tag)}</span><span class="meta">${meta}</span></h2><div class="body">${body}</div>`;
-    sec.querySelector('h2').onclick=()=>sec.classList.toggle('closed');
-    out.appendChild(sec);
+    if(c.tag==='STRT') continue;
+    else if(c.tag==='SCNE') parseSCNE(dv,c,doc);
+    else if(c.tag==='MATL') parseMATL(dv,c,doc,strview);
+    else if(c.tag==='NODE') parseNODE(dv,c,doc,strview);
+    else UNKNOWN_CHUNKS.push({tag:c.tag, bytes:reader(dv,c.payload).bytes(c.size)});
   }
-  $('#legend').style.display='flex';
-  drop.style.display='none';
+  return doc;
 }
-function note(html){const d=document.createElement('div');d.className='note';d.innerHTML=html;out.appendChild(d)}
 
-/* ---------- STRT: u32 count, (count+1) offsets u32, blob ---------- */
+/* STRT = Array(offsets u32) + Array(blob u8) */
 function parseSTRT(dv,c){
   const r=reader(dv,c.payload);
-  const n=r.u32();
-  const offs=[]; for(let i=0;i<=n;i++)offs.push(r.u32());
-  const base=r.pos, dec=new TextDecoder();
-  const S=[];
-  for(let i=0;i<n;i++)
-    S.push(dec.decode(new Uint8Array(dv.buffer,base+offs[i],offs[i+1]-offs[i])));
+  const nOff=r.u32();
+  const offs=[]; for(let i=0;i<nOff;i++) offs.push(r.u32());
+  r.align4();
+  const blobLen=r.u32();
+  const blobStart=r.pos;
+  const dec=new TextDecoder();
+  const S=[]; const nStr=nOff-1;
+  for(let i=0;i<nStr;i++){
+    S.push(dec.decode(new Uint8Array(dv.buffer, dv.byteOffset+blobStart+offs[i], offs[i+1]-offs[i])));
+  }
   return S;
 }
-function viewSTRT(S){
-  let rows=S.map((s,i)=>`<tr><td class="o">${i}</td><td class="s">${esc(s)||'<span class="d">(vacío)</span>'}</td><td class="d">${s.length}</td></tr>`).join('');
-  return `<table><tr><th>#</th><th>string</th><th>len</th></tr>${rows}</table>`;
-}
 
-/* ---------- SCNE: 2×u32 (semántica no confirmada) ---------- */
-function viewSCNE(dv,c,S){
+/* SCNE = f32 ambientFactor + u32 primarySunNode */
+function parseSCNE(dv,c,doc){
   const r=reader(dv,c.payload);
-  const vals=[]; while(r.pos<c.payload+c.size) vals.push(r.u32());
-  const guess = vals.length===2
-    ? `<div class="note">Lectura probable: <span class="guess" title="no confirmado contra el serializador">nombre = ${STRREF(S,vals[0])}, u32 = ${I(vals[1])}</span> (¿índice de nodo? ¿flags?). Verificalo contra tu writer en C++.</div>`
-    : '';
-  return guess+`<table><tr><th>#</th><th>u32</th><th>como float</th><th>como string</th></tr>`+
-    vals.map((v,i)=>{
-      const f=new Float32Array(new Uint32Array([v]).buffer)[0];
-      return `<tr><td class="o">${i}</td><td class="i">${v}</td><td class="n">${fnum(f)}</td><td>${v<S.length?STRREF(S,v):'<span class="d">—</span>'}</td></tr>`;
-    }).join('')+`</table>`;
+  doc.ambientFactor=r.f32();
+  doc.primarySunNode=r.u32();
 }
 
-/* ---------- MATL ---------- */
-function viewMATL(dv,c,S){
+/* MATL = u32 count + [material] */
+function parseMATL(dv,c,doc,strv){
   const r=reader(dv,c.payload);
   const n=r.u32();
-  let html=`<div class="note">${I(n)} materiales · esquema: name, shader, vert, frag, ntex, [slot, path, srgb]×ntex, 8 floats</div>`;
   for(let m=0;m<n;m++){
-    const name=r.u32(), shader=r.u32(), vert=r.u32(), frag=r.u32(), ntex=r.u32();
-    html+=`<table style="margin-bottom:10px"><tr>
-      <th>mat #${m}</th><th colspan="3">${STRREF(S,name)} <span class="pill">shader ${STRREF(S,shader)}</span></th></tr>
-      <tr><td class="d">vert</td><td colspan="3">${STRREF(S,vert)}</td></tr>
-      <tr><td class="d">frag</td><td colspan="3">${STRREF(S,frag)}</td></tr>`;
-    for(let t=0;t<ntex;t++){
-      const slot=r.u32(), path=r.u32(), srgb=r.u32();
-      html+=`<tr><td class="d">tex</td>
-        <td><span class="guess i" title="enum ${slot} — mapeo inferido">${TEX_SLOTS[slot]??('slot '+slot)}</span></td>
-        <td>${STRREF(S,path)}</td>
-        <td class="d">${srgb?'sRGB':''}</td></tr>`;
-    }
-    const fl=r.floats(8);
-    html+=`<tr><td class="d">params</td><td colspan="3"><span class="guess" title="8 floats — etiquetas sin confirmar (¿tint rgb + factores PBR?)">[${fl.map(fnum).join(', ')}]</span></td></tr></table>`;
+    const mat={
+      name:strv(r.u32()), shader:strv(r.u32()), vert:strv(r.u32()), frag:strv(r.u32()),
+      textures:[]
+    };
+    const nt=r.u32();
+    for(let t=0;t<nt;t++) mat.textures.push({slot:r.u32(),path:strv(r.u32()),colorSpace:r.u32()});
+    r.align4();
+    mat.tint=r.vec3();
+    mat.metallic=r.f32(); mat.roughness=r.f32(); mat.aoStrength=r.f32();
+    mat.heightScale=r.f32(); mat.alphaCutoff=r.f32();
+    doc.materials.push(mat);
   }
-  checkConsumed(r,c);
-  return html;
 }
 
-/* ---------- NODE ---------- */
-function viewNODE(dv,c,S){
+/* NODE = u32 count + [node] */
+function parseNODE(dv,c,doc,strv){
   const r=reader(dv,c.payload);
   const n=r.u32();
-  const nodes=[];
   for(let i=0;i<n;i++){
-    const nd={idx:i,name:r.u32(),parent:r.i32(),type:r.u32(),
-              pos:r.vec3(),rot:r.vec3(),scale:r.vec3(),children:[]};
-    if(nd.type===1){ // mesh
-      nd.src=r.u32(); nd.path=r.u32();
-      const bs=r.u32(); nd.params=r.floats(bs>>2);
-      const mc=r.u32(); nd.mats=[];
-      for(let k=0;k<mc;k++) nd.mats.push([r.u32(),r.u32()]); // [submesh_str, mat_idx]
-    }else if(nd.type===2){ // light
-      nd.lightType=r.u32(); nd.color=r.vec3();
-    }else if(nd.type!==0){
-      throw new Error(`tipo de nodo desconocido ${nd.type} en nodo ${i} (offset 0x${r.pos.toString(16)})`);
+    const nd={ name:strv(r.u32()), parent:r.u32(), mesh:null, light:null, behaviors:[] };
+    const flags=r.u32();
+    nd.pos=r.vec3(); nd.rot=r.vec3(); nd.scale=r.vec3();
+    if(flags&NODE_HAS_MESH){
+      const mesh={ kind:r.u32(), str:strv(r.u32()), genPayload:null, bindings:[] };
+      const gp=r.u32(); mesh.genPayload=r.bytes(gp); r.align4();
+      const nb=r.u32();
+      for(let k=0;k<nb;k++) mesh.bindings.push({submesh:strv(r.u32()), materialIndex:r.u32()});
+      r.align4();
+      nd.mesh=mesh;
     }
-    const sc=r.u32(); nd.scripts=[];
-    for(let k=0;k<sc;k++){
-      const sn=r.u32(), fl=r.u32(), bs=r.u32();
-      nd.scripts.push({name:sn,flag:fl,params:r.floats(bs>>2)});
+    if(flags&NODE_HAS_LIGHT){
+      nd.light={ kind:r.u32(), color:r.vec3() };
     }
-    nodes.push(nd);
+    const nsc=r.u32();
+    for(let k=0;k<nsc;k++){
+      const b={ typeName:strv(r.u32()), enabled:r.u32(), payload:null };
+      const bp=r.u32(); b.payload=r.bytes(bp); r.align4();
+      nd.behaviors.push(b);
+    }
+    doc.nodes.push(nd);
   }
-  checkConsumed(r,c);
-  // armar árbol
-  const roots=[];
-  nodes.forEach(nd=>{
-    if(nd.parent>=0&&nd.parent<nodes.length&&nd.parent!==nd.idx) nodes[nd.parent].children.push(nd);
-    else roots.push(nd);
+}
+
+/* ============================================================== WRITER ========= */
+// Espeja BinaryWriter: little-endian, Align4 con ceros, bloques con byteSize parcheado.
+function writer(){
+  let buf=new Uint8Array(1024), len=0;
+  const scratch=new DataView(new ArrayBuffer(4));
+  function ensure(n){ if(len+n<=buf.length)return; let cap=buf.length; while(cap<len+n)cap*=2;
+    const nb=new Uint8Array(cap); nb.set(buf); buf=nb; }
+  return {
+    get len(){return len},
+    u8(v){ ensure(1); buf[len++]=v&0xff; },
+    u32(v){ ensure(4); scratch.setUint32(0,v>>>0,true); for(let i=0;i<4;i++)buf[len++]=scratch.getUint8(i); },
+    f32(v){ ensure(4); scratch.setFloat32(0,v,true); for(let i=0;i<4;i++)buf[len++]=scratch.getUint8(i); },
+    vec3(a){ this.f32(a[0]); this.f32(a[1]); this.f32(a[2]); },
+    tag(s){ ensure(4); for(let i=0;i<4;i++)buf[len++]=s.charCodeAt(i)&0xff; },
+    raw(u8){ ensure(u8.length); buf.set(u8,len); len+=u8.length; },
+    align4(){ while(len%4!==0){ ensure(1); buf[len++]=0; } },
+    patchU32(off,v){ scratch.setUint32(0,v>>>0,true); for(let i=0;i<4;i++)buf[off+i]=scratch.getUint8(i); },
+    // Array<T trivial>: count + bytes + align4. Se pasan los u32 ya armados.
+    arrayU32(list){ this.u32(list.length); for(const v of list)this.u32(v); this.align4(); },
+    blob(u8){ this.u32(u8.length); this.raw(u8); this.align4(); },
+    beginBlock(){ const marker=len; this.u32(0); return marker; },
+    endBlock(marker){ this.align4(); this.patchU32(marker, len-(marker+4)); },
+    take(){ return buf.slice(0,len); },
+  };
+}
+
+// Tabla de strings incremental: parte del orden original y sólo agrega nuevas al final.
+// Así un documento sin cambios reproduce el STRT byte-idéntico.
+function makeInterner(base){
+  const strings=base.slice();
+  const lookup=new Map();
+  strings.forEach((s,i)=>{ if(!lookup.has(s)) lookup.set(s,i); });
+  if(!lookup.has('')){ strings.unshift(''); lookup.clear(); strings.forEach((s,i)=>{ if(!lookup.has(s))lookup.set(s,i); }); }
+  return {
+    intern(s){ s=s??''; if(lookup.has(s))return lookup.get(s); const idx=strings.length; strings.push(s); lookup.set(s,idx); return idx; },
+    strings,
+  };
+}
+
+function serializeEfe(doc){
+  const it=makeInterner(ORIG_STRINGS);
+  // Pre-pass: registrar cualquier string nuevo (los existentes conservan su índice).
+  for(const m of doc.materials){
+    it.intern(m.name); it.intern(m.shader); it.intern(m.vert); it.intern(m.frag);
+    for(const t of m.textures) it.intern(t.path);
+  }
+  for(const nd of doc.nodes){
+    it.intern(nd.name);
+    if(nd.mesh){ it.intern(nd.mesh.str); for(const b of nd.mesh.bindings) it.intern(b.submesh); }
+    for(const b of nd.behaviors) it.intern(b.typeName);
+  }
+
+  const w=writer();
+  // header
+  w.tag(MAGIC); w.u32(ENDIAN); w.u32(VERSION); w.u32(CONTENT_SCENE);
+  w.u32(4 + UNKNOWN_CHUNKS.length);
+
+  // STRT
+  let mk=chunkStart(w,'STRT');
+  writeSTRT(w, it.strings);
+  w.endBlock(mk);
+
+  // SCNE
+  mk=chunkStart(w,'SCNE');
+  w.f32(doc.ambientFactor); w.u32(doc.primarySunNode>>>0);
+  w.endBlock(mk);
+
+  // MATL
+  mk=chunkStart(w,'MATL');
+  w.u32(doc.materials.length);
+  for(const m of doc.materials){
+    w.u32(it.intern(m.name)); w.u32(it.intern(m.shader)); w.u32(it.intern(m.vert)); w.u32(it.intern(m.frag));
+    w.u32(m.textures.length);
+    for(const t of m.textures){ w.u32(t.slot); w.u32(it.intern(t.path)); w.u32(t.colorSpace); }
+    w.align4();
+    w.vec3(m.tint);
+    w.f32(m.metallic); w.f32(m.roughness); w.f32(m.aoStrength); w.f32(m.heightScale); w.f32(m.alphaCutoff);
+  }
+  w.endBlock(mk);
+
+  // NODE
+  mk=chunkStart(w,'NODE');
+  w.u32(doc.nodes.length);
+  for(const nd of doc.nodes){
+    w.u32(it.intern(nd.name)); w.u32(nd.parent>>>0);
+    const flags=(nd.mesh?NODE_HAS_MESH:0)|(nd.light?NODE_HAS_LIGHT:0);
+    w.u32(flags);
+    w.vec3(nd.pos); w.vec3(nd.rot); w.vec3(nd.scale);
+    if(nd.mesh){
+      w.u32(nd.mesh.kind); w.u32(it.intern(nd.mesh.str));
+      w.blob(nd.mesh.genPayload||new Uint8Array(0));
+      w.u32(nd.mesh.bindings.length);
+      for(const b of nd.mesh.bindings){ w.u32(it.intern(b.submesh)); w.u32(b.materialIndex>>>0); }
+      w.align4();
+    }
+    if(nd.light){ w.u32(nd.light.kind); w.vec3(nd.light.color); }
+    w.u32(nd.behaviors.length);
+    for(const b of nd.behaviors){
+      w.u32(it.intern(b.typeName)); w.u32(b.enabled>>>0);
+      w.blob(b.payload||new Uint8Array(0));
+    }
+  }
+  w.endBlock(mk);
+
+  // chunks desconocidos, crudos (preservados verbatim)
+  for(const uc of UNKNOWN_CHUNKS){
+    w.tag(uc.tag); const m2=w.beginBlock(); w.raw(uc.bytes); w.endBlock(m2);
+  }
+  return w.take();
+}
+function chunkStart(w,tag){ w.tag(tag); return w.beginBlock(); }
+function writeSTRT(w, strings){
+  // offsets: [0, len0, len0+len1, ...]  (count = nStrings+1)
+  const enc=new TextEncoder();
+  const blobs=strings.map(s=>enc.encode(s));
+  const offs=[0]; let acc=0;
+  for(const b of blobs){ acc+=b.length; offs.push(acc); }
+  w.arrayU32(offs);
+  const blob=new Uint8Array(acc); let p=0;
+  for(const b of blobs){ blob.set(b,p); p+=b.length; }
+  w.blob(blob);
+}
+
+/* ---------- validación de invariantes (ParseSceneDocument) ---------- */
+function validate(doc){
+  const errs=[];
+  if(doc.nodes.length){
+    if(doc.nodes[0].parent!==INVALID) errs.push('el nodo 0 debe ser la raíz (parent = ninguno)');
+    for(let i=1;i<doc.nodes.length;i++){
+      const p=doc.nodes[i].parent;
+      if(p===INVALID || p>=i) errs.push(`nodo ${i} rompe el pre-orden (parent=${p===INVALID?'ninguno':p}, debe ser < ${i})`);
+    }
+  }
+  if(doc.primarySunNode!==INVALID && doc.primarySunNode>=doc.nodes.length)
+    errs.push(`primarySunNode ${doc.primarySunNode} fuera de rango`);
+  doc.nodes.forEach((nd,i)=>{
+    if(nd.mesh) nd.mesh.bindings.forEach((b,k)=>{
+      if(b.materialIndex!==INVALID && b.materialIndex>=doc.materials.length)
+        errs.push(`nodo ${i}: binding ${k} apunta al material ${b.materialIndex} inexistente`);
+    });
   });
-  const ONE=v=>v[0]===1&&v[1]===1&&v[2]===1, ZERO=v=>!v[0]&&!v[1]&&!v[2];
-  function nodeHtml(nd){
-    const t=NODE_TYPES[nd.type]??'unk';
-    let props='';
-    if(!ZERO(nd.pos))   props+=`<div>pos ${V3(nd.pos)}</div>`;
-    if(!ZERO(nd.rot))   props+=`<div>rot ${V3(nd.rot)}</div>`;
-    if(!ONE(nd.scale))  props+=`<div>scale ${V3(nd.scale)}</div>`;
-    if(nd.type===1){
-      props+=`<div>${MESH_SRC[nd.src]??('src '+nd.src)} → ${STRREF(S,nd.path)}`+
-        (nd.params.length?` <span class="d">params</span> [${nd.params.map(F).join(', ')}]`:'')+`</div>`;
-      nd.mats.forEach(([sm,mi])=>props+=`<div>mat: ${STRREF(S,sm)} → ${I('#'+mi)}</div>`);
-    }
-    if(nd.type===2){
-      props+=`<div><span class="guess" title="enum ${nd.lightType} — mapeo inferido">${LIGHT_TYPES[nd.lightType]??('light '+nd.lightType)}</span> · color/intensidad ${V3(nd.color)}</div>`;
-    }
-    nd.scripts.forEach(sc=>props+=`<div>script ${STRREF(S,sc.name)}`+
-      (sc.flag?` <span class="d">flag ${sc.flag}</span>`:'')+
-      (sc.params.length?` [${sc.params.map(F).join(', ')}]`:'')+`</div>`);
-    return `<div class="node"><span class="o">#${nd.idx}</span> <span class="nodename">${STRREF(S,nd.name)}</span>`+
-      `<span class="ntype ${t}">${t}</span>`+
-      (props?`<div class="props">${props}</div>`:'')+`</div>`+
-      (nd.children.length?`<ul>${nd.children.map(ch=>`<li>${nodeHtml(ch)}</li>`).join('')}</ul>`:'');
-  }
-  return `<div class="note">${I(n)} nodos</div><ul class="tree">${roots.map(nd=>`<li>${nodeHtml(nd)}</li>`).join('')}</ul>`;
+  return errs;
 }
 
-function checkConsumed(r,c){
-  const end=c.payload+c.size;
-  if(r.pos!==end) throw new Error(`el parser consumió hasta 0x${r.pos.toString(16)} pero el chunk termina en 0x${end.toString(16)}`);
+function downloadEfe(){
+  const errs=validate(DOC);
+  if(errs.length){
+    alert('No se puede descargar, hay problemas de consistencia:\n\n• '+errs.join('\n• '));
+    return;
+  }
+  const bytes=serializeEfe(DOC);
+  const blob=new Blob([bytes],{type:'application/octet-stream'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=FILENAME.replace(/\.efe$/i,'')+'-editado.efe';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 
-/* ---------- hexdump genérico ---------- */
-function hexdump(dv,off,len){
-  const max=Math.min(len,4096);
-  let s='';
-  for(let i=0;i<max;i+=16){
-    let hx='',tx='';
-    for(let j=0;j<16;j++){
-      if(i+j<len){
-        const b=dv.getUint8(off+i+j);
-        hx+=b.toString(16).padStart(2,'0')+' ';
-        tx+=(b>=32&&b<127)?String.fromCharCode(b):'·';
-      }else hx+='   ';
-    }
-    s+=`<span class="a">${(off+i).toString(16).padStart(6,'0')}</span>  ${hx} <span class="t">${esc(tx)}</span>\n`;
+/* ============================================================== UI ============= */
+function markDirty(){ DIRTY=true; updateInfo(); }
+function updateInfo(){
+  const nn=DOC?DOC.nodes.length:0, nm=DOC?DOC.materials.length:0;
+  info.innerHTML=`${esc(FILENAME)} · EFE1 v${VERSION} · ${nm} materiales · ${nn} nodos`
+    + (DIRTY?` · <span class="mod">● modificado</span>`:'');
+}
+
+/* helpers de inputs enlazados al modelo */
+function numInput(obj,key,cls){
+  const el=document.createElement('input');
+  el.className='num '+(cls||''); el.type='number'; el.step='any';
+  el.value=prettyF(obj[key]);
+  el.oninput=()=>{ const v=parseFloat(el.value); if(isFinite(v)){ obj[key]=v; markDirty(); } };
+  return el;
+}
+function vec3Inputs(obj,key){
+  const wrap=document.createElement('span'); wrap.className='vecrow';
+  ['0','1','2'].forEach(i=>{
+    const el=document.createElement('input');
+    el.className='num'; el.type='number'; el.step='any'; el.value=prettyF(obj[key][i]);
+    el.oninput=()=>{ const v=parseFloat(el.value); if(isFinite(v)){ obj[key][+i]=v; markDirty(); } };
+    wrap.appendChild(el);
+  });
+  return wrap;
+}
+function textInput(obj,key,cls,ph){
+  const el=document.createElement('input');
+  el.className='str '+(cls||''); el.type='text'; el.value=obj[key]??''; if(ph)el.placeholder=ph;
+  el.oninput=()=>{ obj[key]=el.value; markDirty(); };
+  return el;
+}
+function selectInput(obj,key,map){
+  const el=document.createElement('select');
+  for(const [v,label] of Object.entries(map)){
+    const o=document.createElement('option'); o.value=v; o.textContent=`${v} · ${label}`;
+    if(+v===obj[key])o.selected=true; el.appendChild(o);
   }
-  if(len>max)s+=`… (${len-max} bytes más)`;
-  return `<div class="hex">${s}</div>`;
+  el.onchange=()=>{ obj[key]=+el.value; markDirty(); };
+  return el;
+}
+function colorInput(colorArr){
+  // color[] es rgb(+intensidad) en float; el picker edita rgb 0..1, se preserva el resto.
+  const el=document.createElement('input'); el.type='color';
+  const to255=v=>Math.max(0,Math.min(255,Math.round(v*255)));
+  el.value='#'+[0,1,2].map(i=>to255(colorArr[i]).toString(16).padStart(2,'0')).join('');
+  el.oninput=()=>{ const h=el.value; colorArr[0]=parseInt(h.slice(1,3),16)/255;
+    colorArr[1]=parseInt(h.slice(3,5),16)/255; colorArr[2]=parseInt(h.slice(5,7),16)/255; markDirty(); };
+  return el;
+}
+function row(label, ...nodes){
+  const d=document.createElement('div'); d.className='row';
+  const l=document.createElement('span'); l.className='lbl'; l.textContent=label; d.appendChild(l);
+  nodes.forEach(n=>{ if(typeof n==='string'){ const s=document.createElement('span'); s.className='small'; s.textContent=n; d.appendChild(s);} else d.appendChild(n); });
+  return d;
+}
+function btn(label,cls,onclick){
+  const b=document.createElement('button'); b.className=cls||''; b.textContent=label; b.onclick=onclick; return b;
+}
+function makeSection(tag,meta){
+  const sec=document.createElement('section'); sec.className='chunk';
+  sec.innerHTML=`<h2><span class="tag">${esc(tag)}</span><span class="meta">${esc(meta||'')}</span></h2><div class="body"></div>`;
+  sec.querySelector('h2').onclick=()=>sec.classList.toggle('closed');
+  return sec;
+}
+
+function render(){
+  err.style.display='none'; out.innerHTML='';
+  drop.style.display='none';
+  btnDownload.hidden=false; btnReload.hidden=false;
+  updateInfo();
+
+  out.appendChild(renderSceneSection());
+  out.appendChild(renderMaterialsSection());
+  out.appendChild(renderNodesSection());
+  if(UNKNOWN_CHUNKS.length) out.appendChild(renderUnknownSection());
+  $('#legend').style.display='flex';
+}
+
+function renderSceneSection(){
+  const sec=makeSection('SCNE','ajustes de la escena');
+  const body=sec.querySelector('.body');
+  const g=document.createElement('div'); g.className='grid';
+  const kA=document.createElement('span'); kA.className='k'; kA.textContent='ambientFactor';
+  g.appendChild(kA); g.appendChild(numInput(DOC,'ambientFactor'));
+  const kS=document.createElement('span'); kS.className='k'; kS.textContent='sol primario';
+  const sel=document.createElement('select');
+  const none=document.createElement('option'); none.value=String(INVALID); none.textContent='ninguno';
+  if(DOC.primarySunNode===INVALID)none.selected=true; sel.appendChild(none);
+  DOC.nodes.forEach((nd,i)=>{ const o=document.createElement('option'); o.value=String(i);
+    o.textContent=`#${i} · ${nd.name||'(sin nombre)'}`; if(DOC.primarySunNode===i)o.selected=true; sel.appendChild(o); });
+  sel.onchange=()=>{ DOC.primarySunNode=(sel.value===String(INVALID))?INVALID:+sel.value; markDirty(); };
+  g.appendChild(kS); g.appendChild(sel);
+  body.appendChild(g);
+  return sec;
+}
+
+function renderMaterialsSection(){
+  const sec=makeSection('MATL',`${DOC.materials.length} materiales`);
+  const body=sec.querySelector('.body');
+  const list=document.createElement('div');
+  DOC.materials.forEach((m,idx)=>list.appendChild(matCard(m,idx)));
+  body.appendChild(list);
+  const add=btn('+ agregar material','primary mini',()=>{
+    DOC.materials.push({ name:'material_nuevo', shader:'pbr',
+      vert:'assets/shaders/pbr.vert', frag:'assets/shaders/pbr.frag', textures:[],
+      tint:[1,1,1], metallic:0.5, roughness:1.0, aoStrength:0.5, heightScale:0.05, alphaCutoff:0.5 });
+    markDirty(); render();
+  });
+  const acts=document.createElement('div'); acts.className='actions'; acts.appendChild(add);
+  body.appendChild(acts);
+  return sec;
+}
+
+function matCard(m,idx){
+  const card=document.createElement('div'); card.className='matcard';
+  const h=document.createElement('h3'); h.textContent=`material #${idx}`;
+  const del=btn('borrar','danger mini',()=>{ deleteMaterial(idx); });
+  h.appendChild(del); card.appendChild(h);
+
+  const g=document.createElement('div'); g.className='grid';
+  const addRow=(k,node)=>{ const s=document.createElement('span'); s.className='k'; s.textContent=k; g.appendChild(s); g.appendChild(node); };
+  addRow('name',   textInput(m,'name','name'));
+  addRow('shader', textInput(m,'shader'));
+  addRow('vert',   textInput(m,'vert'));
+  addRow('frag',   textInput(m,'frag'));
+  const tint=document.createElement('span'); tint.appendChild(vec3Inputs(m,'tint')); tint.appendChild(colorInput(m.tint));
+  addRow('albedoTint', tint);
+  addRow('metallic',   numInput(m,'metallic'));
+  addRow('roughness',  numInput(m,'roughness'));
+  addRow('aoStrength', numInput(m,'aoStrength'));
+  addRow('heightScale',numInput(m,'heightScale'));
+  addRow('alphaCutoff',numInput(m,'alphaCutoff'));
+  card.appendChild(g);
+
+  const texWrap=document.createElement('div'); texWrap.style.marginTop='8px';
+  const th=document.createElement('div'); th.className='small'; th.textContent='texturas'; texWrap.appendChild(th);
+  m.textures.forEach((t,ti)=>{
+    const r=document.createElement('div'); r.className='row';
+    r.appendChild(selectInput(t,'slot',TEX_SLOTS));
+    r.appendChild(textInput(t,'path','str','ruta de la textura'));
+    r.appendChild(selectInput(t,'colorSpace',COLOR_SPACES));
+    r.appendChild(btn('×','danger mini',()=>{ m.textures.splice(ti,1); markDirty(); render(); }));
+    texWrap.appendChild(r);
+  });
+  texWrap.appendChild(btn('+ textura','mini',()=>{ m.textures.push({slot:0,path:'',colorSpace:0}); markDirty(); render(); }));
+  card.appendChild(texWrap);
+  return card;
+}
+
+function deleteMaterial(idx){
+  if(!confirm(`¿Borrar el material #${idx} ("${DOC.materials[idx].name}")?\nLos bindings que lo usaban se quitan y los que apuntan a índices mayores se reajustan.`)) return;
+  DOC.materials.splice(idx,1);
+  // remapear bindings de todos los nodos
+  DOC.nodes.forEach(nd=>{
+    if(!nd.mesh) return;
+    nd.mesh.bindings=nd.mesh.bindings.filter(b=>b.materialIndex!==idx);
+    nd.mesh.bindings.forEach(b=>{ if(b.materialIndex!==INVALID && b.materialIndex>idx) b.materialIndex--; });
+  });
+  markDirty(); render();
+}
+
+function renderNodesSection(){
+  const sec=makeSection('NODE',`${DOC.nodes.length} nodos`);
+  const body=sec.querySelector('.body');
+  // armar árbol por parent
+  const nodes=DOC.nodes;
+  const children=nodes.map(()=>[]);
+  const roots=[];
+  nodes.forEach((nd,i)=>{ if(nd.parent!==INVALID && nd.parent<i) children[nd.parent].push(i); else roots.push(i); });
+
+  const ul=document.createElement('ul'); ul.className='tree';
+  const build=(i)=>{
+    const li=document.createElement('li');
+    li.appendChild(nodeEditor(i));
+    if(children[i].length){ const sub=document.createElement('ul'); children[i].forEach(ci=>sub.appendChild(build(ci))); li.appendChild(sub); }
+    return li;
+  };
+  roots.forEach(ri=>ul.appendChild(build(ri)));
+  body.appendChild(ul);
+
+  const acts=document.createElement('div'); acts.className='actions';
+  acts.appendChild(btn('+ agregar modelo','primary mini', addModelPrompt));
+  body.appendChild(acts);
+  return sec;
+}
+
+function nodeEditor(i){
+  const nd=DOC.nodes[i];
+  const wrap=document.createElement('div'); wrap.className='node';
+  const head=document.createElement('div');
+  const oi=document.createElement('span'); oi.className='o'; oi.textContent='#'+i+' '; head.appendChild(oi);
+  head.appendChild(textInput(nd,'name','name'));
+  const t=nd.mesh?'mesh':(nd.light?'light':'empty');
+  const tt=document.createElement('span'); tt.className='ntype '+t; tt.textContent=t; head.appendChild(document.createTextNode(' ')); head.appendChild(tt);
+  wrap.appendChild(head);
+
+  const props=document.createElement('div'); props.className='props';
+  props.appendChild(row('pos',   vec3Inputs(nd,'pos')));
+  props.appendChild(row('rot',   vec3Inputs(nd,'rot')));
+  props.appendChild(row('scale', vec3Inputs(nd,'scale')));
+
+  if(nd.mesh){
+    props.appendChild(row('mesh', selectInput(nd.mesh,'kind',MESH_KINDS), textInput(nd.mesh,'str','str','path del modelo / nombre del generador')));
+    if(nd.mesh.genPayload && nd.mesh.genPayload.length){
+      props.appendChild(row('genPayload', `${nd.mesh.genPayload.length} bytes (opaco, se preserva)`));
+    }
+    nd.mesh.bindings.forEach((b,bi)=>{
+      const matSel=document.createElement('select');
+      const none=document.createElement('option'); none.value=String(INVALID); none.textContent='(sin material)';
+      if(b.materialIndex===INVALID)none.selected=true; matSel.appendChild(none);
+      DOC.materials.forEach((m,mi)=>{ const o=document.createElement('option'); o.value=String(mi);
+        o.textContent=`#${mi} · ${m.name}`; if(b.materialIndex===mi)o.selected=true; matSel.appendChild(o); });
+      matSel.onchange=()=>{ b.materialIndex=(matSel.value===String(INVALID))?INVALID:+matSel.value; markDirty(); };
+      const del=btn('×','danger mini',()=>{ nd.mesh.bindings.splice(bi,1); markDirty(); render(); });
+      props.appendChild(row('binding', textInput(b,'submesh','str','nombre del submesh'), matSel, del));
+    });
+    props.appendChild(row('', btn('+ binding','mini',()=>{ nd.mesh.bindings.push({submesh:'',materialIndex:DOC.materials.length?0:INVALID}); markDirty(); render(); })));
+  }
+
+  // toggle de luz
+  const lightRow=document.createElement('div'); lightRow.className='row';
+  const ll=document.createElement('span'); ll.className='lbl'; ll.textContent='light'; lightRow.appendChild(ll);
+  const chk=document.createElement('input'); chk.type='checkbox'; chk.checked=!!nd.light;
+  chk.onchange=()=>{ if(chk.checked){ if(!nd.light)nd.light={kind:0,color:[1,1,1]}; } else nd.light=null; markDirty(); render(); };
+  lightRow.appendChild(chk);
+  if(nd.light){
+    lightRow.appendChild(selectInput(nd.light,'kind',LIGHT_KINDS));
+    lightRow.appendChild(vec3Inputs(nd.light,'color'));
+    lightRow.appendChild(colorInput(nd.light.color));
+  }
+  props.appendChild(lightRow);
+
+  nd.behaviors.forEach(b=>{
+    props.appendChild(row('behavior', `${esc(b.typeName)}${b.enabled?'':' (deshabilitado)'} · payload ${b.payload?b.payload.length:0} bytes (opaco)`));
+  });
+
+  wrap.appendChild(props);
+  return wrap;
+}
+
+function addModelPrompt(){
+  const name=prompt('Nombre del nodo nuevo:','modelo');
+  if(name===null) return;
+  const path=prompt('Path del modelo (ej. assets/models/x.obj):','assets/models/');
+  if(path===null) return;
+  // elegir padre: por defecto la raíz (0). Se agrega al final para respetar el pre-orden.
+  let parent=0;
+  if(DOC.nodes.length>1){
+    const opts=DOC.nodes.map((n,i)=>`${i}: ${n.name||'(sin nombre)'}`).join('\n');
+    const ans=prompt('Índice del nodo padre:\n'+opts, '0');
+    if(ans===null) return;
+    parent=parseInt(ans,10);
+    if(!(parent>=0 && parent<DOC.nodes.length)){ alert('Índice de padre inválido'); return; }
+  }
+  DOC.nodes.push({
+    name, parent, pos:[0,0,0], rot:[0,0,0], scale:[1,1,1],
+    mesh:{ kind:0, str:path, genPayload:new Uint8Array(0), bindings:[] },
+    light:null, behaviors:[]
+  });
+  markDirty(); render();
+}
+
+function renderUnknownSection(){
+  const sec=makeSection('?','chunks no reconocidos (se preservan sin cambios al guardar)');
+  const body=sec.querySelector('.body');
+  UNKNOWN_CHUNKS.forEach(uc=>{
+    const n=document.createElement('div'); n.className='note';
+    n.innerHTML=`<b>${esc(uc.tag)}</b> · ${uc.bytes.length} bytes`;
+    body.appendChild(n);
+  });
+  return sec;
 }
 </script>
 </body>
