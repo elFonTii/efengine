@@ -168,6 +168,19 @@ namespace scene {
         }
     }
 
+    void SceneGraph::FixedUpdate(f32 fixedDt) {
+        for (Slot& slot : m_slots) {
+            if (!slot.alive) continue;
+            Node& node = slot.node;
+            if (node.behaviors.empty()) continue;
+
+            FixedUpdateContext ctx{ *this, node.self, node, fixedDt };
+            for (std::unique_ptr<Behavior>& b : node.behaviors) {
+                if (b && b->enabled) b->OnFixedUpdate(ctx);
+            }
+        }
+    }
+
     void SceneGraph::SetPrimarySun(NodeHandle handle) {
         EF_ASSERT(IsValid(handle), "SceneGraph::SetPrimarySun: handle invalido");
         m_primarySun = handle;

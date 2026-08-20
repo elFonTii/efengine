@@ -36,6 +36,7 @@ add_executable(efengine_tests
     scene/Camera.test.cpp
     scene/CameraController.test.cpp
     scene/Behavior.test.cpp
+    scene/BehaviorFixed.test.cpp
     scene/SceneGraphClear.test.cpp
     serialization/BinaryIO.test.cpp
     serialization/StringTable.test.cpp
