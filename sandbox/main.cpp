@@ -207,6 +207,15 @@ int main() {
         app.GetWindow().SetCursorCaptured(controller.WantsCursorCaptured());
         cam.SetAspect(app.GetWindow().GetAspectRatio());
 
+        // Pump de paso fijo. Corre ANTES de Update para que los behaviors
+        // variables vean la simulacion de este frame y no la del anterior (mismo
+        // orden que Unity). A partir del ciclo 3 aca adentro tambien va el step
+        // de fisica y el drenado de triggers.
+        core::Time& time = app.GetTime();
+        for (i32 i = 0; i < time.FixedSteps(); ++i) {
+            scene.FixedUpdate(time.FixedDelta());
+        }
+
         scene.Update(app.DeltaTime());
 
         app.RenderScene(scene, cam);

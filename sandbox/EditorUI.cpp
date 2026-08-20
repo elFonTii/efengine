@@ -6,6 +6,7 @@
 
 #include <efengine/application/Application.h>
 #include <efengine/core/Log.h>
+#include <efengine/core/Time.h>
 #include <efengine/renderer/BloomPass.h>
 #include <efengine/renderer/FxaaPass.h>
 #include <efengine/renderer/ShadowPass.h>
@@ -969,6 +970,11 @@ namespace {
             const glm::vec3& p = ctx.camera.Position();
             ImGui::Text("cam  %.2f, %.2f, %.2f", p.x, p.y, p.z);
             ImGui::Text("exp  %.2f   asp %.2f", ctx.camera.Exposure(), ctx.app.GetWindow().GetAspectRatio());
+
+            const core::Time& time = ctx.app.GetTime();
+            ImGui::Text("fix  %d pasos   alpha %.2f%s",
+                        time.FixedSteps(), time.Alpha(),
+                        time.FixedStepsSaturated() ? "   SATURADO" : "");
         }
         ImGui::End();
     }
