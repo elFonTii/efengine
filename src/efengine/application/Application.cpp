@@ -14,9 +14,6 @@ namespace application {
         , m_context( m_window )
         , m_sceneFB(m_window.GetWidth(), m_window.GetHeight())
         , m_debugUI( m_window )
-        , m_tonemapPass( m_renderer, m_fullscreenQuad,
-                m_resources.GetShader("tonemap", "assets/shaders/screen.vert", "assets/shaders/tonemap.frag")
-         )
         , m_bloomPass( m_renderer, m_fullscreenQuad,
                m_resources.GetShader("brightpass",     "assets/shaders/screen.vert", "assets/shaders/brightpass.frag"),
                m_resources.GetShader("blur",           "assets/shaders/screen.vert", "assets/shaders/blur.frag"),
@@ -43,9 +40,12 @@ namespace application {
 
         renderer::Buffer       vbo(quadVertices, sizeof(quadVertices));
         renderer::IndexBuffer  ebo(quadIndices, 6);
+        // Dos eslabones y no tres: el composite del bloom tonemapea, asi que la
+        // imagen sale de ahi ya en LDR sRGB. El orden efectivo sigue siendo
+        // bloom -> tonemap -> FXAA, que es el correcto: FXAA estima contraste
+        // asumiendo valores perceptuales.
         m_postChain.Add(&m_bloomPass);
-        m_postChain.Add(&m_tonemapPass);
-        m_postChain.Add(&m_fxaaPass);   // último eslabón → escribe al backbuffer; tonemap pasa a un scratch LDR
+        m_postChain.Add(&m_fxaaPass);   // ultimo eslabon -> escribe al backbuffer
         renderer::VertexLayout layout;
         layout.Push(renderer::ShaderDataType::Float2);
         layout.Push(renderer::ShaderDataType::Float2); 
@@ -313,7 +313,7 @@ namespace application {
         }
 
         // Ya no hay "desbindear": el post chain declara su propio destino por pase.
-        m_tonemapPass.SetExposure(camera.Exposure());
+        m_bloomPass.SetExposure(camera.Exposure());
         m_postChain.Run(m_sceneFB.ColorTexture());
     }
 

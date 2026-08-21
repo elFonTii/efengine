@@ -5,7 +5,6 @@
 #include <efengine/renderer/Context.h>
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Framebuffer.h>
-#include <efengine/renderer/TonemapPass.h>
 #include <efengine/renderer/BloomPass.h>
 #include <efengine/renderer/FxaaPass.h>
 #include <efengine/renderer/PostChain.h>
@@ -81,7 +80,6 @@ namespace application {
             resources::ResourceManager m_resources; // 5
             application::DebugUI m_debugUI;
             renderer::VertexArray m_fullscreenQuad; // 6
-            renderer::TonemapPass m_tonemapPass;
             renderer::BloomPass m_bloomPass;
             renderer::FxaaPass m_fxaaPass;
             renderer::PostChain m_postChain;
