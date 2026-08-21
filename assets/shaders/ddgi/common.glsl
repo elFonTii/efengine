@@ -30,6 +30,18 @@ const float kDdgiPI     = 3.14159265359;
 
 bool DdgiEnabled() { return uDdgiParams1.x > 0.5; }
 
+// -- Ablation test (params2.w) -----------------------------------------------
+// Instrumento de MEDICION, no un modo de imagen: con esto encendido, pbr.frag
+// devuelve una irradiancia constante en vez de samplear el volumen y deja el
+// resto del shading intacto. Aisla el coste de los ~16 gathers del sampleo
+// dentro del pase Forward, que es la unica forma de saber si el Forward esta
+// parado en latencia de memoria o en otra cosa.
+//
+// Un solo float codifica las dos cosas: negativo = apagado, >= 0 = el valor.
+// Ver el comentario de MakeDdgiBlock en ShaderBlocks.cpp.
+bool  DdgiAblate()            { return uDdgiParams2.w >= 0.0; }
+float DdgiAblateIrradiance()  { return uDdgiParams2.w; }
+
 // -- Modo de debug de vista --------------------------------------------------
 // Viaja en params1.z. Lo consume pbr.frag para escribir UN termino del shading
 // en vez de la suma final. Existe porque DDGI entra como una fraccion de

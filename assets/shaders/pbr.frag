@@ -349,7 +349,12 @@ void main() {
         // distancia que no van a ningun lado. La excepcion es el modo que existe
         // justamente para ver lo que el fade descarta.
         if (ddgiFade > 0.0 || DdgiDebugView() == kDdgiViewDdgiNoFade) {
-            ddgiIrr = SampleDdgiIrradiance(vFragPos, N, bentN, V) * uDdgiParams0.y;
+            // Ablation test: irradiancia constante, MISMO camino aguas abajo.
+            // Lo unico que desaparece son los gathers del volumen. Ver
+            // DdgiSettings::ablateSample.
+            ddgiIrr = (DdgiAblate() ? vec3(DdgiAblateIrradiance())
+                                    : SampleDdgiIrradiance(vFragPos, N, bentN, V))
+                    * uDdgiParams0.y;
         }
         if (ddgiFade > 0.0) indirectDiffuse = mix(iblIrr, ddgiIrr, ddgiFade);
     }

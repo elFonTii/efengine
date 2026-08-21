@@ -640,6 +640,20 @@ namespace {
             ImGui::TextColored(kColorAviso, "Vista de debug activa: la imagen NO es la final.");
         }
 
+        // -- Diagnostico de rendimiento ---------------------------------------
+        // Separado del bloque de vistas a proposito: las vistas responden "que
+        // aporta DDGI", esto responde "cuanto cuesta". Es el ablation test de la
+        // tarea 0 del plan de optimizacion; se mide con el panel de profiling
+        // abierto, mirando el pase Forward.
+        ImGui::SeparatorText("Diagnostico");
+        ImGui::Checkbox("Ablation: irradiancia constante", &s.ablateSample);
+        if (s.ablateSample) {
+            ImGui::SliderFloat("Valor del ablation", &s.ablateIrradiance, 0.0f, 2.0f, "%.3f");
+            ImGui::TextColored(kColorAviso,
+                               "Medicion activa: la imagen NO es la final. Mira 'Forward' en el profiler.");
+        }
+
+        ImGui::SeparatorText("Volcado");
         ImGui::Checkbox("Mostrar probes", &s.debugProbes);
         const char* modos[] = { "Irradiancia", "Media de distancia", "Target de captura",
                                 "Target de captura (distancia)" };

@@ -280,7 +280,39 @@ TEST_CASE("MakeDdgiBlock: params2 lleva maxDistance y los dos umbrales de backfa
     CHECK(b.params2.x == doctest::Approx(12.5f));
     CHECK(b.params2.y == doctest::Approx(0.2f));
     CHECK(b.params2.z == doctest::Approx(0.4f));
-    CHECK(b.params2.w == doctest::Approx(0.0f));
+    // .w es el ablation test, apagado por default: negativo.
+    CHECK(b.params2.w < 0.0f);
+}
+
+TEST_CASE("MakeDdgiBlock: params2.w codifica el ablation en un solo float") {
+    DdgiGrid grid;
+    grid.spacing = glm::vec3(1.0f);
+    grid.counts  = glm::ivec3(2, 2, 2);
+
+    DdgiSettings s;
+
+    // Apagado: negativo. El shader lo lee como "samplea el volumen".
+    s.ablateSample = false;
+    s.ablateIrradiance = 0.25f;
+    CHECK(MakeDdgiBlock(grid, s, UpdateRange{}, true).params2.w < 0.0f);
+
+    // Encendido: el valor constante, que tiene que ser >= 0 para que el
+    // predicado del shader (>= 0.0) no lo confunda con "apagado".
+    s.ablateSample = true;
+    CHECK(MakeDdgiBlock(grid, s, UpdateRange{}, true).params2.w == doctest::Approx(0.25f));
+
+    // Un valor negativo escrito a mano se recorta a 0: si se colara, apagaria
+    // el ablation en silencio justo cuando se lo acaba de encender.
+    s.ablateIrradiance = -3.0f;
+    CHECK(MakeDdgiBlock(grid, s, UpdateRange{}, true).params2.w == doctest::Approx(0.0f));
+}
+
+TEST_CASE("DdgiSettings: el ablation arranca apagado y no altera la imagen") {
+    const DdgiSettings s;
+    CHECK(s.ablateSample == false);
+    // No-cero a proposito: con cero el compilador puede plegar la multiplicacion
+    // por albedo y borrar trabajo que el camino real si hace.
+    CHECK(s.ablateIrradiance > 0.0f);
 }
 
 TEST_CASE("DdgiSettings: los umbrales de backface arrancan con start < end") {

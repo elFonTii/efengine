@@ -2,6 +2,7 @@
 #include "efengine/renderer/Renderer.h"
 
 #include <glm/gtc/matrix_inverse.hpp>
+#include <algorithm>
 #include <cstddef>
 
 namespace efengine {
@@ -141,9 +142,16 @@ namespace renderer {
         b.params1 = glm::vec4((settings.enabled && atlasValid) ? 1.0f : 0.0f,
                               settings.chebyshevSharpness,
                               static_cast<f32>(settings.debugView), 0.0f);
+        // params2.w codifica el ablation test en UN float: negativo = apagado,
+        // >= 0 = el valor constante que pbr.frag devuelve en vez de samplear.
+        // Dos campos (flag + valor) habrian obligado a crecer el bloque y a
+        // tocar los cinco shaders que lo declaran para un instrumento de medida.
         b.params2 = glm::vec4(settings.maxDistance,
                               settings.backfaceFadeStart,
-                              settings.backfaceFadeEnd, 0.0f);
+                              settings.backfaceFadeEnd,
+                              settings.ablateSample
+                                  ? std::max(settings.ablateIrradiance, 0.0f)
+                                  : -1.0f);
         return b;
     }
 
