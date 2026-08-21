@@ -839,12 +839,16 @@ namespace {
 
         // -- La tabla, en ORDEN DE FRAME. Ordenarla por costo haria saltar las
         // -- filas entre corridas y volveria imposible comparar dos mediciones.
-        if (ImGui::BeginTable("pases", 4,
+        if (ImGui::BeginTable("pases", 5,
                 ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("Pase");
             ImGui::TableSetupColumn("GPU ms");
             ImGui::TableSetupColumn("CPU ms");
             ImGui::TableSetupColumn("Draws");
+            // El peor frame de la ventana, GPU o CPU, el que sea mas alto. Es la
+            // columna que convierte "hay picos en el grafico de frametime" en
+            // "los produce este pase".
+            ImGui::TableSetupColumn("Peor ms");
             ImGui::TableHeadersRow();
 
             for (const renderer::PassRow& r : prof.stats().Rows()) {
@@ -858,6 +862,7 @@ namespace {
                     ImGui::TableNextColumn(); ImGui::TextDisabled("--");
                     ImGui::TableNextColumn(); ImGui::TextDisabled("--");
                     ImGui::TableNextColumn(); ImGui::TextDisabled("--");
+                    ImGui::TableNextColumn(); ImGui::TextDisabled("--");
                     continue;
                 }
 
@@ -865,6 +870,19 @@ namespace {
                 ImGui::TableNextColumn(); ImGui::Text("%6.3f", r.gpuMs);
                 ImGui::TableNextColumn(); ImGui::Text("%6.3f", r.cpuMs);
                 ImGui::TableNextColumn(); ImGui::Text("%.0f",  r.drawCalls);
+
+                // El peor frame de la ventana, en rojo si se despego del
+                // promedio. Es el instrumento para atribuir un pico: un pase que
+                // cuesta 0.15 ms casi siempre y 4 ms cada 200 frames promedia
+                // 0.17 y en la columna de promedio no se distingue de uno parejo.
+                const f32 peor = (r.gpuMaxMs > r.cpuMaxMs) ? r.gpuMaxMs : r.cpuMaxMs;
+                const f32 medio = (r.gpuMs > r.cpuMs) ? r.gpuMs : r.cpuMs;
+                ImGui::TableNextColumn();
+                if (medio > 0.0f && peor > medio * 2.0f) {
+                    ImGui::TextColored(kColorAviso, "%6.3f", peor);
+                } else {
+                    ImGui::Text("%6.3f", peor);
+                }
             }
             ImGui::EndTable();
         }
@@ -874,6 +892,21 @@ namespace {
         // -- El historico que FrameStats ya lleva --
         const FrameStats& fs = st.stats;
         ImGui::Text("Frame: %.2f ms  (%.0f FPS)", fs.AvgMs(), fs.AvgFps());
+
+        // La cola, no la media. Un frame de 4.3 ms de promedio con dos picos de
+        // 15 se siente peor que uno de 6 parejo, y el promedio dice lo contrario.
+        ImGui::Text("p95 %.2f   p99 %.2f   max %.2f ms", fs.P95Ms(), fs.P99Ms(), fs.MaxMs());
+
+        const u32 picos = fs.Spikes();
+        if (picos > 0u) {
+            ImGui::TextColored(kColorAviso,
+                               "%u de %d frames por encima de %.0fx el promedio",
+                               picos, fs.HistoryCount(), FrameStats::kSpikeFactor);
+            ImGui::TextDisabled("mira la columna 'Peor ms' para ver que pase los produce");
+        } else {
+            ImGui::TextColored(kColorOk, "sin picos en los ultimos %d frames", fs.HistoryCount());
+        }
+
         ImGui::PlotLines("##frame", fs.History(), fs.HistoryCount(), fs.HistoryOffset(),
                          nullptr, 0.0f, FLT_MAX, ImVec2(0.0f, 60.0f));
 
@@ -1017,6 +1050,14 @@ namespace {
         if (ImGui::Begin("##stats", &st.showStats, flags)) {
             const FrameStats& fs = st.stats;
             ImGui::Text("%6.1f FPS   (%.2f ms)", fs.AvgFps(), fs.AvgMs());
+            // El p99 al lado del promedio y no escondido en el panel grande: es
+            // el numero que dice si la imagen se siente pareja, y si solo se ve
+            // el promedio uno optimiza la media y empeora la cola sin enterarse.
+            if (fs.Spikes() > 0u) {
+                ImGui::TextColored(kColorAviso, "p99 %.2f ms   %u picos", fs.P99Ms(), fs.Spikes());
+            } else {
+                ImGui::TextDisabled("p99 %.2f ms", fs.P99Ms());
+            }
 
             // Escala fija 0..33.3 ms (o sea, hasta 30 FPS). Autoescalada, el ruido
             // de un frame quieto se veria como una montana rusa y no informaria nada.
