@@ -28,6 +28,17 @@ layout(binding = 13) uniform sampler2D uDdgiDistance;
 const int   kDdgiBorder = 1;
 const float kDdgiPI     = 3.14159265359;
 
+// Texels de UNA cara del target de captura. Tiene que coincidir con
+// kProbeFaceSize^2 de DdgiVolume.h; hay un static_assert en DdgiPass.cpp que lo
+// ata. Lo usan los dos blends para dimensionar el cache de shared memory con el
+// que recorren la captura cara por cara.
+//
+// Por cara y no las seis juntas: seis caras serian 1536 entradas, y con los dos
+// arrays que el blend necesita eso pasa de los 32 KB que el spec de GL garantiza
+// por workgroup. Una cara son 256 entradas, 8 KB, y entra en cualquier
+// implementacion.
+const int kDdgiFaceTexels = 256;
+
 bool DdgiEnabled() { return uDdgiParams1.x > 0.5; }
 
 // -- Ablation test (params2.w) -----------------------------------------------

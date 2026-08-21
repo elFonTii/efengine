@@ -10,8 +10,26 @@ layout(rgba16f, binding = 0) uniform image2D uIrradianceAtlas;
 
 #include "ddgi/common.glsl"
 
+// -- Cache de la captura en shared memory ------------------------------------
+// Cada texel de salida integra las 6*faceSize^2 = 1536 muestras del probe, y hay
+// 100 texels de salida por workgroup: sin cache son 153.600 texelFetch POR PROBE
+// sobre las mismas 1536 direcciones. Con el cache son 1536, y el bucle interno
+// lee de LDS.
+//
+// Ademas de la radiancia se cachea la direccion y el angulo solido del texel de
+// captura, que dependen solo de (cara, x, y): son los mismos para los 100
+// hilos y para los 14 probes del frame, y se recalculaban en cada uno.
+//
+// Se recorre CARA POR CARA (256 entradas, 8 KB) y no las seis juntas (1536,
+// 48 KB): 48 KB supera los 32 KB que el spec de GL garantiza por workgroup.
+shared vec4 sRad[kDdgiFaceTexels];   // rgb = radiancia, a = angulo solido
+shared vec3 sDir[kDdgiFaceTexels];   // direccion de mundo del texel de captura
+
 void main() {
     int slot = int(gl_WorkGroupID.x);
+    // El early-out es UNIFORME en el workgroup (slot sale de gl_WorkGroupID), asi
+    // que o salen todas las invocaciones o ninguna. Es lo que hace legales los
+    // barrier() de mas abajo.
     if (slot >= uDdgiRange.y) return;
 
     int total = uDdgiCounts.w;
@@ -50,32 +68,42 @@ void main() {
     // ibl/irradiance_convolve.comp. Cambiar esto rompe el criterio de que
     // encender DDGI no altere el brillo.
     int faceSize = uDdgiRange.z;
+    int nTexels  = min(faceSize * faceSize, kDdgiFaceTexels);
+    int nHilos   = int(gl_WorkGroupSize.x * gl_WorkGroupSize.y);
 
     vec3  suma      = vec3(0.0);
     float sumaPesos = 0.0;
 
     for (int face = 0; face < 6; ++face) {
-        for (int y = 0; y < faceSize; ++y) {
-            for (int x = 0; x < faceSize; ++x) {
-                vec2 ndc = (vec2(x, y) + 0.5) / float(faceSize) * 2.0 - 1.0;
-                vec3 dirCap = dirForFace(uint(face), ndc);
+        // El primer barrier protege el cache de la cara ANTERIOR: sin el, un hilo
+        // que ya termino su integral empezaria a pisar entradas que otro todavia
+        // esta leyendo.
+        barrier();
+        for (int i = int(gl_LocalInvocationIndex); i < nTexels; i += nHilos) {
+            int x = i % faceSize;
+            int y = i / faceSize;
 
-                float coseno = dot(dirCap, dirOct);
-                if (coseno <= 0.0) continue;
+            vec2 ndc = (vec2(x, y) + 0.5) / float(faceSize) * 2.0 - 1.0;
 
-                // Angulo solido del texel: los de las esquinas de cada cara
-                // subtienden menos. Sin esto la irradiancia sale sesgada hacia
-                // las esquinas.
-                float r2 = 1.0 + ndc.x * ndc.x + ndc.y * ndc.y;
-                float solidAngle = 1.0 / (r2 * sqrt(r2));
+            // Angulo solido del texel: los de las esquinas de cada cara
+            // subtienden menos. Sin esto la irradiancia sale sesgada hacia
+            // las esquinas.
+            float r2 = 1.0 + ndc.x * ndc.x + ndc.y * ndc.y;
 
-                ivec2 capTexel = ivec2(face * faceSize + x, slot * faceSize + y);
-                vec3  radiancia = texelFetch(uCapture, capTexel, 0).rgb;
+            sDir[i] = dirForFace(uint(face), ndc);
+            sRad[i] = vec4(texelFetch(uCapture,
+                                      ivec2(face * faceSize + x, slot * faceSize + y), 0).rgb,
+                           1.0 / (r2 * sqrt(r2)));
+        }
+        barrier();
 
-                float peso = coseno * solidAngle;
-                suma      += radiancia * peso;
-                sumaPesos += peso;
-            }
+        for (int i = 0; i < nTexels; ++i) {
+            float coseno = dot(sDir[i], dirOct);
+            if (coseno <= 0.0) continue;
+
+            float peso = coseno * sRad[i].a;
+            suma      += sRad[i].rgb * peso;
+            sumaPesos += peso;
         }
     }
 

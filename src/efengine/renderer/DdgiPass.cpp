@@ -33,6 +33,19 @@ namespace renderer {
         // "Muy lejos": el cielo y lo que no pega nada. Chebyshev nunca lo cuenta
         // como oclusion.
         constexpr f32 kFarDistance = 1.0e4f;
+
+        // Los dos blends recorren la captura cara por cara con un cache de
+        // shared memory dimensionado a kDdgiFaceTexels (una constante de
+        // ddgi/common.glsl). Si kProbeFaceSize crece por encima de eso, el
+        // min() del shader trunca el bucle y la integral se calcula sobre menos
+        // direcciones de las que la captura tiene: la irradiancia queda sesgada
+        // hacia las primeras caras SIN QUE NADA FALLE. Este assert es la unica
+        // defensa, porque el shader no puede assertar.
+        constexpr u32 kShaderFaceTexels = 256u;
+        static_assert(kProbeFaceSize * kProbeFaceSize <= kShaderFaceTexels,
+                      "kProbeFaceSize crecio: subir kDdgiFaceTexels en "
+                      "assets/shaders/ddgi/common.glsl y revisar que el cache de "
+                      "los blends siga entrando en 32 KB de shared memory");
     }
 
     std::optional<DdgiPass> DdgiPass::Create(Renderer& renderer, VertexArray& fullscreenQuad,
