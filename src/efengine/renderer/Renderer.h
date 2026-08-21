@@ -12,6 +12,7 @@
 #include <efengine/renderer/IblContext.h>
 #include <efengine/renderer/ShaderBlocks.h>
 #include <efengine/renderer/SceneLighting.h>
+#include <efengine/renderer/IndirectContext.h>
 #include <efengine/renderer/UniformBuffer.h>
 
 #include <glm/glm.hpp>
@@ -71,6 +72,18 @@ namespace renderer {
             // SU updateRange y su hysteresis forzada del primer barrido, que no
             // son los que el frame le va a dar despues a pbr.frag.
             void SetDdgiBlock(const DdgiBlock& block) const;
+
+            // Re-sube el bloque de binding 6 (AO + upsample) y bindea el par de
+            // texturas de la indirecta. Existe porque IndirectPass corre DESPUES
+            // de BeginScene -- necesita el bloque Frame ya subido -- pero su
+            // resultado lo consume pbr.frag, que lee el bloque que BeginScene ya
+            // habia armado sin el.
+            //
+            // Sin esta segunda subida, upsample.x queda en cero y pbr.frag
+            // samplea el volumen inline igual: el pase corre, escribe su target
+            // y nadie lo lee. Falla en velocidad y no en imagen, que es
+            // exactamente la clase de bug que no se nota.
+            void SetIndirectContext(const AoContext& ao, const IndirectContext& indirect) const;
 
         private:
             // Un UBO por frecuencia de actualizacion. El de material vive aca y no

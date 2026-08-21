@@ -61,9 +61,27 @@ layout(binding = 11) uniform sampler2D   uBrdfLUT;
 // Bloque propio y no campos nuevos en Frame: extender Frame obliga a tocar los
 // cuatro shaders que lo declaran sin que ninguno use el dato.
 layout(std140, binding = 6) uniform AoParams {
-    vec4 uAoParams;   // enabled, bentNormal, multiBounce, debugView
+    vec4 uAoParams;    // enabled, bentNormal, multiBounce, debugView
+    // x = la indirecta llega ya resuelta en la unidad 15 (no samplear el volumen)
+    // y = el AO esta a resolucion reducida (subirlo con el mismo filtro)
+    // zw = resolucion en texels del target reducido, compartida por los dos
+    vec4 uUpsample;
 };
 layout(binding = 14) uniform sampler2D uAoTexture;
+
+// -- Señales resueltas a resolucion reducida (unidades 15 y 16) ---------------
+// uIndirect trae la irradiancia indirecta de DDGI ya escalada (rgb) y el fade
+// del volumen (a); lo escribe ddgi/indirect.frag a 1/2 por eje. uDepthNormal es
+// el prepass del AO A RESOLUCION COMPLETA y es la GUIA del upsample: sin el los
+// pesos no tienen contra que comparar.
+layout(binding = 15) uniform sampler2D uIndirect;
+layout(binding = 16) uniform sampler2D uDepthNormal;
+
+#include "common/bilateral.glsl"
+
+bool  UsaUpsample()   { return uUpsample.x > 0.5; }
+bool  AoEsReducido()  { return uUpsample.y > 0.5; }
+ivec2 TamanoReducido(){ return ivec2(uUpsample.zw + 0.5); }
 
 // Espeja renderer::TextureSlot: un bit por slot en uMapMask.x.
 const uint SLOT_ALBEDO    = 0u;
@@ -303,10 +321,32 @@ void main() {
     // "sin oclusión" (1.0) y el valor del mapa.
     float ao    = hasMap(SLOT_AO) ? mix(1.0, texture(uAOMap, uv).r, uScalars0.z) : 1.0;
 
+    // -- La guia del upsample -------------------------------------------------
+    // Depth y normal de ESTE pixel en espacio de VISTA, que es donde vive el
+    // prepass. Se calculan una sola vez y los usan los dos upsamples (el del AO
+    // y el de la indirecta).
+    //
+    // La normal es la GEOMETRICA y no la del normal map, a proposito: el prepass
+    // escribe la geometrica, y comparar contra una normal perturbada por textura
+    // rechazaria taps de la misma superficie plana en cuanto el mapa tenga algo
+    // de relieve.
+    float zGuia = 0.0;
+    vec3  nGuia = vec3(0.0, 0.0, 1.0);
+    if (UsaUpsample()) {
+        zGuia = -(uView * vec4(vFragPos, 1.0)).z;   // positivo: la convencion del prepass
+        nGuia = normalize(mat3(uView) * Ng);
+    }
+    ivec2 pixel = ivec2(gl_FragCoord.xy);
+
     // AO screen-space: el contacto sub-metrico que la grilla de probes no ve.
-    // texelFetch por gl_FragCoord y no texture(uv): el AO sale a resolucion
-    // completa, asi que no hace falta ningun uniform de tamano de pantalla.
-    vec4  aoMuestra = texelFetch(uAoTexture, ivec2(gl_FragCoord.xy), 0);
+    // A resolucion completa es un texelFetch directo; a resolucion reducida hay
+    // que subirlo con el mismo filtro bilateral que la indirecta, o el bent
+    // normal cruza siluetas y la visibilidad del fondo se derrama sobre el borde
+    // de los objetos.
+    vec4 aoMuestra = (UsaUpsample() && AoEsReducido())
+                   ? BilateralUpsample(uAoTexture, uDepthNormal, pixel,
+                                       zGuia, nGuia, TamanoReducido())
+                   : texelFetch(uAoTexture, pixel, 0);
     float ssVis     = (uAoParams.x > 0.5) ? clamp(aoMuestra.w, 0.0, 1.0) : 1.0;
 
     // El bent normal apunta hacia donde el hemisferio esta ABIERTO. Es lo que
@@ -342,7 +382,24 @@ void main() {
     vec3  ddgiIrr  = vec3(0.0);
 
     vec3 indirectDiffuse = iblIrr;
-    if (DdgiEnabled()) {
+    if (UsaUpsample()) {
+        // -- Camino rapido: la indirecta ya esta resuelta ---------------------
+        // ddgi/indirect.frag la calculo a 1/2 por eje con la MISMA matematica
+        // (mismo bias, mismo Chebyshev, misma intensidad) y dejo el fade en el
+        // alfa. Aca solo se sube de resolucion. Son 4 taps de la indirecta y 4
+        // de la guia -- ocho fetches locales y coherentes en cache -- contra los
+        // ~16 gathers dispersos del sampleo del volumen.
+        vec4 muestra = BilateralUpsample(uIndirect, uDepthNormal, pixel,
+                                         zGuia, nGuia, TamanoReducido());
+        ddgiIrr  = muestra.rgb;
+        ddgiFade = muestra.a;
+        if (ddgiFade > 0.0) indirectDiffuse = mix(iblIrr, ddgiIrr, ddgiFade);
+    } else if (DdgiEnabled()) {
+        // -- Camino inline: samplear el volumen por pixel ----------------------
+        // Es el camino de antes de que existiera IndirectPass, y sigue vivo
+        // porque ese pase depende del prepass del AO: con el AO apagado, o si
+        // fallo la carga de su shader, esto es lo unico que hay. Cuesta lo que
+        // cuesta -- ver el comentario de IndirectPass.h.
         ddgiFade = DdgiVolumeFade(vFragPos);
 
         // Con fade 0 el sampleo se saltea: son 8 taps de irradiancia y 8 de

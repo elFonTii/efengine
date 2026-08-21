@@ -49,14 +49,24 @@ namespace renderer {
         return b;
     }
 
-    AoBlock MakeAoBlock(const AoContext& ctx) {
+    AoBlock MakeAoBlock(const AoContext& ctx, const IndirectContext& indirect) {
         const bool on = (ctx.enabled && ctx.texture != null);
+
+        // Un contexto a medio llenar (textura si, prepass no) apagaria los pesos
+        // del upsample dejando el resto encendido: pbr.frag samplearia la
+        // indirecta de media resolucion con un bilineal a secas y saldrian los
+        // halos que el filtro existe para evitar. Valid() los ata a los dos.
+        const bool up = indirect.Valid();
 
         AoBlock b {};
         b.params = glm::vec4(on ? 1.0f : 0.0f,
                              (on && ctx.bentNormal)  ? 1.0f : 0.0f,
                              (on && ctx.multiBounce) ? 1.0f : 0.0f,
                              static_cast<f32>(ctx.debugView));
+        b.upsample = glm::vec4(up ? 1.0f : 0.0f,
+                               (up && indirect.aoReduced) ? 1.0f : 0.0f,
+                               up ? static_cast<f32>(indirect.size.x) : 0.0f,
+                               up ? static_cast<f32>(indirect.size.y) : 0.0f);
         return b;
     }
 

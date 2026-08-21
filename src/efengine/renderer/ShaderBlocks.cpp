@@ -61,7 +61,14 @@ namespace renderer {
     static_assert(offsetof(AoPassBlock, params1)     ==  96u, "AoPassBlock.params1");
     static_assert(offsetof(AoPassBlock, counts)      == 112u, "AoPassBlock.counts");
 
-    static_assert(sizeof(AoBlock) == 16u, "AoBlock: tamano std140 roto");
+    static_assert(sizeof(IndirectPassBlock) == 96u, "IndirectPassBlock: tamano std140 roto");
+    static_assert(offsetof(IndirectPassBlock, viewToWorld) ==  0u, "IndirectPassBlock.viewToWorld");
+    static_assert(offsetof(IndirectPassBlock, projInfo)    == 64u, "IndirectPassBlock.projInfo");
+    static_assert(offsetof(IndirectPassBlock, counts)      == 80u, "IndirectPassBlock.counts");
+
+    static_assert(sizeof(AoBlock) == 32u, "AoBlock: tamano std140 roto");
+    static_assert(offsetof(AoBlock, params)   ==  0u, "AoBlock.params");
+    static_assert(offsetof(AoBlock, upsample) == 16u, "AoBlock.upsample");
 
     // El array del bloque tiene que tener exactamente los slots que el motor cree.
     static_assert(Renderer::kMaxLights == 4u,

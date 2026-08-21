@@ -12,6 +12,7 @@ using efengine::renderer::AoProjInfo;
 using efengine::renderer::AoProjScale;
 using efengine::renderer::AoSettings;
 using efengine::renderer::MakeAoBlock;
+using efengine::renderer::IndirectContext;
 using efengine::renderer::MakeAoPassBlock;
 using efengine::renderer::SanitizeAoSettings;
 
@@ -73,7 +74,7 @@ TEST_CASE("MakeAoBlock: sin textura, el AO queda apagado aunque enabled sea true
     ctx.enabled = true;
     ctx.texture = nullptr;   // el caso "fallo la carga de shaders, no hay AoPass"
 
-    const AoBlock b = MakeAoBlock(ctx);
+    const AoBlock b = MakeAoBlock(ctx, IndirectContext{});
 
     CHECK(b.params.x == doctest::Approx(0.0f));
 }
@@ -91,12 +92,71 @@ TEST_CASE("MakeAoBlock: los flags viajan como 0/1") {
     ctx.multiBounce = false;
     ctx.debugView   = 2u;
 
-    const AoBlock b = MakeAoBlock(ctx);
+    const AoBlock b = MakeAoBlock(ctx, IndirectContext{});
 
     CHECK(b.params.x == doctest::Approx(1.0f));
     CHECK(b.params.y == doctest::Approx(1.0f));
     CHECK(b.params.z == doctest::Approx(0.0f));
     CHECK(b.params.w == doctest::Approx(2.0f));
+
+    // Sin contexto de indirecta, el upsample queda apagado y pbr.frag samplea
+    // el volumen inline: el camino de antes de que IndirectPass existiera.
+    CHECK(b.upsample.x == doctest::Approx(0.0f));
+}
+
+TEST_CASE("MakeAoBlock: el upsample necesita el par textura + prepass, no uno solo") {
+    const efengine::renderer::Texture* fake =
+        reinterpret_cast<const efengine::renderer::Texture*>(0x1);
+
+    AoContext ao;
+    ao.texture = fake;
+    ao.enabled = true;
+
+    // Solo la indirecta, sin el prepass que hace de guia: no alcanza. Encender
+    // el upsample sin guia lo degrada a un bilineal a secas, que es exactamente
+    // el halo en las siluetas que el filtro existe para evitar.
+    IndirectContext soloTextura;
+    soloTextura.texture = fake;
+    soloTextura.size    = glm::ivec2(960, 540);
+    CHECK(MakeAoBlock(ao, soloTextura).upsample.x == doctest::Approx(0.0f));
+
+    // Solo el prepass, sin la señal que subir: tampoco.
+    IndirectContext soloGuia;
+    soloGuia.depthNormal = fake;
+    soloGuia.size        = glm::ivec2(960, 540);
+    CHECK(MakeAoBlock(ao, soloGuia).upsample.x == doctest::Approx(0.0f));
+
+    // Un tamano en cero deja el clamp de taps sin limite y el quad del borde
+    // derecho leeria fuera del target.
+    IndirectContext sinTamano;
+    sinTamano.texture     = fake;
+    sinTamano.depthNormal = fake;
+    sinTamano.size        = glm::ivec2(0, 0);
+    CHECK(MakeAoBlock(ao, sinTamano).upsample.x == doctest::Approx(0.0f));
+}
+
+TEST_CASE("MakeAoBlock: upsample lleva los dos flags y el tamano del target reducido") {
+    const efengine::renderer::Texture* fake =
+        reinterpret_cast<const efengine::renderer::Texture*>(0x1);
+
+    AoContext ao;
+    ao.texture = fake;
+    ao.enabled = true;
+
+    IndirectContext ind;
+    ind.texture     = fake;
+    ind.depthNormal = fake;
+    ind.size        = glm::ivec2(960, 540);
+    ind.aoReduced   = false;
+
+    const AoBlock b = MakeAoBlock(ao, ind);
+    CHECK(b.upsample.x == doctest::Approx(1.0f));
+    CHECK(b.upsample.y == doctest::Approx(0.0f));   // el AO sigue a resolucion completa
+    CHECK(b.upsample.z == doctest::Approx(960.0f));
+    CHECK(b.upsample.w == doctest::Approx(540.0f));
+
+    ind.aoReduced = true;
+    CHECK(MakeAoBlock(ao, ind).upsample.y == doctest::Approx(1.0f));
 }
 
 TEST_CASE("MakeAoPassBlock: viewToWorld es la inversa de la view") {

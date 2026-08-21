@@ -99,7 +99,21 @@ namespace renderer {
         // El AO a su unidad fija. Si no hay textura, MakeAoBlock apaga el bloque
         // y pbr.frag ni la samplea.
         if (lighting.ao.texture != null) lighting.ao.texture->Bind(kAoTextureUnit);
-        const AoBlock aoBlock = MakeAoBlock(lighting.ao);
+
+        // La indirecta ya resuelta a resolucion reducida y su GUIA (el prepass a
+        // resolucion completa). Las dos o ninguna: IndirectContext::Valid() ata
+        // el par, porque el upsample sin guia no es upsample -- es un bilineal
+        // con halos en cada silueta.
+        //
+        // Con el par ausente, MakeAoBlock apaga upsample.x y pbr.frag samplea el
+        // volumen inline. Es el camino de antes de que el pase existiera, no una
+        // degradacion: la imagen es la misma, mas cara.
+        if (lighting.indirect.Valid()) {
+            lighting.indirect.texture->Bind(kIndirectTextureUnit);
+            lighting.indirect.depthNormal->Bind(kDepthNormalUnit);
+        }
+
+        const AoBlock aoBlock = MakeAoBlock(lighting.ao, lighting.indirect);
         m_aoUbo.Update(&aoBlock, sizeof(aoBlock));
     }
 
@@ -109,6 +123,15 @@ namespace renderer {
 
     void Renderer::SetDdgiBlock(const DdgiBlock& block) const {
         m_ddgiUbo.Update(&block, sizeof(block));
+    }
+
+    void Renderer::SetIndirectContext(const AoContext& ao, const IndirectContext& indirect) const {
+        if (indirect.Valid()) {
+            indirect.texture->Bind(kIndirectTextureUnit);
+            indirect.depthNormal->Bind(kDepthNormalUnit);
+        }
+        const AoBlock block = MakeAoBlock(ao, indirect);
+        m_aoUbo.Update(&block, sizeof(block));
     }
 
     void Renderer::SetObjectMatrix(const glm::mat4& model) const {

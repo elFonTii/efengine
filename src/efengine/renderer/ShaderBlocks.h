@@ -31,6 +31,14 @@ namespace renderer {
     // Unidad del AO screen-space, atrás de los dos atlas de DDGI.
     inline constexpr u32 kAoTextureUnit       = 14u;
 
+    // Las dos texturas que pbr.frag necesita para el upsample bilateral de las
+    // señales que se resuelven a media resolucion (la indirecta de DDGI y el
+    // propio AO). La guia es el prepass del AO A RESOLUCION COMPLETA: sin ella
+    // los pesos no tienen contra que comparar y el upsample vuelve a ser un
+    // bilineal con halos en las siluetas.
+    inline constexpr u32 kIndirectTextureUnit = 15u;
+    inline constexpr u32 kDepthNormalUnit     = 16u;
+
     // ── Mirrors C++ de los bloques std140 ──────────────────────────────────
     // Regla de std140 que gobierna todo esto: un vec3 ocupa igual 16 bytes, y un
     // array de vec3 paddea CADA elemento a 16. Promover todo a vec4 evita pelear
@@ -115,11 +123,35 @@ namespace renderer {
         glm::ivec4 counts;        // x=slices, y=steps, z=direccion del blur (0=H,1=V), w=debugView
     };
 
+    // PassParams (binding 4) de ddgi/indirect.frag: el pase que resuelve la
+    // indirecta difusa a media resolucion.
+    //
+    // Corre DESPUES de BeginScene, asi que la view/proj y la posicion de camara
+    // le llegan por el bloque Frame y no se repiten aca. Lo unico que Frame no
+    // trae es la inversa de la view (invertir una mat4 por pixel en el shader
+    // seria absurdo) y los tamanos, que dependen del target y no de la camara.
+    struct alignas(16) IndirectPassBlock {
+        glm::mat4  viewToWorld;   // inverse(view)
+        glm::vec4  projInfo;      // xy = reconstruccion view-space, zw = 1/resolucion del target
+        glm::ivec4 counts;        // x=escala vs full, y=usar bent normal, zw=resolucion full
+    };
+
     // Constantes de AO del frame (binding 6). Bloque propio y no campos nuevos
     // en FrameBlock por el mismo motivo que DdgiBlock: extender Frame obliga a
     // tocar los cuatro shaders que lo declaran sin que ninguno use el dato.
     struct alignas(16) AoBlock {
         glm::vec4 params;   // enabled, bentNormal, multiBounce, debugView
+
+        // Como pbr.frag reconstruye las señales que se resuelven a resolucion
+        // reducida. Va en ESTE bloque y no en uno nuevo porque el binding 6 ya
+        // es "lo que el forward necesita de los pases screen-space", y un bloque
+        // mas por dos flags seria un binding entero para 8 bytes utiles.
+        //
+        //   x = la indirecta esta en la unidad 15 -> upsample en vez de
+        //       samplear el volumen inline
+        //   y = el AO esta a resolucion reducida -> upsample tambien
+        //   zw = resolucion en texels del target reducido (la comparten los dos)
+        glm::vec4 upsample;
     };
 
     // ── Funciones puras que arman los bloques ──────────────────────────────

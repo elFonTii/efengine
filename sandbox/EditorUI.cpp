@@ -14,6 +14,7 @@
 #include <efengine/renderer/DdgiSettings.h>
 #include <efengine/renderer/DdgiVolume.h>
 #include <efengine/renderer/AoPass.h>
+#include <efengine/renderer/IndirectPass.h>
 #include <efengine/renderer/GpuProfiler.h>
 #include <efecom/RHI.h>
 #include <efengine/renderer/AoSettings.h>
@@ -645,6 +646,36 @@ namespace {
         // aporta DDGI", esto responde "cuanto cuesta". Es el ablation test de la
         // tarea 0 del plan de optimizacion; se mide con el panel de profiling
         // abierto, mirando el pase Forward.
+        ImGui::SeparatorText("Rendimiento");
+
+        // El interruptor del pase de indirecta a resolucion reducida. Esta aca y
+        // no escondido en codigo porque el plan de optimizacion pide medir cada
+        // cambio por separado: sin un toggle en caliente, comparar "con" y "sin"
+        // pide recompilar, y entre las dos compilaciones cambia el estado de
+        // boost de la GPU y el delta se pierde en el ruido.
+        std::optional<renderer::IndirectPass>& ind = ctx.app.GetIndirectPass();
+        if (ind.has_value()) {
+            bool usaIndirecta = ind->enabled();
+            if (ImGui::Checkbox("Indirecta a media resolucion", &usaIndirecta)) {
+                ind->SetEnabled(usaIndirecta);
+            }
+            if (usaIndirecta) {
+                ImGui::TextDisabled("target %ux%u; pbr.frag sube con upsample bilateral",
+                                    ind->width(), ind->height());
+                // Es la dependencia que mas sorprende: sin AO no hay prepass, y
+                // sin prepass no hay ni posicion ni guia para el upsample.
+                std::optional<renderer::AoPass>& ao = ctx.app.GetAoPass();
+                if (!ao.has_value() || !ao->settings().enabled) {
+                    ImGui::TextColored(kColorAviso,
+                                       "AO apagado: el pase no corre y pbr.frag samplea inline.");
+                }
+            } else {
+                ImGui::TextDisabled("pbr.frag samplea el volumen por pixel (~16 gathers)");
+            }
+        } else {
+            ImGui::TextColored(kColorError, "IndirectPass no disponible: fallo la carga del shader.");
+        }
+
         ImGui::SeparatorText("Diagnostico");
         ImGui::Checkbox("Ablation: irradiancia constante", &s.ablateSample);
         if (s.ablateSample) {

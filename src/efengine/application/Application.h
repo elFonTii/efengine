@@ -19,6 +19,7 @@
 #include <efengine/renderer/DdgiPass.h>
 #include <efengine/renderer/DdgiDebugPass.h>
 #include <efengine/renderer/AoPass.h>
+#include <efengine/renderer/IndirectPass.h>
 #include <efengine/renderer/SceneLighting.h>
 #include <efengine/renderer/GpuProfiler.h>
 #include <optional>
@@ -46,6 +47,7 @@ namespace application {
             renderer::ShadowPass& GetShadowPass() { return m_shadowPass; }
             std::optional<renderer::DdgiPass>& GetDdgiPass() { return m_ddgiPass; }
             std::optional<renderer::AoPass>&   GetAoPass()   { return m_aoPass; }
+            std::optional<renderer::IndirectPass>& GetIndirectPass() { return m_indirectPass; }
 
             // FRAME API
             bool Running() const { return !m_window.ShouldClose(); }
@@ -94,6 +96,10 @@ namespace application {
             std::optional<renderer::DdgiDebugPass> m_ddgiDebug;
             // Vacio si falto algun shader de AO: el frame sigue sin oclusion.
             std::optional<renderer::AoPass>        m_aoPass;
+            // Vacio si falto su shader: pbr.frag samplea el volumen inline, que
+            // es el camino de antes de que este pase existiera. Misma imagen,
+            // mas cara.
+            std::optional<renderer::IndirectPass>  m_indirectPass;
             // Cache del ResourceManager: la esfera del volcado de probes.
             const renderer::Model* m_ddgiProbeMesh = null;
 
