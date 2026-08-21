@@ -79,10 +79,15 @@ namespace application {
         // DDGI. Si falta cualquier shader, m_ddgiPass queda vacio y el frame
         // sigue con IBL puro: un fallo de carga no rompe el render.
         renderer::DdgiPass::Shaders ddgiShaders;
+        // Los dos vertex shaders son propios del pase y ya no los de pbr/skybox:
+        // la captura dibuja TODAS las vistas del frame con un draw instanciado, y
+        // cada instancia saca su vista de un SSBO en vez del bloque Frame.
         ddgiShaders.capture = m_resources.GetShader("ddgi_capture",
-                                  "assets/shaders/pbr.vert", "assets/shaders/ddgi/capture.frag");
+                                  "assets/shaders/ddgi/capture.vert",
+                                  "assets/shaders/ddgi/capture.frag");
         ddgiShaders.captureSky = m_resources.GetShader("ddgi_capture_sky",
-                                  "assets/shaders/skybox.vert", "assets/shaders/ddgi/capture_sky.frag");
+                                  "assets/shaders/ddgi/capture_sky.vert",
+                                  "assets/shaders/ddgi/capture_sky.frag");
         ddgiShaders.blendIrradiance = m_resources.GetComputeShader("ddgi_blend_irradiance",
                                   "assets/shaders/ddgi/blend_irradiance.comp");
         ddgiShaders.blendDistance = m_resources.GetComputeShader("ddgi_blend_distance",
@@ -285,12 +290,12 @@ namespace application {
 
         {
             EF_PROFILE_SCOPE("Forward");
-            const renderer::Renderer::DepthMode modo =
-                prepassListo ? renderer::Renderer::DepthMode::Equal
-                             : renderer::Renderer::DepthMode::Write;
+            renderer::DrawOptions opciones;
+            opciones.depth = prepassListo ? renderer::DepthMode::Equal
+                                          : renderer::DepthMode::Write;
             for(const scene::RenderItem& item : scene.Renderables()) {
                 if(!item.model) { EF_LOG_WARNING("Se intenta renderizar un item sin modelo"); continue; }
-                m_renderer.Submit(*item.model, *item.materials, item.world, null, null, modo);
+                m_renderer.Submit(*item.model, *item.materials, item.world, opciones);
             }
         }
 

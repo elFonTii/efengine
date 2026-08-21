@@ -146,7 +146,9 @@ namespace renderer {
                 // overrideShader SIN overrideState: asi cada material conserva su
                 // doubleSided. Forzar el estado dejaria las salas inward=1 (cascaras
                 // de espesor cero, que necesitan CullMode::None) fuera del target.
-                m_renderer.Submit(*item.model, *item.materials, item.world, m_shaders.depthNormal);
+                DrawOptions opciones;
+                opciones.shader = m_shaders.depthNormal;
+                m_renderer.Submit(*item.model, *item.materials, item.world, opciones);
             }
 
             // A partir de aca el depth compartido tiene la profundidad de la

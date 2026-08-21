@@ -61,6 +61,12 @@ namespace renderer {
     static_assert(offsetof(AoPassBlock, params1)     ==  96u, "AoPassBlock.params1");
     static_assert(offsetof(AoPassBlock, counts)      == 112u, "AoPassBlock.counts");
 
+    static_assert(sizeof(DdgiCaptureTile) == 160u, "DdgiCaptureTile: tamano std430 roto");
+    static_assert(offsetof(DdgiCaptureTile, viewProj)       ==   0u, "DdgiCaptureTile.viewProj");
+    static_assert(offsetof(DdgiCaptureTile, invViewProjRot) ==  64u, "DdgiCaptureTile.invViewProjRot");
+    static_assert(offsetof(DdgiCaptureTile, rect)           == 128u, "DdgiCaptureTile.rect");
+    static_assert(offsetof(DdgiCaptureTile, probeCenter)    == 144u, "DdgiCaptureTile.probeCenter");
+
     static_assert(sizeof(IndirectPassBlock) == 96u, "IndirectPassBlock: tamano std140 roto");
     static_assert(offsetof(IndirectPassBlock, viewToWorld) ==  0u, "IndirectPassBlock.viewToWorld");
     static_assert(offsetof(IndirectPassBlock, projInfo)    == 64u, "IndirectPassBlock.projInfo");

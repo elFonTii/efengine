@@ -7,7 +7,11 @@
 #include <efengine/renderer/ShadowContext.h>
 #include <efengine/renderer/IblContext.h>
 
+#include <efengine/renderer/ShaderBlocks.h>
+
+#include <glm/glm.hpp>
 #include <optional>
+#include <vector>
 
 namespace efengine {
 namespace scene { class SceneGraph; }
@@ -77,7 +81,7 @@ namespace renderer {
         private:
             DdgiPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
                      Texture capture, Texture irradiance, Texture distance,
-                     u32 captureFbo, u32 captureDepthRbo);
+                     u32 captureFbo, u32 captureDepthRbo, u32 tileSsbo);
 
             // Realoca los dos atlas si la grilla cambio de tamano. Los deja en
             // negro y rearma el contador de barridos.
@@ -88,9 +92,10 @@ namespace renderer {
             // siempre. Se hace con un FBO temporal y Clear: cero RHI nuevo.
             static void ClearAtlas(const Texture& atlas);
 
-            void CaptureProbe(const scene::SceneGraph& scene, const ShadowContext& shadow,
-                              const IblContext& ibl, const Cubemap* env,
-                              u32 probeIndex, u32 slot);
+            // Llena el SSBO con las probes*6 vistas del frame y lo sube. Una
+            // vez por frame, no una por vista: es lo que permite el draw
+            // instanciado. Devuelve cuantas vistas quedaron (= instancias).
+            u32 BuildTiles(const glm::mat4& proj);
 
             Renderer&    m_renderer;
             VertexArray& m_quad;
@@ -102,6 +107,12 @@ namespace renderer {
 
             u32 m_captureFbo      = 0u;
             u32 m_captureDepthRbo = 0u;
+
+            // Las vistas del frame, indexadas por gl_InstanceID. Se aloca al
+            // maximo una sola vez (kMaxProbesPerFrame * 6): mover el slider de
+            // probes por frame nunca realoca, igual que el target de captura.
+            u32 m_tileSsbo = 0u;
+            std::vector<DdgiCaptureTile> m_tiles;
 
             DdgiSettings m_settings;
             DdgiGrid     m_atlasGrid;      // la grilla con la que se alocaron los atlas

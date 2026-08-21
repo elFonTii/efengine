@@ -25,6 +25,50 @@ namespace renderer {
 
     class Cubemap;
 
+    // Como testea la profundidad un draw.
+    //
+    //   Write : GL_LESS escribiendo depth. Es lo normal.
+    //   Equal : GL_EQUAL sin escribir. Solo es valido si un depth prepass
+    //           ya lleno el buffer con ESTA camara y ESTA geometria; si
+    //           no, no se dibuja absolutamente nada.
+    //
+    // Es un campo de DrawOptions y no un `state` forzado porque tiene que
+    // respetar el doubleSided de cada material: el prepass culleo segun el
+    // material, y un forward que culleara distinto testearia contra la
+    // profundidad de un triangulo que el prepass nunca dibujo. Un `state`
+    // forzado, por contrato, ignora el material.
+    enum class DepthMode { Write, Equal };
+
+    // Todo lo que un pase puede cambiarle a un Submit. Es un struct y no
+    // una tira de parametros con default porque ya eran cuatro: en la
+    // llamada, `null, null, modo` no dice nada de lo que hace.
+    struct DrawOptions {
+        // Dibuja TODO con este programa en vez del del material, pero
+        // sigue subiendo el MaterialBlock y bindeando las texturas. Lo
+        // usan la captura de probes de DDGI (necesita el albedo de cada
+        // material pero un solo shader difuso) y el prepass del AO.
+        const Shader* shader = null;
+
+        // Fuerza el estado de rasterizacion e IGNORA mat.doubleSided. Va
+        // aparte de `shader` a proposito: dibujar con otro programa no
+        // implica dibujar con otro estado, y acoplarlos dejaria sin
+        // estado a cualquier otro consumidor de `shader`.
+        //
+        // Tiene precedencia sobre `depth`: quien fuerza el estado entero
+        // ya dijo como quiere el depth test.
+        const efecom::PipelineState* state = null;
+
+        DepthMode depth = DepthMode::Write;
+
+        // Repeticiones del draw. El vertex shader distingue cada una por
+        // gl_InstanceID; que significa cada instancia lo decide el, no
+        // esto. Lo usa la captura de DDGI para dibujar las 6 caras de
+        // cada probe con un solo draw.
+        u32 instances = 1u;
+    };
+
+
+
     class Renderer {
         public:
             static constexpr u32 kMaxLights = 4; // DEBE COINCIDIR CON MAX_LIGHTS DEL SHADER PRINCIPAL
@@ -35,7 +79,7 @@ namespace renderer {
 
             void Clear(f32 r, f32 g, f32 b, f32 a) const;
             void SetViewport(u32 width, u32 height) const;
-            void Draw(const VertexArray& va, const Shader& shader) const;
+            void Draw(const VertexArray& va, const Shader& shader, u32 instances = 1u) const;
 
             // Los cuatro contextos de iluminacion viajan en un solo struct: con
             // el AO eran nueve parametros, y el proximo sistema habria sumado el
@@ -44,36 +88,8 @@ namespace renderer {
                             const glm::vec3& viewPos, const std::vector<PointLight>& lights,
                             const DirectionalLight& sun, const SceneLighting& lighting);
 
-            // overrideShader != null dibuja TODO con ese programa en vez del del
-            // material, pero sigue subiendo el MaterialBlock y bindeando las
-            // texturas. Lo usa la captura de probes de DDGI, que necesita el
-            // albedo de cada material pero un solo shader difuso.
-            //
-            // overrideState fuerza el estado de rasterizacion e ignora
-            // mat.doubleSided. Va aparte de overrideShader a proposito: dibujar
-            // con otro shader no implica dibujar con otro estado, y acoplarlos
-            // dejaria sin estado a cualquier otro consumidor de overrideShader.
-
-            // Como testea la profundidad este draw.
-            //
-            //   Write : GL_LESS escribiendo depth. Es lo normal.
-            //   Equal : GL_EQUAL sin escribir. Solo es valido si un depth prepass
-            //           ya lleno el buffer con ESTA camara y ESTA geometria; si
-            //           no, no se dibuja absolutamente nada.
-            //
-            // Es un enum y no un overrideState porque tiene que respetar el
-            // doubleSided de cada material: el prepass culleo segun el material, y
-            // un forward que culleara distinto testearia contra la profundidad de
-            // un triangulo que el prepass nunca dibujo. Un overrideState, por
-            // contrato, ignora el material -- por eso no sirve aca.
-            enum class DepthMode { Write, Equal };
-
-            // overrideState tiene precedencia sobre depth: quien fuerza el estado
-            // entero ya dijo como quiere el depth test.
             void Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix,
-                        const Shader* overrideShader = null,
-                        const efecom::PipelineState* overrideState = null,
-                        DepthMode depth = DepthMode::Write);
+                        const DrawOptions& options = DrawOptions());
 
             // Sube la matriz de modelo al bloque Object (binding 2). Publico
             // porque ShadowPass tambien dibuja por objeto y necesita el mismo bloque.

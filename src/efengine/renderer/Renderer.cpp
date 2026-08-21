@@ -38,16 +38,23 @@ namespace renderer {
 
     void Renderer::SetViewport(u32 width, u32 height) const { efecom::SetViewport(0, 0, width, height); }
 
-    void Renderer::Draw(const VertexArray& va, const Shader& shader) const {
+    void Renderer::Draw(const VertexArray& va, const Shader& shader, u32 instances) const {
         EF_ASSERT(va.vertexCount() > 0, "Renderer::Draw: VertexArray sin vertices");
+        if (instances == 0u) return;
 
         shader.Bind();
         va.Bind();
 
+        // El camino no instanciado no es glDraw*Instanced con 1: es la misma
+        // llamada de siempre. Instanced con count 1 es equivalente en el papel,
+        // pero cambia el fast path del driver para el 99% de los draws del motor
+        // a cambio de nada.
         if(va.hasIndexBuffer()) {
-            efecom::DrawIndexed(va.indexCount());
+            if (instances > 1u) efecom::DrawIndexedInstanced(va.indexCount(), instances);
+            else                efecom::DrawIndexed(va.indexCount());
         } else {
-            efecom::DrawArrays(va.vertexCount());
+            if (instances > 1u) efecom::DrawArraysInstanced(va.vertexCount(), instances);
+            else                efecom::DrawArrays(va.vertexCount());
         }
 
         // Ya no se desbindea programa ni VAO: cada pase bindea lo suyo antes de
@@ -131,8 +138,7 @@ namespace renderer {
     }
 
     void Renderer::Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix,
-                          const Shader* overrideShader, const efecom::PipelineState* overrideState,
-                          DepthMode depth) {
+                          const DrawOptions& options) {
         // La matriz de modelo es del render item entero: se sube UNA vez, no una
         // por submesh como hacia el uModel viejo.
         SetObjectMatrix(modelMatrix);
@@ -145,10 +151,10 @@ namespace renderer {
             }
             const Material& mat = *it->second;
 
-            const bool igual = (depth == DepthMode::Equal);
+            const bool igual = (options.depth == DepthMode::Equal);
             efecom::ApplyPipelineState(
-                overrideState != null
-                    ? *overrideState
+                options.state != null
+                    ? *options.state
                     : (mat.doubleSided
                          ? (igual ? OpaqueDoubleSidedEqualState() : OpaqueDoubleSidedState())
                          : (igual ? OpaqueEqualState()            : OpaqueState())));
@@ -157,7 +163,9 @@ namespace renderer {
             m_materialUbo.Update(&block, sizeof(block));
             mat.BindTextures();
 
-            Draw(mesh.vertexArray(), (overrideShader != null) ? *overrideShader : mat.shader());
+            Draw(mesh.vertexArray(),
+                 (options.shader != null) ? *options.shader : mat.shader(),
+                 options.instances);
         }
     }
 }
