@@ -28,14 +28,14 @@ namespace renderer {
         }
 
         EF_LOG_INFO("IndirectPass: target %ux%u (1/%d de %ux%u)",
-                    Reduced(width), Reduced(height), kScale, width, height);
+                    ReducedExtent(width), ReducedExtent(height), kScale, width, height);
         return IndirectPass(renderer, fullscreenQuad, shader, width, height);
     }
 
     IndirectPass::IndirectPass(Renderer& renderer, VertexArray& fullscreenQuad, Shader* shader,
                                u32 width, u32 height)
         : m_renderer(renderer), m_quad(fullscreenQuad), m_shader(shader)
-        , m_fb(Reduced(width), Reduced(height))
+        , m_fb(ReducedExtent(width), ReducedExtent(height))
         , m_fullSize(static_cast<i32>(width), static_cast<i32>(height)) {}
 
     IndirectPass::IndirectPass(IndirectPass&& o) noexcept
@@ -43,7 +43,7 @@ namespace renderer {
         , m_fb(std::move(o.m_fb)), m_fullSize(o.m_fullSize)
         , m_ubo(std::move(o.m_ubo))
         , m_enabled(o.m_enabled), m_ranEste(o.m_ranEste)
-        , m_depthNormal(o.m_depthNormal), m_aoReduced(o.m_aoReduced) {}
+        , m_aoReduced(o.m_aoReduced) {}
 
     // Las dos referencias (renderer, quad) no se reasignan: son las mismas para
     // todo el proceso, y una referencia no se puede rebindear igual. Mismo
@@ -56,7 +56,6 @@ namespace renderer {
             m_ubo         = std::move(o.m_ubo);
             m_enabled     = o.m_enabled;
             m_ranEste     = o.m_ranEste;
-            m_depthNormal = o.m_depthNormal;
             m_aoReduced   = o.m_aoReduced;
         }
         return *this;
@@ -66,12 +65,14 @@ namespace renderer {
         if (fullWidth == 0u || fullHeight == 0u) return;
 
         m_fullSize = glm::ivec2(static_cast<i32>(fullWidth), static_cast<i32>(fullHeight));
-        m_fb.Resize(Reduced(fullWidth), Reduced(fullHeight));
+        m_fb.Resize(ReducedExtent(fullWidth), ReducedExtent(fullHeight));
     }
 
-    void IndirectPass::Render(const AoContext& ao, const Texture* depthNormal,
-                              const Texture* aoTexture,
+    void IndirectPass::Render(const AoContext& ao,
                               const glm::mat4& view, const glm::mat4& projection) {
+        const Texture* depthNormal = ao.depthNormal;
+        const Texture* aoTexture   = ao.texture;
+
         // Se apaga PRIMERO y se enciende solo al final: cualquier salida
         // temprana tiene que dejar el contexto invalido, o pbr.frag se quedaria
         // con el target del frame anterior y una camara que ya se movio.
@@ -86,14 +87,15 @@ namespace renderer {
 
         EF_PROFILE_SCOPE("Indirecta (1/2)");
 
-        // El target del AO comparte la resolucion de este pase, o esta a la
-        // completa. Se deduce comparando y no con un flag que el caller pase:
-        // un flag es una segunda fuente de verdad que se desincroniza el dia que
-        // alguien cambie la resolucion del AO y se olvide de este pase.
+        // En que grilla vive el target del AO. Sale de comparar los tamanos y no
+        // del ao.scale que viene en el contexto: lo que este shader necesita es
+        // que el texel que lee EXISTA, y eso lo decide el tamano real de la
+        // textura, no un numero que viaja aparte y puede ir un frame atrasado.
         m_aoReduced = (aoTexture != null
                     && aoTexture->width()  == m_fb.width()
                     && aoTexture->height() == m_fb.height()
-                    && m_fb.width()  != static_cast<u32>(m_fullSize.x));
+                    && m_fb.width() != static_cast<u32>(m_fullSize.x));
+
 
         IndirectPassBlock block {};
         block.viewToWorld = glm::inverse(view);
@@ -132,20 +134,15 @@ namespace renderer {
 
         m_renderer.Draw(m_quad, *m_shader);
 
-        m_depthNormal = depthNormal;
-        m_ranEste     = true;
+        m_ranEste = true;
     }
 
     IndirectContext IndirectPass::Context() const {
         IndirectContext ctx;
         if (!m_ranEste) return ctx;   // invalido -> pbr.frag samplea inline
 
-        ctx.texture     = &m_fb.ColorTexture();
-        ctx.depthNormal = m_depthNormal;
-        ctx.size        = glm::ivec2(static_cast<i32>(m_fb.width()),
-                                     static_cast<i32>(m_fb.height()));
-        ctx.scale       = kScale;
-        ctx.aoReduced   = m_aoReduced;
+        ctx.texture = &m_fb.ColorTexture();
+        ctx.scale   = kScale;
         return ctx;
     }
 

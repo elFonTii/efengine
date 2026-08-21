@@ -119,7 +119,7 @@ namespace renderer {
         glm::mat4  viewToWorld;   // inverse(view): emite el bent normal en world space
         glm::vec4  projInfo;      // xy = reconstruccion view-space, zw = 1/resolucion
         glm::vec4  params0;       // radius (m), thickness, intensity, maxScreenRadius (px)
-        glm::vec4  params1;       // projScale (px por metro a 1 m), _, _, _
+        glm::vec4  params1;       // projScale (px por metro a 1 m), escala vs full, _, _
         glm::ivec4 counts;        // x=slices, y=steps, z=direccion del blur (0=H,1=V), w=debugView
     };
 
@@ -150,7 +150,12 @@ namespace renderer {
         //   x = la indirecta esta en la unidad 15 -> upsample en vez de
         //       samplear el volumen inline
         //   y = el AO esta a resolucion reducida -> upsample tambien
-        //   zw = resolucion en texels del target reducido (la comparten los dos)
+        //   z = escala: cuantos texels de resolucion completa cubre uno del
+        //       target reducido por eje. La comparten los dos (ReducedRes.h).
+        //   w = libre
+        //
+        // x e y son INDEPENDIENTES: el AO puede estar a resolucion reducida con
+        // la indirecta apagada, y ahi hay que subir uno y no el otro.
         glm::vec4 upsample;
     };
 

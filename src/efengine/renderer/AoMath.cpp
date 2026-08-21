@@ -30,10 +30,14 @@ namespace renderer {
 
     AoPassBlock MakeAoPassBlock(const glm::mat4& view, const glm::mat4& projection,
                                 const AoSettings& settings, u32 width, u32 height,
-                                i32 blurDirection) {
+                                i32 blurDirection, i32 scale) {
         // Se sanea aca y no en el caller: este es el ultimo punto antes de que
         // los valores lleguen al shader, donde un cero se vuelve NaN silencioso.
         const AoSettings s = SanitizeAoSettings(settings);
+
+        // Una escala de cero o negativa multiplicaria las coordenadas del texel
+        // de guia por cero y todo el target leeria el pixel (0,0) del prepass.
+        const i32 esc = (scale > 0) ? scale : 1;
 
         const glm::vec2 info = AoProjInfo(projection);
         const f32 invW = (width  > 0u) ? 1.0f / static_cast<f32>(width)  : 0.0f;
@@ -41,9 +45,15 @@ namespace renderer {
 
         AoPassBlock b {};
         b.viewToWorld = glm::inverse(view);
+        // 1/resolucion COMPLETA: es lo que convierte el radio de marcha, medido
+        // en pixeles de pantalla, a un offset de UV. La UV es la misma para los
+        // dos targets, asi que el shader marcha en la grilla fina aunque escriba
+        // en la gruesa -- y eso es deseable: los horizontes salen de la
+        // profundidad de verdad, no de una submuestreada.
         b.projInfo    = glm::vec4(info.x, info.y, invW, invH);
         b.params0     = glm::vec4(s.radius, s.thickness, s.intensity, s.maxScreenRadius);
-        b.params1     = glm::vec4(AoProjScale(projection, height), 0.0f, 0.0f, 0.0f);
+        b.params1     = glm::vec4(AoProjScale(projection, height),
+                                  static_cast<f32>(esc), 0.0f, 0.0f);
         b.counts      = glm::ivec4(s.slices, s.steps, blurDirection,
                                    static_cast<i32>(s.debugView));
         return b;
@@ -52,21 +62,31 @@ namespace renderer {
     AoBlock MakeAoBlock(const AoContext& ctx, const IndirectContext& indirect) {
         const bool on = (ctx.enabled && ctx.texture != null);
 
-        // Un contexto a medio llenar (textura si, prepass no) apagaria los pesos
-        // del upsample dejando el resto encendido: pbr.frag samplearia la
-        // indirecta de media resolucion con un bilineal a secas y saldrian los
-        // halos que el filtro existe para evitar. Valid() los ata a los dos.
-        const bool up = indirect.Valid();
+        // Sin el prepass no hay upsample posible: los pesos no tienen contra que
+        // comparar. Encenderlo igual lo degradaria a un bilineal a secas, que es
+        // exactamente el halo de silueta que el filtro existe para evitar.
+        const bool guia = (ctx.depthNormal != null);
+
+        // Los dos flags son INDEPENDIENTES. El AO puede estar a resolucion
+        // reducida con la indirecta apagada, y en ese caso pbr.frag igual tiene
+        // que subirlo: leerlo con coordenadas de resolucion completa devolveria
+        // el cuadrante superior izquierdo estirado sobre toda la pantalla.
+        const bool subeIndirecta = guia && indirect.Valid();
+        const bool subeAo        = guia && on && ctx.scale > 1;
+
+        // La escala la comparten los dos por construccion (ReducedRes.h). Se
+        // toma de quien este activo; si los dos lo estan, tienen que coincidir.
+        const i32 escala = subeAo ? ctx.scale : (subeIndirecta ? indirect.scale : 1);
 
         AoBlock b {};
         b.params = glm::vec4(on ? 1.0f : 0.0f,
                              (on && ctx.bentNormal)  ? 1.0f : 0.0f,
                              (on && ctx.multiBounce) ? 1.0f : 0.0f,
                              static_cast<f32>(ctx.debugView));
-        b.upsample = glm::vec4(up ? 1.0f : 0.0f,
-                               (up && indirect.aoReduced) ? 1.0f : 0.0f,
-                               up ? static_cast<f32>(indirect.size.x) : 0.0f,
-                               up ? static_cast<f32>(indirect.size.y) : 0.0f);
+        b.upsample = glm::vec4(subeIndirecta ? 1.0f : 0.0f,
+                               subeAo        ? 1.0f : 0.0f,
+                               static_cast<f32>(escala),
+                               0.0f);
         return b;
     }
 

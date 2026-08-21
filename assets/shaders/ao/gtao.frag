@@ -9,18 +9,31 @@
 // ocluidas como el SSAO clasico. De ahi sale la ponderacion coseno correcta y,
 // gratis, el bent normal: la bisectriz de cada corte.
 
-in vec2 vUV;
+// vUV de screen.vert no se usa: con el target a resolucion reducida, la
+// coordenada que manda es la del TEXEL DE GUIA del prepass, y esa se deriva de
+// gl_FragCoord (ver uvGuia en main). Dejarla declarada invitaria a usarla.
 out vec4 FragColor;
 
 layout(binding = 0) uniform sampler2D uDepthNormal;   // xyz = normal view, w = viewZ lineal
 
 layout(std140, binding = 4) uniform AoPassParams {
     mat4  uViewToWorld;
-    vec4  uProjInfo;    // xy = reconstruccion view-space, zw = 1/resolucion
+    vec4  uProjInfo;    // xy = reconstruccion view-space, zw = 1/resolucion COMPLETA
     vec4  uParams0;     // radius, thickness, intensity, maxScreenRadius
-    vec4  uParams1;     // projScale, _, _, _
+    vec4  uParams1;     // projScale, escala vs full, _, _
     ivec4 uCounts;      // x=slices, y=steps, z=dirBlur (sin uso aca), w=debugView
 };
+
+// -- Resolucion reducida ------------------------------------------------------
+// Este shader escribe en un target de 1/uParams1.y por eje, pero MARCHA sobre el
+// prepass, que siempre esta a resolucion completa. Los dos espacios se tocan en
+// un solo lugar: el texel de guia de este pixel es gl_FragCoord * escala.
+//
+// La marcha se queda en la grilla fina a proposito. Un horizonte sale de
+// comparar profundidades, y submuestrear las profundidades no ahorra nada
+// interesante (el coste esta en los taps, que son los mismos) a cambio de
+// perder los oclusores finos. Lo que se ahorra bajando de resolucion es la
+// cantidad de PIXELES que hacen la marcha entera, que es 4x.
 
 const float kPi = 3.14159265359;
 
@@ -42,8 +55,25 @@ float Ign(vec2 p) {
 }
 
 void main() {
-    vec4  centro = texture(uDepthNormal, vUV);
+    // El texel de guia de este pixel. texelFetch y no texture(vUV): el centro de
+    // un pixel del target reducido cae JUSTO entre cuatro texels del prepass, y
+    // el bilineal devolveria el promedio de las cuatro profundidades. Sobre una
+    // silueta ese promedio no es la profundidad de ninguna superficie real y el
+    // AO se calcularia para un punto que no existe.
+    //
+    // Es ademas el contrato que el upsample de pbr.frag da por sentado: el busca
+    // la guia de cada tap en tap*escala. Si este pase muestreara en otro lado,
+    // los pesos compararian contra una superficie distinta de la que el tap uso.
+    int   esc  = int(uParams1.y + 0.5);
+    ivec2 full = ivec2(gl_FragCoord.xy) * esc;
+
+    vec4  centro = texelFetch(uDepthNormal, full, 0);
     float viewZ  = centro.w;
+
+    // La UV del TEXEL DE GUIA, no la del pixel. Todo lo que sigue -- la
+    // reconstruccion de la posicion y los dos taps de cada paso -- tiene que
+    // partir de la misma coordenada de la que salio `viewZ`.
+    vec2 uvGuia = (vec2(full) + 0.5) * uProjInfo.zw;
 
     // Las vistas 3 y 4 vuelcan el prepass: este shader es el unico que lo tiene
     // bindeado. Visibilidad 1 para no alterar la imagen antes de mostrarlas.
@@ -53,7 +83,7 @@ void main() {
     // Fondo sin geometria: visibilidad plena.
     if (viewZ <= 0.0) { FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
 
-    vec3 P = ViewPos(vUV, viewZ);
+    vec3 P = ViewPos(uvGuia, viewZ);
     vec3 V = normalize(-P);
     vec3 N = normalize(centro.xyz);
 
@@ -85,7 +115,7 @@ void main() {
         // OJO CON EL ORDEN. Este es el eje contra el que se miden los signos de
         // TODO lo que sigue: gamma, los dos horizontes y la bisectriz del bent
         // normal. Por la identidad (u x V) x V = -u, cross(sliceN, V) devuelve
-        // -omega: las muestras de +omega (uvA = vUV + desplaz) caerian en el
+        // -omega: las muestras de +omega (uvA = uvGuia + desplaz) caerian en el
         // semiplano NEGATIVO mientras h2 les pone signo positivo, o sea h1 y h2
         // cruzados. El error es exactamente cero cuando el corte es simetrico y
         // maximo en las aristas y en las superficies al ras.
@@ -125,7 +155,7 @@ void main() {
 
             vec2 desplaz = omega * offPx * uProjInfo.zw;
 
-            vec2  uvA = vUV + desplaz;
+            vec2  uvA = uvGuia + desplaz;
             float zA  = texture(uDepthNormal, uvA).w;
             if (zA > 0.0) {
                 vec3  dA = ViewPos(uvA, zA) - P;
@@ -140,7 +170,7 @@ void main() {
                 }
             }
 
-            vec2  uvB = vUV - desplaz;
+            vec2  uvB = uvGuia - desplaz;
             float zB  = texture(uDepthNormal, uvB).w;
             if (zB > 0.0) {
                 vec3  dB = ViewPos(uvB, zB) - P;

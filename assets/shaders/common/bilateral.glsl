@@ -18,12 +18,15 @@
 // exactamente donde se ve.
 //
 // -- El contrato de correspondencia --
-// El pase a media resolucion samplea su guia en el texel full-res (2*h) de cada
-// texel de media (h): la esquina superior-izquierda del quad 2x2. Este upsample
-// tiene que leer la guia EN EL MISMO TEXEL, por eso el `tap * 2` de abajo. Si
-// las dos puntas no coinciden, los pesos comparan contra una profundidad que no
-// es la que el tap uso y el filtro deja de ser bilateral: vuelve a ser bilineal
-// con pasos extra.
+// El pase a resolucion reducida samplea su guia en el texel full-res
+// (h * escala) de cada texel suyo (h): la esquina superior-izquierda del bloque
+// que le toca. Este upsample tiene que leer la guia EN EL MISMO TEXEL, por eso
+// el `tap * escala` de abajo. Si las dos puntas no coinciden, los pesos comparan
+// contra una profundidad que no es la que el tap uso y el filtro deja de ser
+// bilateral: vuelve a ser un bilineal con pasos extra, halos incluidos.
+//
+// Lo respetan gtao.frag, ddgi/indirect.frag y ao/denoise.frag. Es LA invariante
+// del sistema de resolucion reducida; si se toca, se toca en los cuatro.
 
 // Tolerancia de profundidad, RELATIVA a la profundidad del pixel. Absoluta no
 // sirve: un umbral en metros calibrado a 2 m de la camara borra todo el detalle
@@ -57,12 +60,16 @@ float BilateralTapWeight(float zGuia, vec3 nGuia, float zCentro, vec3 nCentro) {
 
 // Reconstruye a resolucion completa el valor de una textura a media resolucion.
 //
-//   media      : la señal a media res (el resultado del pase que se quiere subir)
+//   media      : la señal reducida (el resultado del pase que se quiere subir)
 //   guia       : el prepass del AO a resolucion COMPLETA (xyz = normal view, w = viewZ)
 //   fullCoord  : ivec2(gl_FragCoord.xy) del pixel que se esta sombreando
 //   zCentro    : su viewZ (positivo, la misma convencion que el prepass)
 //   nCentro    : su normal GEOMETRICA en espacio de vista, normalizada
-//   mediaSize  : tamano en texels de `media`
+//   escala     : texels de resolucion completa por texel de `media`, por eje
+//
+// El tamano de `media` sale de textureSize y no de un uniform: es un dato que la
+// propia textura ya tiene, y pasarlo aparte crea una segunda fuente de verdad
+// que se desincroniza justo en el frame del resize.
 //
 // El fallback cuando los cuatro taps se rechazan (silueta fina, un pixel de
 // geometria contra el fondo) es el tap de profundidad mas parecida, sin
@@ -70,11 +77,18 @@ float BilateralTapWeight(float zGuia, vec3 nGuia, float zCentro, vec3 nCentro) {
 // full: se ve como un escalon de un pixel, que es MUCHO menos visible que el
 // halo que produciria promediar los cuatro igual.
 vec4 BilateralUpsample(sampler2D media, sampler2D guia, ivec2 fullCoord,
-                       float zCentro, vec3 nCentro, ivec2 mediaSize) {
-    // Centro del pixel full-res en coordenadas de TEXEL de media resolucion,
+                       float zCentro, vec3 nCentro, int escala) {
+    ivec2 mediaSize = textureSize(media, 0);
+
+    // Escala 1: la señal ya esta a resolucion completa, no hay nada que subir y
+    // los cuatro taps colapsarian sobre el mismo texel con pesos bilineales
+    // degenerados. Un texelFetch y afuera.
+    if (escala <= 1) return texelFetch(media, clamp(fullCoord, ivec2(0), mediaSize - 1), 0);
+
+    // Centro del pixel full-res en coordenadas de TEXEL de la grilla reducida,
     // corrido medio texel: asi floor() da la esquina del quad 2x2 de taps y la
     // parte fraccionaria son los pesos bilineales.
-    vec2  h    = (vec2(fullCoord) + 0.5) * 0.5 - 0.5;
+    vec2  h    = (vec2(fullCoord) + 0.5) / float(escala) - 0.5;
     ivec2 base = ivec2(floor(h));
     vec2  f    = h - vec2(base);
 
@@ -88,9 +102,9 @@ vec4 BilateralUpsample(sampler2D media, sampler2D guia, ivec2 fullCoord,
     for (int i = 0; i < 4; ++i) {
         ivec2 tap = clamp(base + ivec2(i & 1, i >> 1), ivec2(0), mediaSize - 1);
 
-        // La guia se lee en el texel full-res que el pase de media uso. Ver el
+        // La guia se lee en el texel full-res que el pase reducido uso. Ver el
         // contrato de correspondencia arriba.
-        vec4  g     = texelFetch(guia, tap * 2, 0);
+        vec4  g     = texelFetch(guia, tap * escala, 0);
         vec4  valor = texelFetch(media, tap, 0);
 
         // Peso bilineal del tap dentro del quad.

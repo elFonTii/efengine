@@ -3,6 +3,7 @@
 #include <efengine/renderer/AoContext.h>
 #include <efengine/renderer/Framebuffer.h>
 #include <efengine/renderer/IndirectContext.h>
+#include <efengine/renderer/ReducedRes.h>
 #include <efengine/renderer/ShaderBlocks.h>
 #include <efengine/renderer/UniformBuffer.h>
 
@@ -63,14 +64,10 @@ namespace renderer {
     // samplea inline. Un fallo de carga no rompe el frame ni cambia la imagen.
     class IndirectPass {
         public:
-            // Cuantos texels de resolucion completa cubre uno del target por eje.
-            //
-            // 2 y no 4: a un cuarto por eje (1/16 de los pixeles) el upsample se
-            // queda sin taps validos demasiado seguido -- un objeto de menos de
-            // 4 px de ancho no tiene NINGUN texel propio en el target reducido, y
-            // el fallback al tap mas parecido deja de ser un escalon de un pixel
-            // para volverse el color de otra superficie.
-            static constexpr i32 kScale = 2;
+            // La escala sale de ReducedRes.h y no de una constante propia: el
+            // AO usa la misma, y dos formulas que puedan divergir son la unica
+            // forma de que los dos targets salgan de tamanos distintos.
+            static constexpr i32 kScale = kReducedScale;
 
             // De donde saca el bent normal ddgi/indirect.frag. Tienen que
             // coincidir con las constantes kBent* del shader: el target del AO
@@ -90,15 +87,14 @@ namespace renderer {
             IndirectPass(IndirectPass&& other) noexcept;
             IndirectPass& operator=(IndirectPass&& other) noexcept;
 
-            // depthNormal es el prepass del AO (FULL res) y ao su target: los dos
-            // salen de AoPass. view/projection son las de la camara del frame;
-            // se pasan y no se leen del bloque Frame porque la inversa de la view
-            // hay que calcularla en CPU igual.
+            // Todo lo que necesita del AO -- el prepass, el target y su escala --
+            // viaja en el contexto. view/projection son las de la camara del
+            // frame; se pasan y no se leen del bloque Frame porque la inversa de
+            // la view hay que calcularla en CPU igual.
             //
             // No hace nada si el AO no dio un prepass utilizable: ver la nota de
             // dependencia arriba.
-            void Render(const AoContext& ao, const Texture* depthNormal,
-                        const Texture* aoTexture,
+            void Render(const AoContext& ao,
                         const glm::mat4& view, const glm::mat4& projection);
 
             void Resize(u32 fullWidth, u32 fullHeight);
@@ -119,11 +115,6 @@ namespace renderer {
             IndirectPass(Renderer& renderer, VertexArray& fullscreenQuad, Shader* shader,
                          u32 width, u32 height);
 
-            // Media resolucion redondeando HACIA ARRIBA: con 1079 de alto, un
-            // floor dejaria la ultima fila de pixeles sin ningun texel que la
-            // cubra y el upsample la resolveria con el clamp del borde.
-            static u32 Reduced(u32 full) { return (full + static_cast<u32>(kScale) - 1u)
-                                                / static_cast<u32>(kScale); }
 
             Renderer&    m_renderer;
             VertexArray& m_quad;
@@ -134,10 +125,9 @@ namespace renderer {
 
             UniformBuffer m_ubo { sizeof(IndirectPassBlock) };
 
-            bool m_enabled  = true;
-            bool m_ranEste  = false;   // corrio en ESTE frame; lo resetea Render
-            const Texture* m_depthNormal = null;
-            bool m_aoReduced = false;
+            bool m_enabled   = true;
+            bool m_ranEste   = false;   // corrio en ESTE frame; lo resetea Render
+            bool m_aoReduced = false;   // el target del AO comparte la grilla de este pase
     };
 
 }

@@ -737,6 +737,18 @@ namespace {
         ImGui::SliderInt  ("Pasos",      &s.steps,  1, 32);
         ImGui::SliderFloat("Techo de radio", &s.maxScreenRadius, 8.0f, 512.0f, "%.0f px");
 
+        ImGui::SeparatorText("Rendimiento");
+        // Mismo criterio que el toggle de la indirecta: el plan pide medir cada
+        // cambio por separado, y sin un interruptor en caliente comparar "con" y
+        // "sin" pide recompilar.
+        ImGui::Checkbox("Media resolucion", &s.halfRes);
+        ImGui::TextDisabled("kernel y blur a %dx%d; prepass y guia siguen a %dx%d",
+                            opt->aoTexture().width(),  opt->aoTexture().height(),
+                            opt->normalTarget().width(), opt->normalTarget().height());
+        if (s.halfRes) {
+            ImGui::TextDisabled("pbr.frag lo sube con upsample bilateral (depth + normal)");
+        }
+
         ImGui::SeparatorText("Aplicacion");
         // Bent normal: orienta el lookup de irradiancia (IBL y DDGI) hacia donde
         // el hemisferio esta abierto. En un rincon de Cornell cambia la DIRECCION

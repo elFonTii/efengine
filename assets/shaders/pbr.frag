@@ -64,7 +64,11 @@ layout(std140, binding = 6) uniform AoParams {
     vec4 uAoParams;    // enabled, bentNormal, multiBounce, debugView
     // x = la indirecta llega ya resuelta en la unidad 15 (no samplear el volumen)
     // y = el AO esta a resolucion reducida (subirlo con el mismo filtro)
-    // zw = resolucion en texels del target reducido, compartida por los dos
+    // z = escala: texels de resolucion completa por texel reducido, por eje
+    // w = libre
+    //
+    // x e y son INDEPENDIENTES: el AO puede estar a resolucion reducida con la
+    // indirecta apagada, y ahi hay que subir uno y no el otro.
     vec4 uUpsample;
 };
 layout(binding = 14) uniform sampler2D uAoTexture;
@@ -79,9 +83,12 @@ layout(binding = 16) uniform sampler2D uDepthNormal;
 
 #include "common/bilateral.glsl"
 
-bool  UsaUpsample()   { return uUpsample.x > 0.5; }
-bool  AoEsReducido()  { return uUpsample.y > 0.5; }
-ivec2 TamanoReducido(){ return ivec2(uUpsample.zw + 0.5); }
+bool UsaIndirecta()  { return uUpsample.x > 0.5; }
+bool AoEsReducido()  { return uUpsample.y > 0.5; }
+int  EscalaUpsample(){ return int(uUpsample.z + 0.5); }
+
+// La guia solo hace falta si alguno de los dos upsamples esta activo.
+bool NecesitaGuia()  { return UsaIndirecta() || AoEsReducido(); }
 
 // Espeja renderer::TextureSlot: un bit por slot en uMapMask.x.
 const uint SLOT_ALBEDO    = 0u;
@@ -332,7 +339,7 @@ void main() {
     // de relieve.
     float zGuia = 0.0;
     vec3  nGuia = vec3(0.0, 0.0, 1.0);
-    if (UsaUpsample()) {
+    if (NecesitaGuia()) {
         zGuia = -(uView * vec4(vFragPos, 1.0)).z;   // positivo: la convencion del prepass
         nGuia = normalize(mat3(uView) * Ng);
     }
@@ -343,9 +350,9 @@ void main() {
     // que subirlo con el mismo filtro bilateral que la indirecta, o el bent
     // normal cruza siluetas y la visibilidad del fondo se derrama sobre el borde
     // de los objetos.
-    vec4 aoMuestra = (UsaUpsample() && AoEsReducido())
+    vec4 aoMuestra = AoEsReducido()
                    ? BilateralUpsample(uAoTexture, uDepthNormal, pixel,
-                                       zGuia, nGuia, TamanoReducido())
+                                       zGuia, nGuia, EscalaUpsample())
                    : texelFetch(uAoTexture, pixel, 0);
     float ssVis     = (uAoParams.x > 0.5) ? clamp(aoMuestra.w, 0.0, 1.0) : 1.0;
 
@@ -382,7 +389,7 @@ void main() {
     vec3  ddgiIrr  = vec3(0.0);
 
     vec3 indirectDiffuse = iblIrr;
-    if (UsaUpsample()) {
+    if (UsaIndirecta()) {
         // -- Camino rapido: la indirecta ya esta resuelta ---------------------
         // ddgi/indirect.frag la calculo a 1/2 por eje con la MISMA matematica
         // (mismo bias, mismo Chebyshev, misma intensidad) y dejo el fade en el
@@ -390,7 +397,7 @@ void main() {
         // de la guia -- ocho fetches locales y coherentes en cache -- contra los
         // ~16 gathers dispersos del sampleo del volumen.
         vec4 muestra = BilateralUpsample(uIndirect, uDepthNormal, pixel,
-                                         zGuia, nGuia, TamanoReducido());
+                                         zGuia, nGuia, EscalaUpsample());
         ddgiIrr  = muestra.rgb;
         ddgiFade = muestra.a;
         if (ddgiFade > 0.0) indirectDiffuse = mix(iblIrr, ddgiIrr, ddgiFade);

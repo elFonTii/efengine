@@ -3,6 +3,7 @@
 #include <efengine/renderer/AoSettings.h>
 #include <efengine/renderer/AoContext.h>
 #include <efengine/renderer/Framebuffer.h>
+#include <efengine/renderer/ReducedRes.h>
 #include <efengine/renderer/ShaderBlocks.h>
 #include <efengine/renderer/UniformBuffer.h>
 
@@ -53,6 +54,12 @@ namespace renderer {
 
             AoContext Context() const;
 
+            // Cuantos texels de resolucion completa cubre uno del target de AO
+            // por eje. 1 con halfRes apagado, kReducedScale con el encendido.
+            // Lo consultan IndirectPass (para saber en que grilla leer el bent
+            // normal) y el panel.
+            i32 scale() const;
+
             AoSettings&       settings()       { return m_settings; }
             const AoSettings& settings() const { return m_settings; }
 
@@ -67,9 +74,22 @@ namespace renderer {
             VertexArray& m_quad;
             Shaders      m_shaders;
 
+            // Realoca m_aoA/m_aoB si la resolucion completa o el flag halfRes
+            // cambiaron. Se llama al principio de Render y no desde el setter
+            // porque el flag lo mueve un checkbox de ImGui a mitad de frame.
+            void EnsureTargetSize();
+
+            // El prepass se queda a resolucion COMPLETA aunque el AO baje: es
+            // barato, la marcha del kernel quiere la profundidad fina, y ES la
+            // guia del upsample bilateral de pbr.frag.
             Framebuffer m_normalFb;   // xyz = normal view, w = viewZ lineal
             Framebuffer m_aoA;        // xyz = bent normal world, w = visibilidad
             Framebuffer m_aoB;        // scratch del blur separable
+
+            // La resolucion completa de la pantalla. m_aoA/m_aoB pueden estar a
+            // otra; m_normalFb siempre esta a esta.
+            u32 m_fullWidth  = 0u;
+            u32 m_fullHeight = 0u;
 
             AoSettings m_settings;
 

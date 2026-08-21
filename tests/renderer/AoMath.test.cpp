@@ -104,59 +104,87 @@ TEST_CASE("MakeAoBlock: los flags viajan como 0/1") {
     CHECK(b.upsample.x == doctest::Approx(0.0f));
 }
 
-TEST_CASE("MakeAoBlock: el upsample necesita el par textura + prepass, no uno solo") {
+TEST_CASE("MakeAoBlock: sin el prepass-guia no se enciende ningun upsample") {
     const efengine::renderer::Texture* fake =
         reinterpret_cast<const efengine::renderer::Texture*>(0x1);
 
+    // AO a resolucion reducida Y la indirecta resuelta, pero sin el prepass que
+    // hace de guia. Encender cualquiera de los dos upsamples asi lo degrada a un
+    // bilineal a secas, que es el halo de silueta que el filtro existe para
+    // evitar.
     AoContext ao;
-    ao.texture = fake;
-    ao.enabled = true;
-
-    // Solo la indirecta, sin el prepass que hace de guia: no alcanza. Encender
-    // el upsample sin guia lo degrada a un bilineal a secas, que es exactamente
-    // el halo en las siluetas que el filtro existe para evitar.
-    IndirectContext soloTextura;
-    soloTextura.texture = fake;
-    soloTextura.size    = glm::ivec2(960, 540);
-    CHECK(MakeAoBlock(ao, soloTextura).upsample.x == doctest::Approx(0.0f));
-
-    // Solo el prepass, sin la señal que subir: tampoco.
-    IndirectContext soloGuia;
-    soloGuia.depthNormal = fake;
-    soloGuia.size        = glm::ivec2(960, 540);
-    CHECK(MakeAoBlock(ao, soloGuia).upsample.x == doctest::Approx(0.0f));
-
-    // Un tamano en cero deja el clamp de taps sin limite y el quad del borde
-    // derecho leeria fuera del target.
-    IndirectContext sinTamano;
-    sinTamano.texture     = fake;
-    sinTamano.depthNormal = fake;
-    sinTamano.size        = glm::ivec2(0, 0);
-    CHECK(MakeAoBlock(ao, sinTamano).upsample.x == doctest::Approx(0.0f));
-}
-
-TEST_CASE("MakeAoBlock: upsample lleva los dos flags y el tamano del target reducido") {
-    const efengine::renderer::Texture* fake =
-        reinterpret_cast<const efengine::renderer::Texture*>(0x1);
-
-    AoContext ao;
-    ao.texture = fake;
-    ao.enabled = true;
+    ao.texture     = fake;
+    ao.depthNormal = nullptr;
+    ao.scale       = 2;
+    ao.enabled     = true;
 
     IndirectContext ind;
-    ind.texture     = fake;
-    ind.depthNormal = fake;
-    ind.size        = glm::ivec2(960, 540);
-    ind.aoReduced   = false;
+    ind.texture = fake;
 
     const AoBlock b = MakeAoBlock(ao, ind);
-    CHECK(b.upsample.x == doctest::Approx(1.0f));
-    CHECK(b.upsample.y == doctest::Approx(0.0f));   // el AO sigue a resolucion completa
-    CHECK(b.upsample.z == doctest::Approx(960.0f));
-    CHECK(b.upsample.w == doctest::Approx(540.0f));
+    CHECK(b.upsample.x == doctest::Approx(0.0f));
+    CHECK(b.upsample.y == doctest::Approx(0.0f));
+}
 
-    ind.aoReduced = true;
-    CHECK(MakeAoBlock(ao, ind).upsample.y == doctest::Approx(1.0f));
+TEST_CASE("MakeAoBlock: los dos upsamples son independientes") {
+    const efengine::renderer::Texture* fake =
+        reinterpret_cast<const efengine::renderer::Texture*>(0x1);
+
+    AoContext ao;
+    ao.texture     = fake;
+    ao.depthNormal = fake;
+    ao.enabled     = true;
+
+    // AO a resolucion reducida, indirecta apagada. pbr.frag TIENE que subir el
+    // AO igual: leerlo con coordenadas de resolucion completa devolveria el
+    // cuadrante superior izquierdo estirado sobre toda la pantalla.
+    ao.scale = 2;
+    const AoBlock soloAo = MakeAoBlock(ao, IndirectContext{});
+    CHECK(soloAo.upsample.x == doctest::Approx(0.0f));
+    CHECK(soloAo.upsample.y == doctest::Approx(1.0f));
+    CHECK(soloAo.upsample.z == doctest::Approx(2.0f));
+
+    // Indirecta resuelta, AO a resolucion completa: al reves.
+    ao.scale = 1;
+    IndirectContext ind;
+    ind.texture = fake;
+    ind.scale   = 2;
+    const AoBlock soloInd = MakeAoBlock(ao, ind);
+    CHECK(soloInd.upsample.x == doctest::Approx(1.0f));
+    CHECK(soloInd.upsample.y == doctest::Approx(0.0f));
+    CHECK(soloInd.upsample.z == doctest::Approx(2.0f));
+
+    // Los dos.
+    ao.scale = 2;
+    const AoBlock ambos = MakeAoBlock(ao, ind);
+    CHECK(ambos.upsample.x == doctest::Approx(1.0f));
+    CHECK(ambos.upsample.y == doctest::Approx(1.0f));
+
+    // Ninguno: escala 1 en los dos deja la escala del bloque en 1, que es lo que
+    // hace que pbr.frag lea con texelFetch directo.
+    ao.scale = 1;
+    const AoBlock ninguno = MakeAoBlock(ao, IndirectContext{});
+    CHECK(ninguno.upsample.x == doctest::Approx(0.0f));
+    CHECK(ninguno.upsample.y == doctest::Approx(0.0f));
+    CHECK(ninguno.upsample.z == doctest::Approx(1.0f));
+}
+
+TEST_CASE("MakeAoBlock: con el AO apagado no se sube el AO, pero si la indirecta") {
+    const efengine::renderer::Texture* fake =
+        reinterpret_cast<const efengine::renderer::Texture*>(0x1);
+
+    AoContext ao;
+    ao.texture     = fake;
+    ao.depthNormal = fake;
+    ao.scale       = 2;
+    ao.enabled     = false;      // el usuario destildo el AO
+
+    IndirectContext ind;
+    ind.texture = fake;
+
+    const AoBlock b = MakeAoBlock(ao, ind);
+    CHECK(b.params.x   == doctest::Approx(0.0f));   // el AO no aporta
+    CHECK(b.upsample.y == doctest::Approx(0.0f));   // ni se lo lee, asi que no se sube
 }
 
 TEST_CASE("MakeAoPassBlock: viewToWorld es la inversa de la view") {

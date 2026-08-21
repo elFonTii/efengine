@@ -1,7 +1,7 @@
 #pragma once
 #include <efengine/core/Types.h>
 
-#include <glm/glm.hpp>
+#include <efengine/renderer/ReducedRes.h>
 
 namespace efengine {
 namespace renderer {
@@ -19,32 +19,16 @@ namespace renderer {
     struct IndirectContext {
         const Texture* texture = null;
 
-        // El prepass de profundidad + normal A RESOLUCION COMPLETA, que es la
-        // GUIA del upsample bilateral. Sale del AoPass; viaja aca y no en
-        // AoContext porque quien lo consume es el upsample, no el AO.
-        //
-        // Sin el no hay upsample posible: los pesos no tienen contra que
-        // comparar. Si falta, pbr.frag vuelve al camino inline igual que si
-        // faltara `texture`.
-        const Texture* depthNormal = null;
-
-        // Resolucion en texels de `texture`. La necesita el clamp de taps del
-        // upsample: sin ella, el quad 2x2 del borde derecho de la pantalla lee
-        // fuera del target.
-        glm::ivec2 size { 0, 0 };
-
         // Cuantos texels de resolucion completa cubre uno de `texture` por eje.
-        // Hoy siempre 2 (media resolucion); el upsample esta escrito contra este
-        // numero para que bajar a un cuarto sea un cambio de una linea.
-        i32 scale = 2;
+        // El upsample lo necesita para saber en que texel del prepass-guia
+        // (que esta a resolucion completa) buscar la guia de cada tap.
+        i32 scale = kReducedScale;
 
-        // El AO tambien esta a resolucion reducida y hay que subirlo con el
-        // mismo filtro. Lo enciende la tarea 2; con el en false pbr.frag lee el
-        // AO con texelFetch directo, como siempre.
-        bool aoReduced = false;
-
-        bool Valid() const { return texture != null && depthNormal != null
-                                 && size.x > 0 && size.y > 0; }
+        // El prepass-guia NO esta aca: vive en AoContext, que es quien lo
+        // produce. Ver el comentario de AoContext::depthNormal. La validez de
+        // este contexto depende de los dos, asi que la decide MakeAoBlock con
+        // los dos en la mano y no este struct por su cuenta.
+        bool Valid() const { return texture != null && scale > 0; }
     };
 
 }

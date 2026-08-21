@@ -42,6 +42,19 @@ namespace renderer {
         // pegada a una pared", donde radius/viewZ explota.
         f32 maxScreenRadius = 128.0f;
 
+        // El kernel y el blur corren a resolucion REDUCIDA (ver ReducedRes.h) y
+        // pbr.frag sube el resultado con el mismo upsample bilateral que la
+        // indirecta. El prepass sigue a resolucion completa: es barato (0.05 ms
+        // medidos), la marcha del kernel quiere la profundidad fina, y ES la
+        // guia del upsample -- bajarlo de resolucion seria quedarse sin contra
+        // que comparar los pesos.
+        //
+        // El AO tolera muy bien media resolucion: la señal es de contacto, de
+        // baja frecuencia comparada con el albedo, y el blur bilateral que ya
+        // corria detras la suaviza igual. Queda como interruptor para poder
+        // medir el delta y para comparar la calidad lado a lado.
+        bool halfRes = true;
+
         bool bentNormal  = true;   // alimenta el lookup de DDGI y el de irradiancia IBL
         bool multiBounce = true;   // aproximacion de Jimenez: el AO se tiñe con el albedo
         bool blur        = true;

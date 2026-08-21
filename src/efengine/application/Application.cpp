@@ -241,8 +241,7 @@ namespace application {
         // --- queda vacio, que es como pbr.frag sabe que tiene que samplear el
         // --- volumen inline.
         if (m_indirectPass && m_aoPass) {
-            m_indirectPass->Render(lighting.ao, &m_aoPass->normalTarget(),
-                                   &m_aoPass->aoTexture(),
+            m_indirectPass->Render(lighting.ao,
                                    camera.ViewMatrix(), camera.ProjectionMatrix());
             lighting.indirect = m_indirectPass->Context();
 
