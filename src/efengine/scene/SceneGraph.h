@@ -77,6 +77,7 @@ namespace scene {
             // Behaviors
             Behavior* AttachBehavior(NodeHandle handle, std::unique_ptr<Behavior> behavior);
             void      Update(f32 dt);
+            void      FixedUpdate(f32 fixedDt);
 
             void       SetPrimarySun(NodeHandle handle);
             NodeHandle PrimarySun() const { return m_primarySun; }

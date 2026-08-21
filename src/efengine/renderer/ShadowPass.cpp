@@ -10,6 +10,7 @@
 #include <efengine/renderer/Mesh.h>
 #include <efengine/scene/SceneGraph.h>
 #include <efengine/core/Assert.h>
+#include <efengine/renderer/GpuProfiler.h>
 
 namespace efengine {
 namespace renderer {
@@ -23,6 +24,7 @@ namespace renderer {
     }
 
     const glm::mat4& ShadowPass::Render(const scene::SceneGraph& scene, const DirectionalLight& sun) {
+    EF_PROFILE_SCOPE("Sombras");
         // El encuadre sale de la escena, no de sliders. Antes el centro era un
         // glm::vec3(0) fijo, asi que una sala que no estuviera en el origen se
         // salia sola de la caja ortografica.

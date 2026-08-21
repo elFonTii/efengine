@@ -25,6 +25,7 @@ add_executable(efengine_tests
     renderer/PipelineState.test.cpp
     renderer/ShaderBlocks.test.cpp
     renderer/MaterialBlock.test.cpp
+    renderer/ProfilerStats.test.cpp
     resources/FileIO.test.cpp
     resources/ModelLoader.test.cpp
     resources/ShaderPreprocessor.test.cpp
@@ -35,6 +36,7 @@ add_executable(efengine_tests
     scene/Camera.test.cpp
     scene/CameraController.test.cpp
     scene/Behavior.test.cpp
+    scene/BehaviorFixed.test.cpp
     scene/SceneGraphClear.test.cpp
     serialization/BinaryIO.test.cpp
     serialization/StringTable.test.cpp

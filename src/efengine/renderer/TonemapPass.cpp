@@ -6,6 +6,7 @@
 #include <efengine/core/Assert.h>
 
 #include <efecom/RHI.h>
+#include <efengine/renderer/GpuProfiler.h>
 
 namespace efengine {
 namespace renderer {
@@ -23,6 +24,7 @@ namespace renderer {
     void TonemapPass::Resize(u32 width, u32 height) {}
     
     void TonemapPass::Apply(const Texture& input, const RenderTarget& target){
+    EF_PROFILE_SCOPE("Tonemap");
         target.Bind();   // bindea Y fija el viewport
 
         const PostParamsBlock params { glm::vec4(m_exposure, 0.0f, 0.0f, 0.0f) };

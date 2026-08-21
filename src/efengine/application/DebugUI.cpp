@@ -4,6 +4,7 @@
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
 #include <efengine/core/Assert.h>
+#include <efengine/renderer/GpuProfiler.h>
 
 namespace efengine {
 namespace application {
@@ -204,6 +205,7 @@ namespace {
     }
 
     void DebugUI::Render() {
+    EF_PROFILE_SCOPE("ImGui");
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     }

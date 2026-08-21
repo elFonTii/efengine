@@ -8,6 +8,7 @@
 #include <efengine/renderer/PipelineStates.h>
 #include <efengine/renderer/VertexArray.h>
 #include <efengine/core/Assert.h>
+#include <efengine/renderer/GpuProfiler.h>
 
 namespace efengine {
 namespace renderer {
@@ -18,6 +19,7 @@ namespace renderer {
     }
 
     void SkyboxPass::Draw(const Cubemap& env) const {
+    EF_PROFILE_SCOPE("Skybox");
         // No se restaura nada al salir: el pase que sigue declara su propio estado.
         efecom::ApplyPipelineState(SkyboxState());
 
