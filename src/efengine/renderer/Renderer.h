@@ -53,9 +53,27 @@ namespace renderer {
             // mat.doubleSided. Va aparte de overrideShader a proposito: dibujar
             // con otro shader no implica dibujar con otro estado, y acoplarlos
             // dejaria sin estado a cualquier otro consumidor de overrideShader.
+
+            // Como testea la profundidad este draw.
+            //
+            //   Write : GL_LESS escribiendo depth. Es lo normal.
+            //   Equal : GL_EQUAL sin escribir. Solo es valido si un depth prepass
+            //           ya lleno el buffer con ESTA camara y ESTA geometria; si
+            //           no, no se dibuja absolutamente nada.
+            //
+            // Es un enum y no un overrideState porque tiene que respetar el
+            // doubleSided de cada material: el prepass culleo segun el material, y
+            // un forward que culleara distinto testearia contra la profundidad de
+            // un triangulo que el prepass nunca dibujo. Un overrideState, por
+            // contrato, ignora el material -- por eso no sirve aca.
+            enum class DepthMode { Write, Equal };
+
+            // overrideState tiene precedencia sobre depth: quien fuerza el estado
+            // entero ya dijo como quiere el depth test.
             void Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix,
                         const Shader* overrideShader = null,
-                        const efecom::PipelineState* overrideState = null);
+                        const efecom::PipelineState* overrideState = null,
+                        DepthMode depth = DepthMode::Write);
 
             // Sube la matriz de modelo al bloque Object (binding 2). Publico
             // porque ShadowPass tambien dibuja por objeto y necesita el mismo bloque.

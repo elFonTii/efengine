@@ -36,8 +36,13 @@ namespace renderer {
                 Shader* denoise     = null;
             };
 
+            // sharedDepthRbo es el renderbuffer de profundidad del framebuffer
+            // de escena. El prepass escribe AHI, no en uno propio, y por eso el
+            // forward puede despues dibujar con GL_EQUAL sin volver a resolver
+            // la visibilidad. Ver el comentario de Framebuffer sobre el prestamo.
             static std::optional<AoPass> Create(Renderer& renderer, VertexArray& fullscreenQuad,
-                                                const Shaders& shaders, u32 width, u32 height);
+                                                const Shaders& shaders, u32 width, u32 height,
+                                                u32 sharedDepthRbo);
 
             AoPass(const AoPass&)            = delete;
             AoPass& operator=(const AoPass&) = delete;
@@ -50,9 +55,17 @@ namespace renderer {
             void Render(const scene::SceneGraph& scene,
                         const glm::mat4& view, const glm::mat4& projection);
 
-            void Resize(u32 width, u32 height);
+            // El renderbuffer nuevo lo crea el dueno (el framebuffer de escena):
+            // hay que pasarlo, porque el viejo muere en su realocacion.
+            void Resize(u32 width, u32 height, u32 sharedDepthRbo);
 
             AoContext Context() const;
+
+            // El prepass corrio en ESTE frame, o sea que el depth compartido
+            // tiene la profundidad de la escena y el forward puede dibujar con
+            // GL_EQUAL. False obliga al forward a limpiar depth y resolver la
+            // visibilidad el mismo, como siempre.
+            bool depthReady() const { return m_depthReady; }
 
             // Cuantos texels de resolucion completa cubre uno del target de AO
             // por eje. 1 con halfRes apagado, kReducedScale con el encendido.
@@ -68,7 +81,7 @@ namespace renderer {
 
         private:
             AoPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
-                   u32 width, u32 height);
+                   u32 width, u32 height, u32 sharedDepthRbo);
 
             Renderer&    m_renderer;
             VertexArray& m_quad;
@@ -102,6 +115,12 @@ namespace renderer {
             // Cual de los dos FBOs tiene el resultado. Con blur apagado es A;
             // con blur, la pasada vertical vuelve a dejarlo en A.
             bool m_resultInA = true;
+
+            // Lo pone Render y lo lee el forward. Arranca en false y se apaga en
+            // cada Render que salga temprano: si el prepass no corrio, el depth
+            // compartido tiene la profundidad del FRAME ANTERIOR, y dibujar con
+            // GL_EQUAL contra eso deja la pantalla vacia.
+            bool m_depthReady = false;
     };
 
 }

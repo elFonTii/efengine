@@ -131,7 +131,8 @@ namespace renderer {
     }
 
     void Renderer::Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix,
-                          const Shader* overrideShader, const efecom::PipelineState* overrideState) {
+                          const Shader* overrideShader, const efecom::PipelineState* overrideState,
+                          DepthMode depth) {
         // La matriz de modelo es del render item entero: se sube UNA vez, no una
         // por submesh como hacia el uModel viejo.
         SetObjectMatrix(modelMatrix);
@@ -144,10 +145,13 @@ namespace renderer {
             }
             const Material& mat = *it->second;
 
-            efecom::ApplyPipelineState(overrideState != null
-                                     ? *overrideState
-                                     : (mat.doubleSided ? OpaqueDoubleSidedState()
-                                                        : OpaqueState()));
+            const bool igual = (depth == DepthMode::Equal);
+            efecom::ApplyPipelineState(
+                overrideState != null
+                    ? *overrideState
+                    : (mat.doubleSided
+                         ? (igual ? OpaqueDoubleSidedEqualState() : OpaqueDoubleSidedState())
+                         : (igual ? OpaqueEqualState()            : OpaqueState())));
 
             const MaterialBlock block = mat.ToBlock();
             m_materialUbo.Update(&block, sizeof(block));

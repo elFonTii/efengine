@@ -18,7 +18,8 @@ namespace efengine {
 namespace renderer {
 
     std::optional<AoPass> AoPass::Create(Renderer& renderer, VertexArray& fullscreenQuad,
-                                         const Shaders& shaders, u32 width, u32 height) {
+                                         const Shaders& shaders, u32 width, u32 height,
+                                         u32 sharedDepthRbo) {
         if (shaders.depthNormal == null || shaders.gtao == null || shaders.denoise == null) {
             EF_LOG_ERROR("AoPass::Create: falta algun shader de AO");
             return std::nullopt;
@@ -28,14 +29,23 @@ namespace renderer {
             return std::nullopt;
         }
 
-        EF_LOG_INFO("AoPass: targets %ux%u (normal + 2 de AO)", width, height);
-        return AoPass(renderer, fullscreenQuad, shaders, width, height);
+        if (sharedDepthRbo == 0u) {
+            EF_LOG_ERROR("AoPass::Create: sin depth compartido; el prepass no puede "
+                         "alimentar el forward");
+            return std::nullopt;
+        }
+
+        EF_LOG_INFO("AoPass: prepass %ux%u (depth compartido), AO %ux%u",
+                    width, height, ReducedExtent(width), ReducedExtent(height));
+        return AoPass(renderer, fullscreenQuad, shaders, width, height, sharedDepthRbo);
     }
 
     AoPass::AoPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
-                   u32 width, u32 height)
+                   u32 width, u32 height, u32 sharedDepthRbo)
         : m_renderer(renderer), m_quad(fullscreenQuad), m_shaders(shaders)
-        , m_normalFb(width, height)
+        // El prepass escribe en el depth DEL FRAMEBUFFER DE ESCENA, no en uno
+        // propio: es lo que despues deja al forward dibujar con GL_EQUAL.
+        , m_normalFb(width, height, sharedDepthRbo)
         , m_aoA(ReducedExtent(width), ReducedExtent(height))
         , m_aoB(ReducedExtent(width), ReducedExtent(height))
         , m_fullWidth(width), m_fullHeight(height) {}
@@ -47,7 +57,7 @@ namespace renderer {
         , m_fullWidth(o.m_fullWidth), m_fullHeight(o.m_fullHeight)
         , m_settings(o.m_settings)
         , m_prepassUbo(std::move(o.m_prepassUbo)), m_gtaoUbo(std::move(o.m_gtaoUbo))
-        , m_resultInA(o.m_resultInA) {}
+        , m_resultInA(o.m_resultInA), m_depthReady(o.m_depthReady) {}
 
     // Las dos referencias (renderer, quad) no se reasignan: son las mismas para
     // todo el proceso, y una referencia no se puede rebindear igual.
@@ -63,6 +73,7 @@ namespace renderer {
             m_prepassUbo = std::move(o.m_prepassUbo);
             m_gtaoUbo    = std::move(o.m_gtaoUbo);
             m_resultInA  = o.m_resultInA;
+            m_depthReady = o.m_depthReady;
         }
         return *this;
     }
@@ -78,12 +89,14 @@ namespace renderer {
         return (m_aoA.width() == m_fullWidth) ? 1 : kReducedScale;
     }
 
-    void AoPass::Resize(u32 width, u32 height) {
-        if (width == 0u || height == 0u) return;
+    void AoPass::Resize(u32 width, u32 height, u32 sharedDepthRbo) {
+        if (width == 0u || height == 0u || sharedDepthRbo == 0u) return;
 
         m_fullWidth  = width;
         m_fullHeight = height;
-        m_normalFb.Resize(width, height);
+        // El handle tambien cuenta: el dueno pudo realocarse. Framebuffer::Resize
+        // lo compara y no hace nada si no cambio nada.
+        m_normalFb.Resize(width, height, sharedDepthRbo);
         EnsureTargetSize();
     }
 
@@ -100,6 +113,11 @@ namespace renderer {
 
     void AoPass::Render(const scene::SceneGraph& scene,
                         const glm::mat4& view, const glm::mat4& projection) {
+        // Se apaga PRIMERO: si este Render sale temprano, el depth compartido
+        // tiene la profundidad del frame anterior, y dibujar el forward con
+        // GL_EQUAL contra eso deja la pantalla vacia.
+        m_depthReady = false;
+
         if (!m_settings.enabled) return;
 
         // El checkbox de media resolucion se mueve a mitad de frame desde ImGui:
@@ -112,7 +130,10 @@ namespace renderer {
             EF_PROFILE_SCOPE("AO prepass");
 
             m_normalFb.Bind();
-            // Negro con alfa 0: viewZ == 0 es el centinela de "aca no hay geometria".
+            // Negro con alfa 0: viewZ == 0 es el centinela de "aca no hay
+            // geometria". El Clear tambien limpia la PROFUNDIDAD, que es la del
+            // framebuffer de escena: este es el unico clear de depth del frame, y
+            // por eso el forward despues limpia solo color.
             m_renderer.Clear(0.0f, 0.0f, 0.0f, 0.0f);
 
             const AoPrepassBlock prepass { view, projection };
@@ -127,6 +148,10 @@ namespace renderer {
                 // de espesor cero, que necesitan CullMode::None) fuera del target.
                 m_renderer.Submit(*item.model, *item.materials, item.world, m_shaders.depthNormal);
             }
+
+            // A partir de aca el depth compartido tiene la profundidad de la
+            // escena con la camara de este frame.
+            m_depthReady = true;
         }
 
         // -- 2. Kernel de GTAO -------------------------------------------------
