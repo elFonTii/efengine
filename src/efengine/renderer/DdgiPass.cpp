@@ -4,6 +4,7 @@
 
 #include <efengine/core/Assert.h>
 #include <efengine/core/Log.h>
+#include <efengine/renderer/FrameContext.h>
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/Cubemap.h>
@@ -48,12 +49,12 @@ namespace renderer {
                       "los blends siga entrando en 32 KB de shared memory");
     }
 
-    std::optional<DdgiPass> DdgiPass::Create(Renderer& renderer, VertexArray& fullscreenQuad,
-                                             const Shaders& shaders) {
+    std::unique_ptr<DdgiPass> DdgiPass::Create(Renderer& renderer, VertexArray& fullscreenQuad,
+                                               const Shaders& shaders) {
         if (shaders.capture == null || shaders.captureSky == null
             || shaders.blendIrradiance == null || shaders.blendDistance == null) {
             EF_LOG_ERROR("DdgiPass::Create: falta algun shader de DDGI");
-            return std::nullopt;
+            return null;
         }
 
         const DdgiGrid grid = SanitizeGrid(DdgiGrid{});
@@ -74,7 +75,7 @@ namespace renderer {
         const u32 fbo = efecom::CreateFramebuffer();
         if (fbo == 0u) {
             EF_LOG_ERROR("DdgiPass::Create: no hay contexto GL");
-            return std::nullopt;
+            return null;
         }
         efecom::FramebufferColorTexture(fbo, capture.id());
 
@@ -92,8 +93,10 @@ namespace renderer {
         const u32 ssbo = efecom::CreateStorageBuffer(
             sizeof(DdgiCaptureTile) * CaptureTileCount(kMaxProbesPerFrame));
 
-        return DdgiPass(renderer, fullscreenQuad, shaders, std::move(capture),
-                        std::move(irradiance), std::move(distance), fbo, rbo, ssbo);
+        // El ctor es privado: make_unique no lo alcanza.
+        return std::unique_ptr<DdgiPass>(
+            new DdgiPass(renderer, fullscreenQuad, shaders, std::move(capture),
+                         std::move(irradiance), std::move(distance), fbo, rbo, ssbo));
     }
 
     DdgiPass::DdgiPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
@@ -251,6 +254,17 @@ namespace renderer {
                            std::chrono::steady_clock::now() - t0).count();
             }
         };
+    }
+
+    void DdgiPass::Execute(FrameContext& ctx) {
+        Update(ctx.scene, ctx.lighting.shadow, ctx.lighting.ibl,
+               ctx.lighting.ibl.environment);
+
+        // Fuera de Update y no al final de su cuerpo: Update tiene retornos
+        // tempranos (sin probes, congelado) y el contexto se publicaba igual.
+        // Con el atlas todavia invalido, Context() no entrega los atlas y
+        // pbr.frag cae a IBL puro, que es lo correcto.
+        ctx.lighting.ddgi = Context();
     }
 
     void DdgiPass::Update(const scene::SceneGraph& scene, const ShadowContext& shadow,

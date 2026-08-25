@@ -47,7 +47,7 @@ namespace application {
             // Sobrevive hasta que los paneles bajen a sandbox/panels/: es lo
             // que mantiene EditorUI compilando mientras los pases se mudan.
             renderer::ShadowPass& GetShadowPass() { return *m_shadowPtr; }
-            std::optional<renderer::DdgiPass>& GetDdgiPass() { return m_ddgiPass; }
+            renderer::DdgiPass* GetDdgiPass() { return m_ddgiPtr; }
             std::optional<renderer::AoPass>&   GetAoPass()   { return m_aoPass; }
             std::optional<renderer::IndirectPass>& GetIndirectPass() { return m_indirectPass; }
 
@@ -99,8 +99,8 @@ namespace application {
             // de arriba; el dueno es el pipeline.
             renderer::ShadowPass* m_shadowPtr = null;
             renderer::IblPass*    m_iblPtr    = null;
-            // Vacios si falto algun shader de DDGI: el frame sigue con IBL puro.
-            std::optional<renderer::DdgiPass>      m_ddgiPass;
+            // Vacio si falto algun shader de DDGI: el frame sigue con IBL puro.
+            renderer::DdgiPass*   m_ddgiPtr   = null;
             std::optional<renderer::DdgiDebugPass> m_ddgiDebug;
             // Vacio si falto algun shader de AO: el frame sigue sin oclusion.
             std::optional<renderer::AoPass>        m_aoPass;

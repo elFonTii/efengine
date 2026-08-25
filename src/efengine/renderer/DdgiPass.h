@@ -2,6 +2,7 @@
 #include <efengine/core/Types.h>
 #include <efengine/renderer/DdgiVolume.h>
 #include <efengine/renderer/DdgiSettings.h>
+#include <efengine/renderer/IScenePass.h>
 #include <efengine/renderer/DdgiContext.h>
 #include <efengine/renderer/Texture.h>
 #include <efengine/renderer/ShadowContext.h>
@@ -10,7 +11,7 @@
 #include <efengine/renderer/ShaderBlocks.h>
 
 #include <glm/glm.hpp>
-#include <optional>
+#include <memory>
 #include <vector>
 
 namespace efengine {
@@ -28,7 +29,7 @@ namespace renderer {
     // Create devuelve nullopt si falta cualquier shader (calcado de
     // Environment::Create): sin DdgiPass, Application pasa un DdgiContext vacio
     // y pbr.frag cae a IBL puro. Un fallo de shader no rompe el frame.
-    class DdgiPass {
+    class DdgiPass : public IScenePass {
         public:
             struct Shaders {
                 Shader* capture         = null;
@@ -40,8 +41,8 @@ namespace renderer {
             // fullscreenQuad es el mismo VertexArray que usa SkyboxPass: el cielo
             // de la captura se dibuja con skybox.vert, que reconstruye la
             // direccion desde las esquinas del quad, no con un cubo.
-            static std::optional<DdgiPass> Create(Renderer& renderer, VertexArray& fullscreenQuad,
-                                                  const Shaders& shaders);
+            static std::unique_ptr<DdgiPass> Create(Renderer& renderer, VertexArray& fullscreenQuad,
+                                                    const Shaders& shaders);
 
             ~DdgiPass();
             DdgiPass(const DdgiPass&)            = delete;
@@ -50,10 +51,11 @@ namespace renderer {
             DdgiPass& operator=(DdgiPass&& other) noexcept;
 
             // Captura los probes del frame y los integra al atlas. Corre DESPUES
-            // del ShadowPass (necesita su depth y su matriz) y ANTES de
-            // BeginScene (sube su propio FrameBlock por cara).
-            void Update(const scene::SceneGraph& scene, const ShadowContext& shadow,
-                        const IblContext& ibl, const Cubemap* env);
+            // del ShadowPass (necesita su depth y su matriz) y ANTES del
+            // FrameUploadPass (sube su propio FrameBlock por cara).
+            void Execute(FrameContext& ctx) override;
+
+            const char* Name() const override { return "DDGI"; }
 
             DdgiContext Context() const;
 
@@ -82,6 +84,11 @@ namespace renderer {
             DdgiPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
                      Texture capture, Texture irradiance, Texture distance,
                      u32 captureFbo, u32 captureDepthRbo, u32 tileSsbo);
+
+            // El trabajo real. Lo llama Execute, que publica el contexto
+            // despues -- afuera, porque esto tiene retornos tempranos.
+            void Update(const scene::SceneGraph& scene, const ShadowContext& shadow,
+                        const IblContext& ibl, const Cubemap* env);
 
             // Realoca los dos atlas si la grilla cambio de tamano. Los deja en
             // negro y rearma el contador de barridos.

@@ -504,8 +504,8 @@ namespace {
     void drawDdgiSection(EditorContext& ctx) {
         if (!ImGui::CollapsingHeader("DDGI (iluminacion indirecta)")) return;
 
-        std::optional<renderer::DdgiPass>& opt = ctx.app.GetDdgiPass();
-        if (!opt.has_value()) {
+        renderer::DdgiPass* opt = ctx.app.GetDdgiPass();
+        if (opt == null) {
             ImGui::TextColored(kColorError, "DdgiPass no disponible: fallo la carga de shaders.");
             ImGui::TextWrapped("La escena esta usando IBL puro. Mira la consola.");
             return;
@@ -717,8 +717,8 @@ namespace {
 
         // El espaciado de DDGI al lado del slider: la regla "radio < espaciado"
         // no se puede verificar de otra forma desde el panel.
-        std::optional<renderer::DdgiPass>& ddgi = ctx.app.GetDdgiPass();
-        if (ddgi.has_value()) {
+        renderer::DdgiPass* ddgi = ctx.app.GetDdgiPass();
+        if (ddgi != null) {
             const glm::vec3& sp = ddgi->settings().grid.spacing;
             const f32 minSp = glm::min(sp.x, glm::min(sp.y, sp.z));
             if (s.radius >= minSp) {

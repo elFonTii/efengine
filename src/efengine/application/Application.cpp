@@ -106,8 +106,9 @@ namespace application {
         ddgiShaders.blendDistance = m_resources.GetComputeShader("ddgi_blend_distance",
                                   "assets/shaders/ddgi/blend_distance.comp");
 
-        m_ddgiPass = renderer::DdgiPass::Create(m_renderer, m_fullscreenQuad, ddgiShaders);
-        if (!m_ddgiPass) EF_LOG_ERROR("Application: no se pudo crear el DdgiPass");
+        m_ddgiPtr = static_cast<renderer::DdgiPass*>(
+            m_pipeline.Add(renderer::DdgiPass::Create(m_renderer, m_fullscreenQuad, ddgiShaders)));
+        if (!m_ddgiPtr) EF_LOG_ERROR("Application: no se pudo crear el DdgiPass");
 
         renderer::Shader* ddgiBlit = m_resources.GetShader("ddgi_debug_blit",
                 "assets/shaders/screen.vert", "assets/shaders/ddgi/debug_blit.frag");
@@ -212,15 +213,6 @@ namespace application {
 
         renderer::SceneLighting& lighting = ctx.lighting;
 
-        // --- DDGI: captura de probes + blend. Antes de BeginScene porque sube su
-        // --- propio FrameBlock por cara, y despues del ShadowPass porque la
-        // --- captura sombrea con la matriz y el depth del sol.
-        if (m_ddgiPass) {
-            m_ddgiPass->Update(scene, lighting.shadow, lighting.ibl,
-                               lighting.ibl.environment);
-            lighting.ddgi = m_ddgiPass->Context();
-        }
-
         // --- AO screen-space: prepass + kernel. Antes de BeginScene porque sube
         // --- su propio bloque de binding 4, y porque pbr.frag necesita el
         // --- resultado YA calculado para modular la indirecta.
@@ -290,12 +282,12 @@ namespace application {
 
         // El volcado del target de captura va sobre la imagen HDR de la escena,
         // antes del post: es un instrumento de debug, no parte de la imagen.
-        if (m_ddgiPass && m_ddgiDebug && m_ddgiPass->settings().debugProbes) {
-            const renderer::DdgiSettings& ds = m_ddgiPass->settings();
+        if (m_ddgiPtr && m_ddgiDebug && m_ddgiPtr->settings().debugProbes) {
+            const renderer::DdgiSettings& ds = m_ddgiPtr->settings();
             // Modo 3 = el mismo volcado pero mirando el alfa: sin esto la
             // distancia capturada no es verificable desde el panel.
             if (ds.debugMode >= 2u) {
-                m_ddgiDebug->DrawCaptureBlit(m_ddgiPass->captureTarget(), ds.debugMode == 3u);
+                m_ddgiDebug->DrawCaptureBlit(m_ddgiPtr->captureTarget(), ds.debugMode == 3u);
             } else if (m_ddgiProbeMesh != null) {
                 m_ddgiDebug->DrawProbes(ds.grid, ds, *m_ddgiProbeMesh);
             }
