@@ -931,7 +931,9 @@ namespace {
             renderer::ShadowPass&     pase = ctx.app.GetShadowPass();
             renderer::ShadowSettings& sh   = pase.settings();
 
-            ImGui::Checkbox   ("Habilitadas", &sh.enabled);
+            // El flag de encendido es del pase (IScenePass::enabled), no de sus
+            // settings: es lo que el ScenePipeline consulta para saltearlo.
+            ImGui::Checkbox   ("Habilitadas", &pase.enabled);
             // Margen: aire alrededor de la escena. El encuadre de la luz sale de
             // sus bounds y esto es lo unico a mano. Mas margen = texel mas
             // grande = mas acne.

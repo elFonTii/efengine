@@ -3,6 +3,7 @@
 #include <efecom/RHI.h>
 
 #include <efengine/core/Log.h>
+#include <efengine/renderer/FrameContext.h>
 #include <efengine/scene/SceneGraph.h>
 #include <efengine/scene/Camera.h>
 
@@ -24,10 +25,18 @@ namespace application {
          )
         , m_postChain( m_window.GetWidth(), m_window.GetHeight())
         , m_skyboxPass( m_renderer, m_fullscreenQuad,
-                m_resources.GetShader("skybox", "assets/shaders/skybox.vert", "assets/shaders/skybox.frag") )
-        , m_shadowPass( m_renderer,
-                m_resources.GetShader("shadow_depth", "assets/shaders/shadow_depth.vert", "assets/shaders/shadow_depth.frag") ){
-        
+                m_resources.GetShader("skybox", "assets/shaders/skybox.vert", "assets/shaders/skybox.frag") ) {
+
+        // El primer eslabon del pipeline. El resto del frame sigue escrito a
+        // mano en RenderScene; la frontera se corre un pase por vez.
+        m_shadowPtr = static_cast<renderer::ShadowPass*>(
+            m_pipeline.Add(std::make_unique<renderer::ShadowPass>(
+                m_renderer,
+                m_resources.GetShader("shadow_depth",
+                    "assets/shaders/shadow_depth.vert",
+                    "assets/shaders/shadow_depth.frag"))));
+
+
         const f32 quadVertices[] = {
         // pos      uv
         -1.0f, -1.0f, 0.0f, 0.0f,
@@ -192,26 +201,12 @@ namespace application {
         // Los dos pases de abajo (sombra y forward) leen el mismo resultado.
         scene.UpdateWorldTransforms();
 
-        // Los cuatro contextos de iluminacion del frame, en un solo struct.
-        renderer::SceneLighting lighting;
+        // El contexto del frame. Los pases ya migrados publican ahi; lo que
+        // todavia esta escrito a mano mas abajo lo lee de ctx.lighting.
+        renderer::FrameContext ctx { scene, camera, m_renderer, m_sceneFB, w, h };
+        m_pipeline.Execute(&ctx);
 
-        // --- Pre-pase de sombra: profundidad de la escena desde el sol ---
-        if (m_shadowPass.settings().enabled) {
-            m_shadowPass.Render(scene, scene.Sun());
-            lighting.shadow.map              = &m_shadowPass.DepthTexture();
-            lighting.shadow.lightSpaceMatrix = m_shadowPass.lightSpaceMatrix();
-            lighting.shadow.enabled          = true;
-            lighting.shadow.biasMin          = m_shadowPass.settings().biasMin;
-            lighting.shadow.biasMax          = m_shadowPass.settings().biasMax;
-
-            // El normal offset se dial en texels pero viaja en metros: el
-            // shader no sabe cuanto mide un texel del shadow map en el mundo, y
-            // eso depende del encuadre que el pase acaba de calcular.
-            const renderer::DirectionalLightFit& fit = m_shadowPass.fit();
-            const f32 texel = 2.0f * fit.orthoHalfSize
-                            / static_cast<f32>(m_shadowPass.resolution());
-            lighting.shadow.normalOffset = m_shadowPass.settings().normalOffsetTexels * texel;
-        }
+        renderer::SceneLighting& lighting = ctx.lighting;
 
         // Las 4 piezas del IBL precomputado. Sin Environment quedan en null y el
         // shader apaga el ambiente entero en vez de samplear una unidad equivocada.

@@ -20,6 +20,7 @@
 #include <efengine/renderer/AoPass.h>
 #include <efengine/renderer/IndirectPass.h>
 #include <efengine/renderer/SceneLighting.h>
+#include <efengine/renderer/ScenePipeline.h>
 #include <efengine/renderer/GpuProfiler.h>
 #include <optional>
 
@@ -43,7 +44,9 @@ namespace application {
             application::DebugUI& GetDebugUI() { return m_debugUI; }
             renderer::BloomPass& GetBloomPass() { return m_bloomPass; }
             renderer::FxaaPass& GetFxaaPass() { return m_fxaaPass; }
-            renderer::ShadowPass& GetShadowPass() { return m_shadowPass; }
+            // Sobrevive hasta que los paneles bajen a sandbox/panels/: es lo
+            // que mantiene EditorUI compilando mientras los pases se mudan.
+            renderer::ShadowPass& GetShadowPass() { return *m_shadowPtr; }
             std::optional<renderer::DdgiPass>& GetDdgiPass() { return m_ddgiPass; }
             std::optional<renderer::AoPass>&   GetAoPass()   { return m_aoPass; }
             std::optional<renderer::IndirectPass>& GetIndirectPass() { return m_indirectPass; }
@@ -88,7 +91,14 @@ namespace application {
             platform::Input m_input;
             std::optional<renderer::Environment> m_environment;
             renderer::SkyboxPass m_skyboxPass;
-            renderer::ShadowPass m_shadowPass;
+
+            // Los pases del frame, en orden. Va DESPUES de m_renderer y de
+            // m_resources: sus pases guardan referencias a los dos, y el orden
+            // de declaracion es el que decide quien muere primero.
+            renderer::ScenePipeline m_pipeline;
+            // Observador al pase que vive en m_pipeline. Solo para el accessor
+            // de arriba; el dueno es el pipeline.
+            renderer::ShadowPass* m_shadowPtr = null;
             // Vacios si falto algun shader de DDGI: el frame sigue con IBL puro.
             std::optional<renderer::DdgiPass>      m_ddgiPass;
             std::optional<renderer::DdgiDebugPass> m_ddgiDebug;
