@@ -12,7 +12,7 @@
 #include <efengine/core/Time.h>
 #include <efengine/platform/InputCodes.h>
 #include <efengine/platform/Input.h>
-#include <efengine/renderer/Environment.h>
+#include <efengine/renderer/IblPass.h>
 #include <efengine/renderer/SkyboxPass.h>
 #include <efengine/renderer/ShadowPass.h>
 #include <efengine/renderer/DdgiPass.h>
@@ -89,7 +89,6 @@ namespace application {
             core::Time m_time;
             // No participa del contrato de orden: no toca GL.
             platform::Input m_input;
-            std::optional<renderer::Environment> m_environment;
             renderer::SkyboxPass m_skyboxPass;
 
             // Los pases del frame, en orden. Va DESPUES de m_renderer y de
@@ -99,6 +98,7 @@ namespace application {
             // Observador al pase que vive en m_pipeline. Solo para el accessor
             // de arriba; el dueno es el pipeline.
             renderer::ShadowPass* m_shadowPtr = null;
+            renderer::IblPass*    m_iblPtr    = null;
             // Vacios si falto algun shader de DDGI: el frame sigue con IBL puro.
             std::optional<renderer::DdgiPass>      m_ddgiPass;
             std::optional<renderer::DdgiDebugPass> m_ddgiDebug;

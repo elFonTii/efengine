@@ -79,8 +79,12 @@ namespace application {
             envShaders.prefilterGGX       = preCS;
             envShaders.brdfLut            = lutCS;
 
-            m_environment = renderer::Environment::Create(envDesc, envShaders);
-            if (!m_environment) EF_LOG_ERROR("Application: no se pudo crear el Environment IBL");
+            // Segundo eslabon. Si Environment::Create falla, Create da null,
+            // el pase no se registra y el frame sigue sin ambiente.
+            m_iblPtr = static_cast<renderer::IblPass*>(
+                m_pipeline.Add(renderer::IblPass::Create(
+                    renderer::Environment::Create(envDesc, envShaders))));
+            if (!m_iblPtr) EF_LOG_ERROR("Application: no se pudo crear el Environment IBL");
         } else {
             EF_LOG_ERROR("Application: no se pudo cargar algún compute de IBL (equirect/irradiance/prefilter/brdf)");
         }
@@ -208,22 +212,12 @@ namespace application {
 
         renderer::SceneLighting& lighting = ctx.lighting;
 
-        // Las 4 piezas del IBL precomputado. Sin Environment quedan en null y el
-        // shader apaga el ambiente entero en vez de samplear una unidad equivocada.
-        lighting.ibl.intensity = scene.iblIntensity;
-        if (m_environment) {
-            lighting.ibl.irradiance  = &m_environment->irradiance();
-            lighting.ibl.prefiltered = &m_environment->prefiltered();
-            lighting.ibl.brdfLut     = &m_environment->brdfLut();
-            lighting.ibl.maxLod      = m_environment->prefilterMaxLod();
-        }
-
         // --- DDGI: captura de probes + blend. Antes de BeginScene porque sube su
         // --- propio FrameBlock por cara, y despues del ShadowPass porque la
         // --- captura sombrea con la matriz y el depth del sol.
         if (m_ddgiPass) {
             m_ddgiPass->Update(scene, lighting.shadow, lighting.ibl,
-                               m_environment ? &m_environment->env() : null);
+                               lighting.ibl.environment);
             lighting.ddgi = m_ddgiPass->Context();
         }
 
@@ -279,8 +273,8 @@ namespace application {
             m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
         }
 
-         if (m_environment) {
-            m_skyboxPass.Draw(m_environment->env());
+         if (lighting.ibl.environment) {
+            m_skyboxPass.Draw(*lighting.ibl.environment);
          }
 
         {
