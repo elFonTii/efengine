@@ -16,6 +16,7 @@
 #include <efengine/renderer/AoPass.h>
 #include <efengine/renderer/IndirectPass.h>
 #include <efengine/renderer/GpuProfiler.h>
+#include <efengine/renderer/ScenePipeline.h>
 #include <efecom/RHI.h>
 #include <efengine/renderer/AoSettings.h>
 #include <efengine/renderer/Bounds.h>
@@ -504,7 +505,7 @@ namespace {
     void drawDdgiSection(EditorContext& ctx) {
         if (!ImGui::CollapsingHeader("DDGI (iluminacion indirecta)")) return;
 
-        renderer::DdgiPass* opt = ctx.app.GetDdgiPass();
+        renderer::DdgiPass* opt = ctx.app.GetPipeline().Find<renderer::DdgiPass>();
         if (opt == null) {
             ImGui::TextColored(kColorError, "DdgiPass no disponible: fallo la carga de shaders.");
             ImGui::TextWrapped("La escena esta usando IBL puro. Mira la consola.");
@@ -653,7 +654,7 @@ namespace {
         // cambio por separado: sin un toggle en caliente, comparar "con" y "sin"
         // pide recompilar, y entre las dos compilaciones cambia el estado de
         // boost de la GPU y el delta se pierde en el ruido.
-        renderer::IndirectPass* ind = ctx.app.GetIndirectPass();
+        renderer::IndirectPass* ind = ctx.app.GetPipeline().Find<renderer::IndirectPass>();
         if (ind != null) {
             // El flag es del pase (IScenePass::enabled): es lo que el
             // ScenePipeline consulta para saltearlo.
@@ -666,7 +667,7 @@ namespace {
                                     ind->width(), ind->height());
                 // Es la dependencia que mas sorprende: sin AO no hay prepass, y
                 // sin prepass no hay ni posicion ni guia para el upsample.
-                renderer::AoPass* ao = ctx.app.GetAoPass();
+                renderer::AoPass* ao = ctx.app.GetPipeline().Find<renderer::AoPass>();
                 if (ao == null || !ao->enabled) {
                     ImGui::TextColored(kColorAviso,
                                        "AO apagado: el pase no corre y pbr.frag samplea inline.");
@@ -698,7 +699,7 @@ namespace {
     void drawAoSection(EditorContext& ctx) {
         if (!ImGui::CollapsingHeader("Oclusion ambiental (GTAO)")) return;
 
-        renderer::AoPass* opt = ctx.app.GetAoPass();
+        renderer::AoPass* opt = ctx.app.GetPipeline().Find<renderer::AoPass>();
         if (opt == null) {
             ImGui::TextColored(kColorError, "AoPass no disponible: fallo la carga de shaders.");
             ImGui::TextWrapped("La escena esta sin oclusion de contacto. Mira la consola.");
@@ -721,7 +722,7 @@ namespace {
 
         // El espaciado de DDGI al lado del slider: la regla "radio < espaciado"
         // no se puede verificar de otra forma desde el panel.
-        renderer::DdgiPass* ddgi = ctx.app.GetDdgiPass();
+        renderer::DdgiPass* ddgi = ctx.app.GetPipeline().Find<renderer::DdgiPass>();
         if (ddgi != null) {
             const glm::vec3& sp = ddgi->settings().grid.spacing;
             const f32 minSp = glm::min(sp.x, glm::min(sp.y, sp.z));
@@ -932,7 +933,9 @@ namespace {
         }
 
         if (ImGui::CollapsingHeader("Sombras", ImGuiTreeNodeFlags_DefaultOpen)) {
-            renderer::ShadowPass&     pase = ctx.app.GetShadowPass();
+            renderer::ShadowPass* pasePtr = ctx.app.GetPipeline().Find<renderer::ShadowPass>();
+            if (pasePtr == null) return;
+            renderer::ShadowPass&     pase = *pasePtr;
             renderer::ShadowSettings& sh   = pase.settings();
 
             // El flag de encendido es del pase (IScenePass::enabled), no de sus

@@ -12,17 +12,6 @@
 #include <efengine/core/Time.h>
 #include <efengine/platform/InputCodes.h>
 #include <efengine/platform/Input.h>
-#include <efengine/renderer/IblPass.h>
-#include <efengine/renderer/SkyboxPass.h>
-#include <efengine/renderer/SceneTargetPass.h>
-#include <efengine/renderer/ForwardPass.h>
-#include <efengine/renderer/ShadowPass.h>
-#include <efengine/renderer/DdgiPass.h>
-#include <efengine/renderer/DdgiDebugPass.h>
-#include <efengine/renderer/AoPass.h>
-#include <efengine/renderer/IndirectPass.h>
-#include <efengine/renderer/FrameUploadPass.h>
-#include <efengine/renderer/SceneLighting.h>
 #include <efengine/renderer/ScenePipeline.h>
 #include <efengine/renderer/GpuProfiler.h>
 #include <optional>
@@ -47,12 +36,10 @@ namespace application {
             application::DebugUI& GetDebugUI() { return m_debugUI; }
             renderer::BloomPass& GetBloomPass() { return m_bloomPass; }
             renderer::FxaaPass& GetFxaaPass() { return m_fxaaPass; }
-            // Sobrevive hasta que los paneles bajen a sandbox/panels/: es lo
-            // que mantiene EditorUI compilando mientras los pases se mudan.
-            renderer::ShadowPass& GetShadowPass() { return *m_shadowPtr; }
-            renderer::DdgiPass* GetDdgiPass() { return m_ddgiPtr; }
-            renderer::AoPass* GetAoPass() { return m_aoPtr; }
-            renderer::IndirectPass* GetIndirectPass() { return m_indirectPtr; }
+
+            // El unico accessor de pases de escena. Los paneles encuentran el
+            // suyo con Find<T>(): agregar un pase ya no agrega un accessor.
+            renderer::ScenePipeline& GetPipeline() { return m_pipeline; }
 
             // FRAME API
             bool Running() const { return !m_window.ShouldClose(); }
@@ -96,18 +83,7 @@ namespace application {
             // m_resources: sus pases guardan referencias a los dos, y el orden
             // de declaracion es el que decide quien muere primero.
             renderer::ScenePipeline m_pipeline;
-            // Observador al pase que vive en m_pipeline. Solo para el accessor
-            // de arriba; el dueno es el pipeline.
-            renderer::ShadowPass* m_shadowPtr = null;
-            renderer::IblPass*    m_iblPtr    = null;
-            // Vacio si falto algun shader de DDGI: el frame sigue con IBL puro.
-            renderer::DdgiPass*   m_ddgiPtr   = null;
-            // Vacio si falto algun shader de AO: el frame sigue sin oclusion.
-            renderer::AoPass*     m_aoPtr     = null;
-            // Vacio si falto su shader: pbr.frag samplea el volumen inline, que
-            // es el camino de antes de que este pase existiera. Misma imagen,
-            // mas cara.
-            renderer::IndirectPass* m_indirectPtr = null;
+
     };
 
 } // namespace application
