@@ -9,16 +9,12 @@
 #include <efengine/core/Time.h>
 #include <efengine/renderer/BloomPass.h>
 #include <efengine/renderer/FxaaPass.h>
-#include <efengine/renderer/ShadowPass.h>
-#include <efengine/renderer/DdgiPass.h>
-#include <efengine/renderer/DdgiSettings.h>
-#include <efengine/renderer/DdgiVolume.h>
-#include <efengine/renderer/AoPass.h>
-#include <efengine/renderer/IndirectPass.h>
 #include <efengine/renderer/GpuProfiler.h>
 #include <efengine/renderer/ScenePipeline.h>
+
+#include "panels/PassPanel.h"
+#include "panels/PanelUI.h"
 #include <efecom/RHI.h>
-#include <efengine/renderer/AoSettings.h>
 #include <efengine/renderer/Bounds.h>
 #include <efengine/resources/SceneAssets.h>
 #include <efengine/renderer/Model.h>
@@ -81,33 +77,9 @@ namespace {
         RefreshHandles(ctx);
     }
 
-    // Colores de mensaje de la UI. AuthoringUI.cpp tiene su propia copia de
-    // kColorError en su namespace anonimo; son dos unidades de traduccion distintas.
-    const ImVec4 kColorError { 1.00f, 0.40f, 0.40f, 1.0f };
-    const ImVec4 kColorAviso { 1.00f, 0.80f, 0.30f, 1.0f };
-    const ImVec4 kColorOk    { 0.45f, 0.85f, 0.45f, 1.0f };
-
-    // Ancho reservado para las etiquetas de los campos. Los widgets se estiran
-    // hasta el borde del panel menos esto, asi que todos empiezan y terminan
-    // alineados en vez de tener cada uno el largo que le toco.
-    constexpr f32 kAnchoEtiqueta = 150.0f;
-
-    // RAII sobre PushItemWidth: se abre una al principio de cada panel y todo lo
-    // que se dibuje adentro queda alineado sin repetir la llamada por widget.
-    //
-    // OJO: la pila de item width es POR VENTANA, asi que el guard tiene que morir
-    // ANTES del ImGui::End() de su panel. Si vive hasta el final de la funcion, el
-    // Pop cae en la ventana de afuera y ImGui asserta con "Calling PopItemWidth()
-    // too many times!". Por eso los paneles lo meten en un bloque propio.
-    struct CamposAlineados {
-        explicit CamposAlineados(f32 anchoEtiqueta = kAnchoEtiqueta) {
-            ImGui::PushItemWidth(-anchoEtiqueta);
-        }
-        ~CamposAlineados() { ImGui::PopItemWidth(); }
-
-        CamposAlineados(const CamposAlineados&)            = delete;
-        CamposAlineados& operator=(const CamposAlineados&) = delete;
-    };
+    // Los colores de mensaje y CamposAlineados viven ahora en
+    // panels/PanelUI.h: los comparten los paneles de pases, que estan en
+    // archivos propios.
 
     // Pega el nombre tipeado al directorio de escenas y le pone .efe si falta:
     // guardar un archivo sin extension lo dejaria fuera del listado del menu.
@@ -502,284 +474,7 @@ namespace {
         ImGui::End();
     }
 
-    void drawDdgiSection(EditorContext& ctx) {
-        if (!ImGui::CollapsingHeader("DDGI (iluminacion indirecta)")) return;
 
-        renderer::DdgiPass* opt = ctx.app.GetPipeline().Find<renderer::DdgiPass>();
-        if (opt == null) {
-            ImGui::TextColored(kColorError, "DdgiPass no disponible: fallo la carga de shaders.");
-            ImGui::TextWrapped("La escena esta usando IBL puro. Mira la consola.");
-            return;
-        }
-        renderer::DdgiPass&     pass = *opt;
-        renderer::DdgiSettings& s    = pass.settings();
-
-        CamposAlineados alineados;
-
-        // -- Lo primero que hay que mirar cuando "no se ve la GI" --------------
-        if (pass.atlasValid()) {
-            ImGui::TextColored(kColorOk, "pbr.frag recibe los atlas: SI");
-        } else {
-            ImGui::TextColored(kColorError, "pbr.frag recibe los atlas: NO");
-            ImGui::TextWrapped("Hasta que corra un blend, DDGI aporta cero y la imagen es IBL puro.");
-        }
-
-        ImGui::Checkbox("Habilitado", &s.enabled);
-
-        // -- Grilla ------------------------------------------------------------
-        ImGui::SeparatorText("Grilla");
-        bool gridChanged = false;
-        gridChanged |= ImGui::DragFloat3("Origen",         &s.grid.origin.x,  0.1f);
-        gridChanged |= ImGui::DragFloat3("Espaciado",      &s.grid.spacing.x, 0.05f, 0.05f, 10.0f);
-        gridChanged |= ImGui::DragInt3  ("Probes por eje", &s.grid.counts.x,  1.0f,
-                                         1, renderer::kMaxProbesPerAxis);
-        ImGui::TextDisabled("total: %u probes", renderer::ProbeCount(s.grid));
-
-        // Encajar la grilla a la escena resuelve de un click la clase entera de
-        // bug "la grilla no cubre la sala", que es con la que arranco este ciclo.
-        if (ImGui::Button("Encajar grilla a la escena", ImVec2(-kAnchoEtiqueta, 0.0f))) {
-            const renderer::AABB& b = ctx.scene.WorldBounds();
-            if (b.Valid()) {
-                // Un 10% de margen hacia adentro: un probe DENTRO de una pared
-                // captura su interior y contamina a sus vecinos por el peso
-                // trilineal.
-                const glm::vec3 ext    = b.Extents() * 0.9f;
-                const glm::vec3 minPos = b.Center() - ext;
-                const glm::ivec3 n     = s.grid.counts;
-                s.grid.origin  = minPos;
-                s.grid.spacing = glm::vec3(
-                    n.x > 1 ? (2.0f * ext.x) / f32(n.x - 1) : 1.0f,
-                    n.y > 1 ? (2.0f * ext.y) / f32(n.y - 1) : 1.0f,
-                    n.z > 1 ? (2.0f * ext.z) / f32(n.z - 1) : 1.0f);
-                gridChanged = true;
-            }
-        }
-        if (gridChanged) {
-            ImGui::TextColored(kColorAviso,
-                               "Cambiar la grilla realoca los atlas y reinicia el barrido.");
-        }
-
-        // -- Update ------------------------------------------------------------
-        ImGui::SeparatorText("Update");
-        int perFrame = static_cast<int>(s.probesPerFrame);
-        if (ImGui::SliderInt("Probes por frame", &perFrame, 0,
-                             static_cast<int>(renderer::kMaxProbesPerFrame))) {
-            s.probesPerFrame = static_cast<u32>(perFrame);
-        }
-        // Histeresis: cuanto del valor viejo se conserva. ESTO es el denoise
-        // temporal de DDGI, no hace falta un denoiser aparte. Mas alto = mas
-        // estable y mas lento en reaccionar.
-        ImGui::SliderFloat("Histeresis", &s.hysteresis, 0.0f, 0.995f, "%.3f");
-        ImGui::Checkbox("Congelar (freeze)", &s.freeze);
-        ImGui::SameLine();
-        if (ImGui::Button("Reset")) pass.Reset();
-
-        const u32 total = renderer::ProbeCount(s.grid);
-        const u32 framesPorBarrido = (s.probesPerFrame > 0u)
-                                   ? (total + s.probesPerFrame - 1u) / s.probesPerFrame
-                                   : 0u;
-        ImGui::TextDisabled("cursor %u / %u   barridos %u", pass.cursor(), total, pass.sweepsDone());
-        ImGui::TextDisabled("frames por barrido: %u", framesPorBarrido);
-        // Tiempo de CPU emitiendo las llamadas, no de GPU ejecutandolas: sirve
-        // para detectar que el round-robin se fue de escala, no como profiler.
-        ImGui::TextDisabled("pase (CPU): %.3f ms", pass.lastMs());
-
-        // -- Sampleo -----------------------------------------------------------
-        ImGui::SeparatorText("Sampleo");
-        ImGui::SliderFloat("Intensidad", &s.intensity, 0.0f, 4.0f);
-        // Normal bias: subir si la luz atraviesa las paredes; bajar si los
-        // rincones tienen una banda oscura.
-        ImGui::SliderFloat("Normal bias", &s.normalBias, 0.0f, 1.0f, "%.3f m");
-        ImGui::SliderFloat("View bias", &s.viewBias, 0.0f, 1.0f, "%.3f m");
-        ImGui::SliderFloat("Chebyshev", &s.chebyshevSharpness, 1.0f, 16.0f);
-
-        // El rango sale de la escena, no de un numero fijo: con un tope de 100 m
-        // fijo, abrir el panel con maxDistance en 200 lo clamparia en silencio y
-        // cambiaria el far plane de la captura sin que nadie toque nada.
-        const renderer::AABB& bounds = ctx.scene.WorldBounds();
-        const f32 topeDist = bounds.Valid() ? glm::max(4.0f * bounds.Radius(), 10.0f) : 200.0f;
-        // Es el far plane de la captura de probes: muy alto tira la precision
-        // del depth, muy bajo deja la captura vacia.
-        ImGui::SliderFloat("Distancia max", &s.maxDistance, 1.0f, topeDist, "%.1f m");
-
-        // -- Debug -------------------------------------------------------------
-        ImGui::SeparatorText("Debug");
-
-        // Primero de la seccion a proposito: es el unico control que contesta la
-        // pregunta con la que uno abre este panel, "DDGI esta aportando algo".
-        // El orden espeja DdgiSettings::DebugView.
-        const char* vistas[] = { "Final (normal)",
-                                 "Indirecta (irradiancia)",
-                                 "Indirecta aplicada al pixel",
-                                 "Solo luz directa",
-                                 "DDGI ignorando el fade",
-                                 "Fade del volumen",
-                                 "Albedo",
-                                 "Normal",
-                                 "Sombra del sol (cruda)" };
-        //
-        // Como se leen estas vistas (era un tooltip; vive aca para no tapar la UI):
-        //
-        //   Eligen que termino escribe pbr.frag en vez de la imagen final.
-        //
-        //   'Indirecta aplicada' es lo que la indirecta le suma al pixel. OJO: ahi
-        //   adentro el IBL y DDGI van MEZCLADOS por el fade, asi que no ver negro no
-        //   prueba que DDGI aporte. Para leerlo, primero Render > Iluminacion >
-        //   Intensidad IBL a 0: lo que quede es DDGI.
-        //
-        //   Y para saber por que: comparar 'DDGI ignorando el fade' con 'Fade del
-        //   volumen'. Si el primero tiene color y el segundo esta negro, la GI se
-        //   calcula bien y la tira el fade -- la grilla no cubre esa superficie con
-        //   el margen que el fade pide.
-        //
-        //   Todas pasan por bloom y ACES: son cualitativas, no numeros.
-        //
-        int vista = static_cast<int>(s.debugView);
-        if (ImGui::Combo("Vista", &vista, vistas, IM_ARRAYSIZE(vistas))) {
-            s.debugView = static_cast<u32>(vista);
-        }
-        if (s.debugView != renderer::DdgiSettings::kDebugOff) {
-            ImGui::TextColored(kColorAviso, "Vista de debug activa: la imagen NO es la final.");
-        }
-
-        // -- Diagnostico de rendimiento ---------------------------------------
-        // Separado del bloque de vistas a proposito: las vistas responden "que
-        // aporta DDGI", esto responde "cuanto cuesta". Es el ablation test de la
-        // tarea 0 del plan de optimizacion; se mide con el panel de profiling
-        // abierto, mirando el pase Forward.
-        ImGui::SeparatorText("Rendimiento");
-
-        // El interruptor del pase de indirecta a resolucion reducida. Esta aca y
-        // no escondido en codigo porque el plan de optimizacion pide medir cada
-        // cambio por separado: sin un toggle en caliente, comparar "con" y "sin"
-        // pide recompilar, y entre las dos compilaciones cambia el estado de
-        // boost de la GPU y el delta se pierde en el ruido.
-        renderer::IndirectPass* ind = ctx.app.GetPipeline().Find<renderer::IndirectPass>();
-        if (ind != null) {
-            // El flag es del pase (IScenePass::enabled): es lo que el
-            // ScenePipeline consulta para saltearlo.
-            bool usaIndirecta = ind->enabled;
-            if (ImGui::Checkbox("Indirecta a media resolucion", &usaIndirecta)) {
-                ind->enabled = usaIndirecta;
-            }
-            if (usaIndirecta) {
-                ImGui::TextDisabled("target %ux%u; pbr.frag sube con upsample bilateral",
-                                    ind->width(), ind->height());
-                // Es la dependencia que mas sorprende: sin AO no hay prepass, y
-                // sin prepass no hay ni posicion ni guia para el upsample.
-                renderer::AoPass* ao = ctx.app.GetPipeline().Find<renderer::AoPass>();
-                if (ao == null || !ao->enabled) {
-                    ImGui::TextColored(kColorAviso,
-                                       "AO apagado: el pase no corre y pbr.frag samplea inline.");
-                }
-            } else {
-                ImGui::TextDisabled("pbr.frag samplea el volumen por pixel (~16 gathers)");
-            }
-        } else {
-            ImGui::TextColored(kColorError, "IndirectPass no disponible: fallo la carga del shader.");
-        }
-
-        ImGui::SeparatorText("Diagnostico");
-        ImGui::Checkbox("Ablation: irradiancia constante", &s.ablateSample);
-        if (s.ablateSample) {
-            ImGui::SliderFloat("Valor del ablation", &s.ablateIrradiance, 0.0f, 2.0f, "%.3f");
-            ImGui::TextColored(kColorAviso,
-                               "Medicion activa: la imagen NO es la final. Mira 'Forward' en el profiler.");
-        }
-
-        ImGui::SeparatorText("Volcado");
-        ImGui::Checkbox("Mostrar probes", &s.debugProbes);
-        const char* modos[] = { "Irradiancia", "Media de distancia", "Target de captura",
-                                "Target de captura (distancia)" };
-        int modo = static_cast<int>(s.debugMode);
-        if (ImGui::Combo("Modo", &modo, modos, 4)) s.debugMode = static_cast<u32>(modo);
-        ImGui::SliderFloat("Radio de esfera", &s.debugRadius, 0.02f, 0.5f, "%.3f m");
-    }
-
-    void drawAoSection(EditorContext& ctx) {
-        if (!ImGui::CollapsingHeader("Oclusion ambiental (GTAO)")) return;
-
-        renderer::AoPass* opt = ctx.app.GetPipeline().Find<renderer::AoPass>();
-        if (opt == null) {
-            ImGui::TextColored(kColorError, "AoPass no disponible: fallo la carga de shaders.");
-            ImGui::TextWrapped("La escena esta sin oclusion de contacto. Mira la consola.");
-            return;
-        }
-        renderer::AoSettings& s = opt->settings();
-
-        CamposAlineados alineados;
-
-        // El flag de encendido es del pase (IScenePass::enabled), no de sus
-        // settings: es lo que el ScenePipeline consulta para saltearlo.
-        ImGui::Checkbox("Habilitado", &opt->enabled);
-
-        ImGui::SeparatorText("Trazado");
-        // El radio va en METROS y tiene que quedar POR DEBAJO del espaciado de
-        // probes de DDGI: lo que el AO ocluye es exactamente lo que la grilla no
-        // puede ver. Por encima, los dos oscurecen la misma cosa. Radio 0 =
-        // control nulo, la imagen tiene que volver a ser la de AO apagado.
-        ImGui::SliderFloat("Radio", &s.radius, 0.0f, 3.0f, "%.2f m");
-
-        // El espaciado de DDGI al lado del slider: la regla "radio < espaciado"
-        // no se puede verificar de otra forma desde el panel.
-        renderer::DdgiPass* ddgi = ctx.app.GetPipeline().Find<renderer::DdgiPass>();
-        if (ddgi != null) {
-            const glm::vec3& sp = ddgi->settings().grid.spacing;
-            const f32 minSp = glm::min(sp.x, glm::min(sp.y, sp.z));
-            if (s.radius >= minSp) {
-                ImGui::TextColored(kColorAviso,
-                                   "Radio >= espaciado de probes (%.2f m): doble oscurecimiento.", minSp);
-            } else {
-                ImGui::TextDisabled("espaciado de probes mas chico: %.2f m", minSp);
-            }
-        }
-
-        ImGui::SliderFloat("Intensidad", &s.intensity, 0.0f, 4.0f);
-        // Grosor: que tan rapido se desvanece una muestra lejana. Bajarlo hace
-        // que un objeto lejano alineado en pantalla deje de ocluir a uno cercano.
-        ImGui::SliderFloat("Grosor",     &s.thickness, 0.01f, 1.0f);
-        ImGui::SliderInt  ("Cortes",     &s.slices, 1, 8);
-        ImGui::SliderInt  ("Pasos",      &s.steps,  1, 32);
-        ImGui::SliderFloat("Techo de radio", &s.maxScreenRadius, 8.0f, 512.0f, "%.0f px");
-
-        ImGui::SeparatorText("Rendimiento");
-        // Mismo criterio que el toggle de la indirecta: el plan pide medir cada
-        // cambio por separado, y sin un interruptor en caliente comparar "con" y
-        // "sin" pide recompilar.
-        ImGui::Checkbox("Media resolucion", &s.halfRes);
-        ImGui::TextDisabled("kernel y blur a %dx%d; prepass y guia siguen a %dx%d",
-                            opt->aoTexture().width(),  opt->aoTexture().height(),
-                            opt->normalTarget().width(), opt->normalTarget().height());
-        if (s.halfRes) {
-            ImGui::TextDisabled("pbr.frag lo sube con upsample bilateral (depth + normal)");
-        }
-
-        ImGui::SeparatorText("Aplicacion");
-        // Bent normal: orienta el lookup de irradiancia (IBL y DDGI) hacia donde
-        // el hemisferio esta abierto. En un rincon de Cornell cambia la DIRECCION
-        // del color bleeding.
-        ImGui::Checkbox("Bent normal",  &s.bentNormal);
-        // Multi-rebote: el AO se tiñe con el albedo en vez de oscurecer a gris.
-        // Sobre la pared roja la diferencia es directa.
-        ImGui::Checkbox("Multi-rebote", &s.multiBounce);
-        ImGui::Checkbox("Blur", &s.blur);
-
-        ImGui::SeparatorText("Debug");
-        const char* vistas[] = { "Final (normal)",
-                                 "Visibilidad",
-                                 "Bent normal (world)",
-                                 "Normal del prepass (view)",
-                                 "Profundidad (1 banda = 1 m)" };
-        // Las dos ultimas vuelcan el prepass y saltean el blur. Si esta vista y
-        // la de DDGI estan las dos activas, gana esta.
-        int vista = static_cast<int>(s.debugView);
-        if (ImGui::Combo("Vista AO", &vista, vistas, IM_ARRAYSIZE(vistas))) {
-            s.debugView = static_cast<u32>(vista);
-        }
-        if (s.debugView != 0u) {
-            ImGui::TextColored(kColorAviso, "Vista de debug activa: la imagen NO es la final.");
-        }
-    }
 
     void drawPerfPanel(EditorContext& ctx) {
         EditorState& st = ctx.state;
@@ -932,57 +627,9 @@ namespace {
             if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 5.0f)) ctx.camera.SetExposure(exposure);
         }
 
-        if (ImGui::CollapsingHeader("Sombras", ImGuiTreeNodeFlags_DefaultOpen)) {
-            renderer::ShadowPass* pasePtr = ctx.app.GetPipeline().Find<renderer::ShadowPass>();
-            if (pasePtr == null) return;
-            renderer::ShadowPass&     pase = *pasePtr;
-            renderer::ShadowSettings& sh   = pase.settings();
-
-            // El flag de encendido es del pase (IScenePass::enabled), no de sus
-            // settings: es lo que el ScenePipeline consulta para saltearlo.
-            ImGui::Checkbox   ("Habilitadas", &pase.enabled);
-            // Margen: aire alrededor de la escena. El encuadre de la luz sale de
-            // sus bounds y esto es lo unico a mano. Mas margen = texel mas
-            // grande = mas acne.
-            ImGui::SliderFloat("Margen",      &sh.padding, 0.0f, 10.0f, "%.2f m");
-            // Sirve para medir: si un artefacto se afina a la mitad al duplicar
-            // la resolucion, escala con el texel y es del shadow map.
-            const char* resoluciones[] = { "512", "1024", "2048", "4096" };
-            const u32   valores[]      = { 512u,  1024u,  2048u,  4096u  };
-            int resSel = 2;
-            for (int i = 0; i < IM_ARRAYSIZE(valores); ++i)
-                if (valores[i] == sh.resolution) resSel = i;
-            if (ImGui::Combo("Resolucion", &resSel, resoluciones, IM_ARRAYSIZE(resoluciones))) {
-                sh.resolution = valores[resSel];
-            }
-
-            // El mecanismo principal contra el acne (lineas oscuras en zonas
-            // iluminadas): subirlo. NO abre luz en los rincones; el techo es la
-            // geometria fina, que empieza a filtrar.
-            ImGui::SliderFloat("Normal offset", &sh.normalOffsetTexels, 0.0f, 8.0f, "%.1f texels");
-
-            // Los dos bias son la escotilla: empujan la profundidad hacia la luz,
-            // asi que cualquier valor > 0 abre una banda de luz en las aristas
-            // entre paredes. Dejarlos en 0.
-            ImGui::SliderFloat("Bias min", &sh.biasMin, 0.0f, 0.01f, "%.4f");
-            ImGui::SliderFloat("Bias max", &sh.biasMax, 0.0f, 0.02f, "%.4f");
-
-            // Los dos bias son fracciones de profundidad NDC, que no quiere
-            // decir nada solo. Lo que se tunea de verdad es cuantos texels de
-            // holgura son, asi que se muestra la conversion.
-            const renderer::DirectionalLightFit& fit = pase.fit();
-            const f32 texel = (pase.resolution() > 0)
-                            ? 2.0f * fit.orthoHalfSize / static_cast<f32>(pase.resolution())
-                            : 0.0f;
-            ImGui::TextDisabled("Encuadre: half %.1f m | rango %.1f m | texel %.1f mm",
-                                fit.orthoHalfSize, fit.depthRange, texel * 1000.0f);
-            ImGui::TextDisabled("Normal offset = %.1f mm | Bias Max = %.1f mm",
-                                sh.normalOffsetTexels * texel * 1000.0f,
-                                sh.biasMax * fit.depthRange * 1000.0f);
-        }
-
-        drawDdgiSection(ctx);
-        drawAoSection(ctx);
+        // Los paneles de pases viven en panels/, uno por pase, y se
+        // registran en PanelesDePases(). Este archivo no nombra ninguno.
+        for (const DrawPanelFn draw : PanelesDePases()) draw(ctx);
 
         // -- Post ---------------------------------------------------------------
         // Bloom y FXAA corren sobre la imagen ya resuelta, asi que van despues de
