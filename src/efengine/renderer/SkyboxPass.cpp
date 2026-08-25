@@ -1,5 +1,7 @@
 #include "efengine/renderer/SkyboxPass.h"
 
+#include <efengine/renderer/FrameContext.h>
+
 #include <efecom/RHI.h>
 
 #include <efengine/renderer/Renderer.h>
@@ -26,6 +28,11 @@ namespace renderer {
         m_shader->Bind();
         env.Bind(0);
         m_renderer.Draw(m_quad, *m_shader);
+    }
+
+    void SkyboxPass::Execute(FrameContext& ctx) {
+        if (ctx.lighting.ibl.environment == null) return;
+        Draw(*ctx.lighting.ibl.environment);
     }
 
 }

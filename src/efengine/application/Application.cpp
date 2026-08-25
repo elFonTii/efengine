@@ -24,8 +24,7 @@ namespace application {
                 m_resources.GetShader("fxaa", "assets/shaders/screen.vert", "assets/shaders/fxaa.frag")
          )
         , m_postChain( m_window.GetWidth(), m_window.GetHeight())
-        , m_skyboxPass( m_renderer, m_fullscreenQuad,
-                m_resources.GetShader("skybox", "assets/shaders/skybox.vert", "assets/shaders/skybox.frag") ) {
+         {
 
         // El primer eslabon del pipeline. El resto del frame sigue escrito a
         // mano en RenderScene; la frontera se corre un pase por vez.
@@ -110,26 +109,6 @@ namespace application {
             m_pipeline.Add(renderer::DdgiPass::Create(m_renderer, m_fullscreenQuad, ddgiShaders)));
         if (!m_ddgiPtr) EF_LOG_ERROR("Application: no se pudo crear el DdgiPass");
 
-        renderer::Shader* ddgiBlit = m_resources.GetShader("ddgi_debug_blit",
-                "assets/shaders/screen.vert", "assets/shaders/ddgi/debug_blit.frag");
-        renderer::Shader* ddgiProbe = m_resources.GetShader("ddgi_debug_probe",
-                "assets/shaders/ddgi/debug_probe.vert", "assets/shaders/ddgi/debug_probe.frag");
-        if (ddgiBlit && ddgiProbe) {
-            m_ddgiDebug.emplace(m_renderer, m_fullscreenQuad, ddgiBlit, ddgiProbe);
-        } else {
-            EF_LOG_ERROR("Application: no se pudo crear el DdgiDebugPass");
-        }
-
-        // La esfera del volcado de probes. Si no carga, el modo de esferas se
-        // saltea; el resto del debug de DDGI sigue funcionando.
-        m_ddgiProbeMesh = m_resources.GetModel("assets/models/sphere.fbx");
-        if (m_ddgiProbeMesh != null) {
-            // El .fbx no viene unitario; DrawProbes divide por esto para que
-            // debugRadius sea de verdad un radio en metros.
-            const glm::vec3 e = m_ddgiProbeMesh->bounds().Extents();
-            EF_LOG_INFO("Application: sphere.fbx semi-extents (%.3f, %.3f, %.3f)", e.x, e.y, e.z);
-        }
-
         // AO screen-space. Mismo patron de degradacion que DDGI: si falta un
         // shader, m_aoPass queda vacio y el frame sigue sin oclusion de contacto.
         renderer::AoPass::Shaders aoShaders;
@@ -166,6 +145,42 @@ namespace application {
                 m_window.GetWidth(), m_window.GetHeight())));
         if (!m_indirectPtr) EF_LOG_ERROR("Application: no se pudo crear el IndirectPass");
 
+        // --- El tramo que dibuja la imagen -----------------------------------
+        // SceneTargetPass va separado del forward a proposito: el skybox corre
+        // entre los dos, y si el bind+clear viviera adentro del forward el cielo
+        // dibujaria en el target que dejo el AO.
+        m_pipeline.Add(std::make_unique<renderer::SceneTargetPass>(m_clearColor));
+
+        m_pipeline.Add(std::make_unique<renderer::SkyboxPass>(
+            m_renderer, m_fullscreenQuad,
+            m_resources.GetShader("skybox", "assets/shaders/skybox.vert",
+                                            "assets/shaders/skybox.frag")));
+
+        m_pipeline.Add(std::make_unique<renderer::ForwardPass>());
+
+        // El debug de DDGI, ultimo: va sobre la imagen HDR y antes del post.
+        renderer::Shader* ddgiBlit = m_resources.GetShader("ddgi_debug_blit",
+                "assets/shaders/screen.vert", "assets/shaders/ddgi/debug_blit.frag");
+        renderer::Shader* ddgiProbe = m_resources.GetShader("ddgi_debug_probe",
+                "assets/shaders/ddgi/debug_probe.vert", "assets/shaders/ddgi/debug_probe.frag");
+
+        // La esfera del volcado de probes. Si no carga, el modo de esferas se
+        // saltea; el resto del debug de DDGI sigue funcionando.
+        const renderer::Model* probeMesh = m_resources.GetModel("assets/models/sphere.fbx");
+        if (probeMesh != null) {
+            // El .fbx no viene unitario; DrawProbes divide por esto para que
+            // debugRadius sea de verdad un radio en metros.
+            const glm::vec3 e = probeMesh->bounds().Extents();
+            EF_LOG_INFO("Application: sphere.fbx semi-extents (%.3f, %.3f, %.3f)", e.x, e.y, e.z);
+        }
+
+        if (ddgiBlit && ddgiProbe) {
+            m_pipeline.Add(std::make_unique<renderer::DdgiDebugPass>(
+                m_renderer, m_fullscreenQuad, ddgiBlit, ddgiProbe, m_ddgiPtr, probeMesh));
+        } else {
+            EF_LOG_ERROR("Application: no se pudo crear el DdgiDebugPass");
+        }
+
         m_window.SetEventListener(&m_input);
         renderer::SetActiveProfiler(&m_profiler);
 
@@ -196,9 +211,10 @@ namespace application {
         const u32 h = m_window.GetHeight();
         if(w != 0 && h != 0) {
             // ORDEN OBLIGATORIO: el framebuffer de escena PRIMERO. Su Resize
-            // crea un renderbuffer de profundidad nuevo y destruye el viejo, y el
-            // prepass del AO lo tiene prestado: pasarle el handle despues es lo
-            // unico que evita que quede enganchado a un attachment muerto.
+            // crea un renderbuffer de profundidad nuevo y destruye el viejo, y
+            // el prepass del AO lo tiene prestado: si los pases se
+            // redimensionaran antes, el AO quedaria enganchado al attachment
+            // muerto. Con esto, AoPass::Resize lee el handle nuevo.
             m_sceneFB.Resize(w, h);
             m_pipeline.Resize(w, h);
             m_postChain.Resize(w, h);
@@ -207,64 +223,15 @@ namespace application {
             efecom::SetPresentExtent(w, h);
         }
 
-        // Recalcula world-transforms y junta las listas de render una vez por frame.
-        // Los dos pases de abajo (sombra y forward) leen el mismo resultado.
+        // Recalcula world-transforms y junta las listas de render una vez por
+        // frame: la sombra, la captura de DDGI y el forward leen el mismo
+        // resultado.
         scene.UpdateWorldTransforms();
 
-        // El contexto del frame. Los pases ya migrados publican ahi; lo que
-        // todavia esta escrito a mano mas abajo lo lee de ctx.lighting.
+        // El frame entero es la lista de pases. El orden vive en el ctor, donde
+        // se registran; lo que un pase le pasa a otro viaja en el contexto.
         renderer::FrameContext ctx { scene, camera, m_renderer, m_sceneFB, w, h };
         m_pipeline.Execute(&ctx);
-
-        renderer::SceneLighting& lighting = ctx.lighting;
-
-        // --- El depth prepass del forward es el prepass del AO ---
-        // Si corrio, el depth del framebuffer de escena YA tiene la profundidad
-        // de la escena con esta camara: el forward limpia solo color y dibuja con
-        // GL_EQUAL, asi el overdraw se sombrea una sola vez y lo tapado ni entra
-        // al fragment shader.
-        //
-        // Si no corrio (AO apagado, o fallo la carga de sus shaders), ese depth
-        // tiene la profundidad del FRAME ANTERIOR y hay que limpiarlo: dibujar
-        // con GL_EQUAL contra el dejaria la pantalla vacia.
-        const bool prepassListo = ctx.depthReady;
-
-        m_sceneFB.Bind();
-        if (prepassListo) {
-            efecom::SetClearColor(m_clearColor[0], m_clearColor[1],
-                                  m_clearColor[2], m_clearColor[3]);
-            efecom::Clear(efecom::ClearMask::Color);
-        } else {
-            m_renderer.Clear(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
-        }
-
-         if (lighting.ibl.environment) {
-            m_skyboxPass.Draw(*lighting.ibl.environment);
-         }
-
-        {
-            EF_PROFILE_SCOPE("Forward");
-            renderer::DrawOptions opciones;
-            opciones.depth = prepassListo ? renderer::DepthMode::Equal
-                                          : renderer::DepthMode::Write;
-            for(const scene::RenderItem& item : scene.Renderables()) {
-                if(!item.model) { EF_LOG_WARNING("Se intenta renderizar un item sin modelo"); continue; }
-                m_renderer.Submit(*item.model, *item.materials, item.world, opciones);
-            }
-        }
-
-        // El volcado del target de captura va sobre la imagen HDR de la escena,
-        // antes del post: es un instrumento de debug, no parte de la imagen.
-        if (m_ddgiPtr && m_ddgiDebug && m_ddgiPtr->settings().debugProbes) {
-            const renderer::DdgiSettings& ds = m_ddgiPtr->settings();
-            // Modo 3 = el mismo volcado pero mirando el alfa: sin esto la
-            // distancia capturada no es verificable desde el panel.
-            if (ds.debugMode >= 2u) {
-                m_ddgiDebug->DrawCaptureBlit(m_ddgiPtr->captureTarget(), ds.debugMode == 3u);
-            } else if (m_ddgiProbeMesh != null) {
-                m_ddgiDebug->DrawProbes(ds.grid, ds, *m_ddgiProbeMesh);
-            }
-        }
 
         // Ya no hay "desbindear": el post chain declara su propio destino por pase.
         m_bloomPass.SetExposure(camera.Exposure());

@@ -14,6 +14,8 @@
 #include <efengine/platform/Input.h>
 #include <efengine/renderer/IblPass.h>
 #include <efengine/renderer/SkyboxPass.h>
+#include <efengine/renderer/SceneTargetPass.h>
+#include <efengine/renderer/ForwardPass.h>
 #include <efengine/renderer/ShadowPass.h>
 #include <efengine/renderer/DdgiPass.h>
 #include <efengine/renderer/DdgiDebugPass.h>
@@ -90,8 +92,6 @@ namespace application {
             core::Time m_time;
             // No participa del contrato de orden: no toca GL.
             platform::Input m_input;
-            renderer::SkyboxPass m_skyboxPass;
-
             // Los pases del frame, en orden. Va DESPUES de m_renderer y de
             // m_resources: sus pases guardan referencias a los dos, y el orden
             // de declaracion es el que decide quien muere primero.
@@ -108,10 +108,6 @@ namespace application {
             // es el camino de antes de que este pase existiera. Misma imagen,
             // mas cara.
             renderer::IndirectPass* m_indirectPtr = null;
-            std::optional<renderer::DdgiDebugPass> m_ddgiDebug;
-            // Cache del ResourceManager: la esfera del volcado de probes.
-            const renderer::Model* m_ddgiProbeMesh = null;
-
     };
 
 } // namespace application
