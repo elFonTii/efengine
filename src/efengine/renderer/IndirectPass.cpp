@@ -6,7 +6,9 @@
 #include <efengine/renderer/AoMath.h>
 #include <efengine/renderer/GpuProfiler.h>
 #include <efengine/renderer/PipelineStates.h>
+#include <efengine/renderer/FrameContext.h>
 #include <efengine/renderer/Renderer.h>
+#include <efengine/scene/Camera.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/Texture.h>
 #include <efengine/renderer/VertexArray.h>
@@ -16,20 +18,22 @@
 namespace efengine {
 namespace renderer {
 
-    std::optional<IndirectPass> IndirectPass::Create(Renderer& renderer, VertexArray& fullscreenQuad,
+    std::unique_ptr<IndirectPass> IndirectPass::Create(Renderer& renderer, VertexArray& fullscreenQuad,
                                                      Shader* shader, u32 width, u32 height) {
         if (shader == null) {
             EF_LOG_ERROR("IndirectPass::Create: falta el shader de indirecta");
-            return std::nullopt;
+            return null;
         }
         if (width == 0u || height == 0u) {
             EF_LOG_ERROR("IndirectPass::Create: tamano invalido %ux%u", width, height);
-            return std::nullopt;
+            return null;
         }
 
         EF_LOG_INFO("IndirectPass: target %ux%u (1/%d de %ux%u)",
                     ReducedExtent(width), ReducedExtent(height), kScale, width, height);
-        return IndirectPass(renderer, fullscreenQuad, shader, width, height);
+        // El ctor es privado: make_unique no lo alcanza.
+        return std::unique_ptr<IndirectPass>(
+            new IndirectPass(renderer, fullscreenQuad, shader, width, height));
     }
 
     IndirectPass::IndirectPass(Renderer& renderer, VertexArray& fullscreenQuad, Shader* shader,
@@ -42,7 +46,7 @@ namespace renderer {
         : m_renderer(o.m_renderer), m_quad(o.m_quad), m_shader(o.m_shader)
         , m_fb(std::move(o.m_fb)), m_fullSize(o.m_fullSize)
         , m_ubo(std::move(o.m_ubo))
-        , m_enabled(o.m_enabled), m_ranEste(o.m_ranEste)
+        , m_ranEste(o.m_ranEste)
         , m_aoReduced(o.m_aoReduced) {}
 
     // Las dos referencias (renderer, quad) no se reasignan: son las mismas para
@@ -54,7 +58,6 @@ namespace renderer {
             m_fb          = std::move(o.m_fb);
             m_fullSize    = o.m_fullSize;
             m_ubo         = std::move(o.m_ubo);
-            m_enabled     = o.m_enabled;
             m_ranEste     = o.m_ranEste;
             m_aoReduced   = o.m_aoReduced;
         }
@@ -68,6 +71,21 @@ namespace renderer {
         m_fb.Resize(ReducedExtent(fullWidth), ReducedExtent(fullHeight));
     }
 
+    void IndirectPass::Execute(FrameContext& ctx) {
+        Render(ctx.lighting.ao, ctx.camera.ViewMatrix(), ctx.camera.ProjectionMatrix());
+
+        // Afuera de Render: tiene retornos tempranos y el contexto se publicaba
+        // igual en esos casos (vacio, que es como pbr.frag sabe que tiene que
+        // samplear el volumen inline).
+        ctx.lighting.indirect = Context();
+
+        // El bloque de binding 6 lo armo FrameUploadPass, que ya corrio: hay que
+        // re-subirlo con el contexto de la indirecta o pbr.frag lee upsample.x
+        // en cero y samplea inline igual, tirando el pase entero. Falla en
+        // velocidad y no en imagen, que es la clase de bug que no se nota.
+        ctx.renderer.SetIndirectContext(ctx.lighting.ao, ctx.lighting.indirect);
+    }
+
     void IndirectPass::Render(const AoContext& ao,
                               const glm::mat4& view, const glm::mat4& projection) {
         const Texture* depthNormal = ao.depthNormal;
@@ -78,7 +96,8 @@ namespace renderer {
         // con el target del frame anterior y una camara que ya se movio.
         m_ranEste = false;
 
-        if (!m_enabled || m_shader == null) return;
+        // El filtro de encendido lo hace el pipeline con IScenePass::enabled.
+        if (m_shader == null) return;
 
         // Sin el prepass del AO no hay de donde sacar posicion ni normal. Ver la
         // nota de dependencia en el header: no es una degradacion silenciosa,

@@ -153,13 +153,18 @@ namespace application {
         // Indirecta difusa a resolucion reducida. Mismo patron de degradacion
         // que DDGI y AO: si falta el shader, m_indirectPass queda vacio y
         // pbr.frag samplea el volumen inline -- la misma imagen, mas cara.
-        m_indirectPass = renderer::IndirectPass::Create(
-            m_renderer, m_fullscreenQuad,
-            m_resources.GetShader("ddgi_indirect",
-                                  "assets/shaders/screen.vert",
-                                  "assets/shaders/ddgi/indirect.frag"),
-            m_window.GetWidth(), m_window.GetHeight());
-        if (!m_indirectPass) EF_LOG_ERROR("Application: no se pudo crear el IndirectPass");
+        // La frontera del frame: de aca para abajo, los pases leen la camara
+        // del bloque Frame en vez de recibirla.
+        m_pipeline.Add(std::make_unique<renderer::FrameUploadPass>());
+
+        m_indirectPtr = static_cast<renderer::IndirectPass*>(
+            m_pipeline.Add(renderer::IndirectPass::Create(
+                m_renderer, m_fullscreenQuad,
+                m_resources.GetShader("ddgi_indirect",
+                                      "assets/shaders/screen.vert",
+                                      "assets/shaders/ddgi/indirect.frag"),
+                m_window.GetWidth(), m_window.GetHeight())));
+        if (!m_indirectPtr) EF_LOG_ERROR("Application: no se pudo crear el IndirectPass");
 
         m_window.SetEventListener(&m_input);
         renderer::SetActiveProfiler(&m_profiler);
@@ -197,7 +202,6 @@ namespace application {
             m_sceneFB.Resize(w, h);
             m_pipeline.Resize(w, h);
             m_postChain.Resize(w, h);
-            if (m_indirectPass) m_indirectPass->Resize(w, h);
             // El backbuffer sigue al framebuffer de la ventana. Sin esto,
             // RenderTarget::Present() fijaria el viewport del tamano viejo.
             efecom::SetPresentExtent(w, h);
@@ -213,30 +217,6 @@ namespace application {
         m_pipeline.Execute(&ctx);
 
         renderer::SceneLighting& lighting = ctx.lighting;
-
-        m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(),
-                              scene.PointLights(), scene.Sun(), lighting);
-
-        // --- Indirecta difusa a resolucion reducida. DESPUES de BeginScene y no
-        // --- antes, a diferencia de los otros tres pre-pases: asi la view/proj y
-        // --- la posicion de camara le llegan por el bloque Frame ya subido y los
-        // --- atlas de DDGI ya estan en sus unidades, en vez de re-empaquetar la
-        // --- camara del frame en un bloque propio y tener dos fuentes de verdad.
-        //
-        // --- Lee el prepass y el target del AO, asi que va despues de el; no
-        // --- re-rasteriza geometria. Con el AO apagado no corre y el Context
-        // --- queda vacio, que es como pbr.frag sabe que tiene que samplear el
-        // --- volumen inline.
-        if (m_indirectPass && m_aoPtr) {
-            m_indirectPass->Render(lighting.ao,
-                                   camera.ViewMatrix(), camera.ProjectionMatrix());
-            lighting.indirect = m_indirectPass->Context();
-
-            // El bloque de binding 6 se arma en BeginScene, que ya corrio: hay
-            // que re-subirlo con el contexto de la indirecta o pbr.frag lee
-            // upsample.x en cero y samplea inline igual, tirando el pase entero.
-            m_renderer.SetIndirectContext(lighting.ao, lighting.indirect);
-        }
 
         // --- El depth prepass del forward es el prepass del AO ---
         // Si corrio, el depth del framebuffer de escena YA tiene la profundidad

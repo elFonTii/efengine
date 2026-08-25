@@ -2,13 +2,14 @@
 #include <efengine/core/Types.h>
 #include <efengine/renderer/AoContext.h>
 #include <efengine/renderer/Framebuffer.h>
+#include <efengine/renderer/IScenePass.h>
 #include <efengine/renderer/IndirectContext.h>
 #include <efengine/renderer/ReducedRes.h>
 #include <efengine/renderer/ShaderBlocks.h>
 #include <efengine/renderer/UniformBuffer.h>
 
 #include <glm/glm.hpp>
-#include <optional>
+#include <memory>
 
 namespace efengine {
 namespace renderer {
@@ -62,7 +63,7 @@ namespace renderer {
     // Create devuelve nullopt si falta el shader (calcado de AoPass y DdgiPass):
     // sin IndirectPass, Application pasa un IndirectContext vacio y pbr.frag
     // samplea inline. Un fallo de carga no rompe el frame ni cambia la imagen.
-    class IndirectPass {
+    class IndirectPass : public IScenePass {
         public:
             // La escala sale de ReducedRes.h y no de una constante propia: el
             // AO usa la misma, y dos formulas que puedan divergir son la unica
@@ -79,8 +80,8 @@ namespace renderer {
             static constexpr i32 kBentFullRes  = 1;
             static constexpr i32 kBentReducido = 2;
 
-            static std::optional<IndirectPass> Create(Renderer& renderer, VertexArray& fullscreenQuad,
-                                                      Shader* shader, u32 width, u32 height);
+            static std::unique_ptr<IndirectPass> Create(Renderer& renderer, VertexArray& fullscreenQuad,
+                                                        Shader* shader, u32 width, u32 height);
 
             IndirectPass(const IndirectPass&)            = delete;
             IndirectPass& operator=(const IndirectPass&) = delete;
@@ -88,24 +89,22 @@ namespace renderer {
             IndirectPass& operator=(IndirectPass&& other) noexcept;
 
             // Todo lo que necesita del AO -- el prepass, el target y su escala --
-            // viaja en el contexto. view/projection son las de la camara del
-            // frame; se pasan y no se leen del bloque Frame porque la inversa de
-            // la view hay que calcularla en CPU igual.
+            // viaja en ctx.lighting.ao. La camara sale del ctx y no del bloque
+            // Frame porque la inversa de la view hay que calcularla en CPU
+            // igual.
             //
             // No hace nada si el AO no dio un prepass utilizable: ver la nota de
             // dependencia arriba.
-            void Render(const AoContext& ao,
-                        const glm::mat4& view, const glm::mat4& projection);
+            void Execute(FrameContext& ctx) override;
 
-            void Resize(u32 fullWidth, u32 fullHeight);
+            const char* Name() const override { return "Indirecta"; }
+
+            void Resize(u32 fullWidth, u32 fullHeight) override;
 
             // Vacio (y por lo tanto invalido) hasta que Render haya corrido este
             // frame: pbr.frag tiene que caer al camino inline, no leer el
             // resultado del frame anterior con la camara de este.
             IndirectContext Context() const;
-
-            bool enabled() const  { return m_enabled; }
-            void SetEnabled(bool v) { m_enabled = v; }
 
             const Texture& target() const { return m_fb.ColorTexture(); }
             u32 width()  const { return m_fb.width(); }
@@ -114,6 +113,11 @@ namespace renderer {
         private:
             IndirectPass(Renderer& renderer, VertexArray& fullscreenQuad, Shader* shader,
                          u32 width, u32 height);
+
+            // El trabajo real; lo llama Execute, que publica el contexto
+            // despues -- afuera, porque esto tiene retornos tempranos.
+            void Render(const AoContext& ao,
+                        const glm::mat4& view, const glm::mat4& projection);
 
 
             Renderer&    m_renderer;
@@ -125,7 +129,6 @@ namespace renderer {
 
             UniformBuffer m_ubo { sizeof(IndirectPassBlock) };
 
-            bool m_enabled   = true;
             bool m_ranEste   = false;   // corrio en ESTE frame; lo resetea Render
             bool m_aoReduced = false;   // el target del AO comparte la grilla de este pase
     };

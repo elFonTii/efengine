@@ -653,11 +653,13 @@ namespace {
         // cambio por separado: sin un toggle en caliente, comparar "con" y "sin"
         // pide recompilar, y entre las dos compilaciones cambia el estado de
         // boost de la GPU y el delta se pierde en el ruido.
-        std::optional<renderer::IndirectPass>& ind = ctx.app.GetIndirectPass();
-        if (ind.has_value()) {
-            bool usaIndirecta = ind->enabled();
+        renderer::IndirectPass* ind = ctx.app.GetIndirectPass();
+        if (ind != null) {
+            // El flag es del pase (IScenePass::enabled): es lo que el
+            // ScenePipeline consulta para saltearlo.
+            bool usaIndirecta = ind->enabled;
             if (ImGui::Checkbox("Indirecta a media resolucion", &usaIndirecta)) {
-                ind->SetEnabled(usaIndirecta);
+                ind->enabled = usaIndirecta;
             }
             if (usaIndirecta) {
                 ImGui::TextDisabled("target %ux%u; pbr.frag sube con upsample bilateral",
