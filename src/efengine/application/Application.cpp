@@ -144,10 +144,11 @@ namespace application {
         // El prepass escribe en el depth DEL FRAMEBUFFER DE ESCENA. Es lo que
         // deja al forward dibujar despues con GL_EQUAL en vez de volver a
         // resolver la visibilidad que el prepass ya resolvio.
-        m_aoPass = renderer::AoPass::Create(m_renderer, m_fullscreenQuad, aoShaders,
-                                            m_window.GetWidth(), m_window.GetHeight(),
-                                            m_sceneFB.depthRenderbuffer());
-        if (!m_aoPass) EF_LOG_ERROR("Application: no se pudo crear el AoPass");
+        m_aoPtr = static_cast<renderer::AoPass*>(
+            m_pipeline.Add(renderer::AoPass::Create(m_renderer, m_fullscreenQuad, aoShaders,
+                                                    m_window.GetWidth(), m_window.GetHeight(),
+                                                    m_sceneFB)));
+        if (!m_aoPtr) EF_LOG_ERROR("Application: no se pudo crear el AoPass");
 
         // Indirecta difusa a resolucion reducida. Mismo patron de degradacion
         // que DDGI y AO: si falta el shader, m_indirectPass queda vacio y
@@ -194,8 +195,8 @@ namespace application {
             // prepass del AO lo tiene prestado: pasarle el handle despues es lo
             // unico que evita que quede enganchado a un attachment muerto.
             m_sceneFB.Resize(w, h);
+            m_pipeline.Resize(w, h);
             m_postChain.Resize(w, h);
-            if (m_aoPass) m_aoPass->Resize(w, h, m_sceneFB.depthRenderbuffer());
             if (m_indirectPass) m_indirectPass->Resize(w, h);
             // El backbuffer sigue al framebuffer de la ventana. Sin esto,
             // RenderTarget::Present() fijaria el viewport del tamano viejo.
@@ -213,14 +214,6 @@ namespace application {
 
         renderer::SceneLighting& lighting = ctx.lighting;
 
-        // --- AO screen-space: prepass + kernel. Antes de BeginScene porque sube
-        // --- su propio bloque de binding 4, y porque pbr.frag necesita el
-        // --- resultado YA calculado para modular la indirecta.
-        if (m_aoPass) {
-            m_aoPass->Render(scene, camera.ViewMatrix(), camera.ProjectionMatrix());
-            lighting.ao = m_aoPass->Context();
-        }
-
         m_renderer.BeginScene(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.Position(),
                               scene.PointLights(), scene.Sun(), lighting);
 
@@ -234,7 +227,7 @@ namespace application {
         // --- re-rasteriza geometria. Con el AO apagado no corre y el Context
         // --- queda vacio, que es como pbr.frag sabe que tiene que samplear el
         // --- volumen inline.
-        if (m_indirectPass && m_aoPass) {
+        if (m_indirectPass && m_aoPtr) {
             m_indirectPass->Render(lighting.ao,
                                    camera.ViewMatrix(), camera.ProjectionMatrix());
             lighting.indirect = m_indirectPass->Context();
@@ -254,7 +247,7 @@ namespace application {
         // Si no corrio (AO apagado, o fallo la carga de sus shaders), ese depth
         // tiene la profundidad del FRAME ANTERIOR y hay que limpiarlo: dibujar
         // con GL_EQUAL contra el dejaria la pantalla vacia.
-        const bool prepassListo = (m_aoPass && m_aoPass->depthReady());
+        const bool prepassListo = ctx.depthReady;
 
         m_sceneFB.Bind();
         if (prepassListo) {

@@ -3,12 +3,13 @@
 #include <efengine/renderer/AoSettings.h>
 #include <efengine/renderer/AoContext.h>
 #include <efengine/renderer/Framebuffer.h>
+#include <efengine/renderer/IScenePass.h>
 #include <efengine/renderer/ReducedRes.h>
 #include <efengine/renderer/ShaderBlocks.h>
 #include <efengine/renderer/UniformBuffer.h>
 
 #include <glm/glm.hpp>
-#include <optional>
+#include <memory>
 
 namespace efengine {
 namespace scene { class SceneGraph; }
@@ -28,7 +29,7 @@ namespace renderer {
     // Create devuelve nullopt si falta cualquier shader (calcado de DdgiPass):
     // sin AoPass, Application pasa un AoContext vacio y pbr.frag cae al ao del
     // material. Un fallo de shader no rompe el frame.
-    class AoPass {
+    class AoPass : public IScenePass {
         public:
             struct Shaders {
                 Shader* depthNormal = null;
@@ -36,28 +37,33 @@ namespace renderer {
                 Shader* denoise     = null;
             };
 
-            // sharedDepthRbo es el renderbuffer de profundidad del framebuffer
-            // de escena. El prepass escribe AHI, no en uno propio, y por eso el
-            // forward puede despues dibujar con GL_EQUAL sin volver a resolver
-            // la visibilidad. Ver el comentario de Framebuffer sobre el prestamo.
-            static std::optional<AoPass> Create(Renderer& renderer, VertexArray& fullscreenQuad,
-                                                const Shaders& shaders, u32 width, u32 height,
-                                                u32 sharedDepthRbo);
+            // sceneFB es el framebuffer de escena. El prepass escribe en SU
+            // depth y no en uno propio, y por eso el forward puede despues
+            // dibujar con GL_EQUAL sin volver a resolver la visibilidad.
+            //
+            // Se guarda el framebuffer y no el handle del renderbuffer porque su
+            // Resize crea uno nuevo y destruye el viejo: leerlo en el momento en
+            // que hace falta es lo unico que evita quedar enganchado a un
+            // attachment muerto.
+            static std::unique_ptr<AoPass> Create(Renderer& renderer, VertexArray& fullscreenQuad,
+                                                  const Shaders& shaders, u32 width, u32 height,
+                                                  Framebuffer& sceneFB);
 
             AoPass(const AoPass&)            = delete;
             AoPass& operator=(const AoPass&) = delete;
             AoPass(AoPass&& other) noexcept;
             AoPass& operator=(AoPass&& other) noexcept;
 
-            // Dibuja el prepass y corre el kernel. La view y la projection son
-            // las de la camara del frame; no se leen del bloque Frame porque
-            // este pase corre antes de BeginScene.
-            void Render(const scene::SceneGraph& scene,
-                        const glm::mat4& view, const glm::mat4& projection);
+            // Dibuja el prepass y corre el kernel, y publica ctx.lighting.ao y
+            // ctx.depthReady. La camara sale del ctx y no del bloque Frame
+            // porque este pase corre antes del FrameUploadPass.
+            void Execute(FrameContext& ctx) override;
 
-            // El renderbuffer nuevo lo crea el dueno (el framebuffer de escena):
-            // hay que pasarlo, porque el viejo muere en su realocacion.
-            void Resize(u32 width, u32 height, u32 sharedDepthRbo);
+            const char* Name() const override { return "AO"; }
+
+            // El renderbuffer nuevo lo crea el framebuffer de escena en SU
+            // Resize, que el pipeline corre antes que este: se lee de ahi.
+            void Resize(u32 width, u32 height) override;
 
             AoContext Context() const;
 
@@ -81,11 +87,21 @@ namespace renderer {
 
         private:
             AoPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
-                   u32 width, u32 height, u32 sharedDepthRbo);
+                   u32 width, u32 height, Framebuffer& sceneFB);
+
+            // El trabajo real; lo llama Execute, que publica el contexto
+            // despues -- afuera, porque esto tiene retornos tempranos.
+            void Render(const scene::SceneGraph& scene,
+                        const glm::mat4& view, const glm::mat4& projection);
 
             Renderer&    m_renderer;
             VertexArray& m_quad;
             Shaders      m_shaders;
+
+            // El framebuffer de escena, del que este pase toma prestado el
+            // depth. Puntero y no referencia solo para que el move siga siendo
+            // trivial de escribir.
+            Framebuffer* m_sceneFB = null;
 
             // Realoca m_aoA/m_aoB si la resolucion completa o el flag halfRes
             // cambiaron. Se llama al principio de Render y no desde el setter

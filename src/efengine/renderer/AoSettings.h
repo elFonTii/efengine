@@ -10,7 +10,8 @@ namespace renderer {
     // Nada de esto esta serializado: se tunea por ImGui y se pierde al cerrar,
     // igual que sombra, bloom y DDGI.
     struct AoSettings {
-        bool enabled = true;
+        // El flag de encendido NO esta aca: es IScenePass::enabled, para que el
+        // pipeline pueda saltear el pase sin conocer sus settings.
 
         // METROS. Tiene que quedar por DEBAJO del espaciado de probes de DDGI:
         // es la regla que evita el doble oscurecimiento. Lo que el AO ocluye es

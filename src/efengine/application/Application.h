@@ -48,7 +48,7 @@ namespace application {
             // que mantiene EditorUI compilando mientras los pases se mudan.
             renderer::ShadowPass& GetShadowPass() { return *m_shadowPtr; }
             renderer::DdgiPass* GetDdgiPass() { return m_ddgiPtr; }
-            std::optional<renderer::AoPass>&   GetAoPass()   { return m_aoPass; }
+            renderer::AoPass* GetAoPass() { return m_aoPtr; }
             std::optional<renderer::IndirectPass>& GetIndirectPass() { return m_indirectPass; }
 
             // FRAME API
@@ -101,9 +101,9 @@ namespace application {
             renderer::IblPass*    m_iblPtr    = null;
             // Vacio si falto algun shader de DDGI: el frame sigue con IBL puro.
             renderer::DdgiPass*   m_ddgiPtr   = null;
-            std::optional<renderer::DdgiDebugPass> m_ddgiDebug;
             // Vacio si falto algun shader de AO: el frame sigue sin oclusion.
-            std::optional<renderer::AoPass>        m_aoPass;
+            renderer::AoPass*     m_aoPtr     = null;
+            std::optional<renderer::DdgiDebugPass> m_ddgiDebug;
             // Vacio si falto su shader: pbr.frag samplea el volumen inline, que
             // es el camino de antes de que este pase existiera. Misma imagen,
             // mas cara.

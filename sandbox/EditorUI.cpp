@@ -664,8 +664,8 @@ namespace {
                                     ind->width(), ind->height());
                 // Es la dependencia que mas sorprende: sin AO no hay prepass, y
                 // sin prepass no hay ni posicion ni guia para el upsample.
-                std::optional<renderer::AoPass>& ao = ctx.app.GetAoPass();
-                if (!ao.has_value() || !ao->settings().enabled) {
+                renderer::AoPass* ao = ctx.app.GetAoPass();
+                if (ao == null || !ao->enabled) {
                     ImGui::TextColored(kColorAviso,
                                        "AO apagado: el pase no corre y pbr.frag samplea inline.");
                 }
@@ -696,8 +696,8 @@ namespace {
     void drawAoSection(EditorContext& ctx) {
         if (!ImGui::CollapsingHeader("Oclusion ambiental (GTAO)")) return;
 
-        std::optional<renderer::AoPass>& opt = ctx.app.GetAoPass();
-        if (!opt.has_value()) {
+        renderer::AoPass* opt = ctx.app.GetAoPass();
+        if (opt == null) {
             ImGui::TextColored(kColorError, "AoPass no disponible: fallo la carga de shaders.");
             ImGui::TextWrapped("La escena esta sin oclusion de contacto. Mira la consola.");
             return;
@@ -706,7 +706,9 @@ namespace {
 
         CamposAlineados alineados;
 
-        ImGui::Checkbox("Habilitado", &s.enabled);
+        // El flag de encendido es del pase (IScenePass::enabled), no de sus
+        // settings: es lo que el ScenePipeline consulta para saltearlo.
+        ImGui::Checkbox("Habilitado", &opt->enabled);
 
         ImGui::SeparatorText("Trazado");
         // El radio va en METROS y tiene que quedar POR DEBAJO del espaciado de
