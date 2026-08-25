@@ -319,6 +319,18 @@ namespace efecom {
         glBindBufferBase(GL_UNIFORM_BUFFER, (GLuint)bindingIndex, (GLuint)buffer);
     }
 
+    u32 CreateStorageBuffer(usize size) {
+        u32 id = 0;
+        glCreateBuffers(1, &id);
+        EFCOM_ASSERT(id != 0, "CreateStorageBuffer: glCreateBuffers fallo (sin contexto GL)");
+        glNamedBufferData(id, (GLsizeiptr)size, nullptr, GL_DYNAMIC_DRAW);
+        return id;
+    }
+
+    void BindStorageBuffer(u32 buffer, u32 bindingIndex) {
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, (GLuint)bindingIndex, (GLuint)buffer);
+    }
+
     // ── Vertex arrays ──────────────────────────────────────────────────────
     u32 CreateVertexArray() {
         u32 id = 0;
@@ -638,6 +650,35 @@ namespace efecom {
         ++g_counters.drawCalls;
         g_counters.triangles += vertexCount / 3u;
         glDrawArrays(GL_TRIANGLES, 0, (GLsizei)vertexCount);
+    }
+
+    // UN draw call en el contador aunque sean N instancias: el contador existe
+    // para medir lo que la CPU emite, y eso es exactamente lo que el
+    // instanciado ahorra. Los triangulos si se cuentan todos -- ese numero mide
+    // el trabajo de la GPU, que no cambia.
+    void DrawIndexedInstanced(u32 indexCount, u32 instanceCount) {
+        if (instanceCount == 0u) return;
+        ++g_counters.drawCalls;
+        g_counters.triangles += (indexCount / 3u) * instanceCount;
+        glDrawElementsInstanced(GL_TRIANGLES, (GLsizei)indexCount, GL_UNSIGNED_INT,
+                                nullptr, (GLsizei)instanceCount);
+    }
+
+    void DrawArraysInstanced(u32 vertexCount, u32 instanceCount) {
+        if (instanceCount == 0u) return;
+        ++g_counters.drawCalls;
+        g_counters.triangles += (vertexCount / 3u) * instanceCount;
+        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)vertexCount, (GLsizei)instanceCount);
+    }
+
+    void SetClipDistanceCount(u32 count) {
+        // El spec garantiza 8. Pasarse seria un GL_INVALID_ENUM por plano, que
+        // el callback de debug reportaria como ruido sin decir de donde sale.
+        const u32 tope = (count > 8u) ? 8u : count;
+        for (u32 i = 0u; i < 8u; ++i) {
+            if (i < tope) glEnable(GL_CLIP_DISTANCE0 + i);
+            else          glDisable(GL_CLIP_DISTANCE0 + i);
+        }
     }
 
 }

@@ -7,11 +7,17 @@
 // Escribe radiancia en rgb y DISTANCIA en el alfa: de ahi sale el test de
 // Chebyshev que mata el light leaking.
 //
-// Reusa pbr.vert verbatim, asi que recibe las mismas varyings.
+// Su vertex shader es ddgi/capture.vert: instanciado por (probe, cara), y con
+// las varyings justas -- este shader es difuso puro y solo necesita la normal
+// GEOMETRICA, no la base TBN entera.
+//
+// El centro del probe llega por varying y ya no por el bloque Frame: con un solo
+// draw para todas las vistas, cada instancia tiene el suyo.
 
 in vec3 vFragPos;
 in vec2 vUV;
-in mat3 vTBN;
+in vec3 vNormal;
+flat in vec3 vProbeCenter;
 
 out vec4 FragColor;
 
@@ -22,7 +28,7 @@ layout(std140, binding = 0) uniform Frame {
     mat4 uProjection;
     mat4 uLightSpaceMatrix;
     mat4 uInvViewProjRot;
-    vec4 uViewPos;        // .xyz = CENTRO DEL PROBE en este pase, no la camara
+    vec4 uViewPos;        // sin uso aca: el centro del probe llega por vProbeCenter
     vec4 uShadowParams;   // x=enabled, y=biasMin, z=biasMax, w=normalOffset (m)
     vec4 uIblParams;
 };
@@ -98,11 +104,10 @@ void main() {
 
     // Normal geometrica: el normal map es detalle de alta frecuencia que la
     // irradiancia difusa promedia igual.
-    vec3 N = normalize(vTBN[2]);
+    vec3 N = normalize(vNormal);
     if (!gl_FrontFacing) N = -N;
 
-    // uViewPos es el centro del probe en este pase.
-    float dist = length(uViewPos.xyz - vFragPos);
+    float dist = length(vProbeCenter - vFragPos);
 
     // --- Luz directa, Lambert puro ---
     vec3 direct = vec3(0.0);
@@ -141,7 +146,7 @@ void main() {
         // del probe y no la camara, y viewBias empuja el punto de muestreo hacia
         // el. El guard es por el fragmento que cae justo sobre el centro, donde
         // normalize(0) daria NaN y lo propagaria a todo el atlas via el blend.
-        vec3  hacia = uViewPos.xyz - vFragPos;
+        vec3  hacia = vProbeCenter - vFragPos;
         float dProb = length(hacia);
         hacia       = (dProb > 1e-5) ? hacia / dProb : N;
 

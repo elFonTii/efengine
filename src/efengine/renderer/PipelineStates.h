@@ -10,6 +10,12 @@ namespace renderer {
 
     efecom::PipelineState OpaqueState();
     efecom::PipelineState OpaqueDoubleSidedState();
+
+    // Los mismos dos, pero testeando GL_EQUAL y SIN escribir profundidad: es
+    // como dibuja el forward cuando el depth prepass ya resolvio la visibilidad.
+    // Ver el comentario largo en PipelineStates.cpp.
+    efecom::PipelineState OpaqueEqualState();
+    efecom::PipelineState OpaqueDoubleSidedEqualState();
     efecom::PipelineState SkyboxState();
     efecom::PipelineState ShadowDepthState();
     efecom::PipelineState FullscreenState();

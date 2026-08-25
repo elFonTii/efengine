@@ -95,5 +95,27 @@ namespace renderer {
         return r;
     }
 
+    glm::vec4 CaptureTileRect(u32 face, u32 slot) {
+        // El atlas entero, en texels. Las mismas dos constantes con las que
+        // DdgiPass aloca el target.
+        const f32 anchoAtlas = static_cast<f32>(6u * kProbeFaceSize);
+        const f32 altoAtlas  = static_cast<f32>(kMaxProbesPerFrame * kProbeFaceSize);
+        const f32 lado       = static_cast<f32>(kProbeFaceSize);
+
+        // La celda en NDC del atlas. El +lado del maximo es lo que hace que el
+        // rectangulo sea la celda entera y no su esquina.
+        const f32 x0 = 2.0f * (static_cast<f32>(face) * lado) / anchoAtlas - 1.0f;
+        const f32 x1 = 2.0f * (static_cast<f32>(face) * lado + lado) / anchoAtlas - 1.0f;
+        const f32 y0 = 2.0f * (static_cast<f32>(slot) * lado) / altoAtlas - 1.0f;
+        const f32 y1 = 2.0f * (static_cast<f32>(slot) * lado + lado) / altoAtlas - 1.0f;
+
+        // Escala = medio ancho de la celda, offset = su centro. Con eso,
+        // clip.xy * escala + offset * clip.w manda el [-1,1] de la vista
+        // exactamente sobre [x0,x1] x [y0,y1].
+        return glm::vec4((x1 - x0) * 0.5f, (y1 - y0) * 0.5f,
+                         (x1 + x0) * 0.5f, (y1 + y0) * 0.5f);
+    }
+
 }
 }
+

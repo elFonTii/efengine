@@ -2,12 +2,17 @@
 #include <efengine/core/Types.h>
 #include <efengine/renderer/DdgiVolume.h>
 #include <efengine/renderer/DdgiSettings.h>
+#include <efengine/renderer/IScenePass.h>
 #include <efengine/renderer/DdgiContext.h>
 #include <efengine/renderer/Texture.h>
 #include <efengine/renderer/ShadowContext.h>
 #include <efengine/renderer/IblContext.h>
 
-#include <optional>
+#include <efengine/renderer/ShaderBlocks.h>
+
+#include <glm/glm.hpp>
+#include <memory>
+#include <vector>
 
 namespace efengine {
 namespace scene { class SceneGraph; }
@@ -24,7 +29,7 @@ namespace renderer {
     // Create devuelve nullopt si falta cualquier shader (calcado de
     // Environment::Create): sin DdgiPass, Application pasa un DdgiContext vacio
     // y pbr.frag cae a IBL puro. Un fallo de shader no rompe el frame.
-    class DdgiPass {
+    class DdgiPass : public IScenePass {
         public:
             struct Shaders {
                 Shader* capture         = null;
@@ -36,8 +41,8 @@ namespace renderer {
             // fullscreenQuad es el mismo VertexArray que usa SkyboxPass: el cielo
             // de la captura se dibuja con skybox.vert, que reconstruye la
             // direccion desde las esquinas del quad, no con un cubo.
-            static std::optional<DdgiPass> Create(Renderer& renderer, VertexArray& fullscreenQuad,
-                                                  const Shaders& shaders);
+            static std::unique_ptr<DdgiPass> Create(Renderer& renderer, VertexArray& fullscreenQuad,
+                                                    const Shaders& shaders);
 
             ~DdgiPass();
             DdgiPass(const DdgiPass&)            = delete;
@@ -46,10 +51,11 @@ namespace renderer {
             DdgiPass& operator=(DdgiPass&& other) noexcept;
 
             // Captura los probes del frame y los integra al atlas. Corre DESPUES
-            // del ShadowPass (necesita su depth y su matriz) y ANTES de
-            // BeginScene (sube su propio FrameBlock por cara).
-            void Update(const scene::SceneGraph& scene, const ShadowContext& shadow,
-                        const IblContext& ibl, const Cubemap* env);
+            // del ShadowPass (necesita su depth y su matriz) y ANTES del
+            // FrameUploadPass (sube su propio FrameBlock por cara).
+            void Execute(FrameContext& ctx) override;
+
+            const char* Name() const override { return "DDGI"; }
 
             DdgiContext Context() const;
 
@@ -77,7 +83,12 @@ namespace renderer {
         private:
             DdgiPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
                      Texture capture, Texture irradiance, Texture distance,
-                     u32 captureFbo, u32 captureDepthRbo);
+                     u32 captureFbo, u32 captureDepthRbo, u32 tileSsbo);
+
+            // El trabajo real. Lo llama Execute, que publica el contexto
+            // despues -- afuera, porque esto tiene retornos tempranos.
+            void Update(const scene::SceneGraph& scene, const ShadowContext& shadow,
+                        const IblContext& ibl, const Cubemap* env);
 
             // Realoca los dos atlas si la grilla cambio de tamano. Los deja en
             // negro y rearma el contador de barridos.
@@ -88,9 +99,10 @@ namespace renderer {
             // siempre. Se hace con un FBO temporal y Clear: cero RHI nuevo.
             static void ClearAtlas(const Texture& atlas);
 
-            void CaptureProbe(const scene::SceneGraph& scene, const ShadowContext& shadow,
-                              const IblContext& ibl, const Cubemap* env,
-                              u32 probeIndex, u32 slot);
+            // Llena el SSBO con las probes*6 vistas del frame y lo sube. Una
+            // vez por frame, no una por vista: es lo que permite el draw
+            // instanciado. Devuelve cuantas vistas quedaron (= instancias).
+            u32 BuildTiles(const glm::mat4& proj);
 
             Renderer&    m_renderer;
             VertexArray& m_quad;
@@ -102,6 +114,12 @@ namespace renderer {
 
             u32 m_captureFbo      = 0u;
             u32 m_captureDepthRbo = 0u;
+
+            // Las vistas del frame, indexadas por gl_InstanceID. Se aloca al
+            // maximo una sola vez (kMaxProbesPerFrame * 6): mover el slider de
+            // probes por frame nunca realoca, igual que el target de captura.
+            u32 m_tileSsbo = 0u;
+            std::vector<DdgiCaptureTile> m_tiles;
 
             DdgiSettings m_settings;
             DdgiGrid     m_atlasGrid;      // la grilla con la que se alocaron los atlas

@@ -2,8 +2,10 @@
 #include <efengine/renderer/ProfilerStats.h>
 
 #include <string>
+#include <vector>
 
 using efengine::renderer::NanosToMs;
+using efengine::renderer::Percentile;
 using efengine::renderer::PassRow;
 using efengine::renderer::ProfilerStats;
 using efengine::renderer::ScopeSample;
@@ -143,4 +145,128 @@ TEST_CASE("Sin ningun frame cerrado, no hay filas ni totales") {
     CHECK(st.Rows().empty());
     CHECK(st.TotalGpuMs() == doctest::Approx(0.0f));
     CHECK(st.TotalCpuMs() == doctest::Approx(0.0f));
+}
+
+// -- Percentiles --------------------------------------------------------------
+// El promedio miente exactamente donde importa: una ventana de 4.3 ms de media
+// con dos picos de 15 se siente peor que una de 6 pareja. Estos tests fijan el
+// contrato del p99 que el overlay muestra.
+
+TEST_CASE("Percentile: casos degenerados no inventan numeros") {
+    std::vector<f32> vacio;
+    CHECK(Percentile(vacio, 0.99f) == doctest::Approx(0.0f));
+
+    std::vector<f32> uno { 4.2f };
+    CHECK(Percentile(uno, 0.0f)  == doctest::Approx(4.2f));
+    CHECK(Percentile(uno, 0.99f) == doctest::Approx(4.2f));
+    CHECK(Percentile(uno, 1.0f)  == doctest::Approx(4.2f));
+}
+
+TEST_CASE("Percentile: q fuera de [0,1] se recorta en vez de indexar fuera") {
+    std::vector<f32> v { 1.0f, 2.0f, 3.0f, 4.0f };
+    CHECK(Percentile(v, -5.0f) == doctest::Approx(1.0f));
+    CHECK(Percentile(v,  5.0f) == doctest::Approx(4.0f));
+}
+
+TEST_CASE("Percentile: devuelve una muestra REAL, no una interpolada") {
+    // 0.5 sobre cuatro muestras cae entre la 2da y la 3ra. Interpolando daria
+    // 2.5, que es un frame que nunca ocurrio; el metodo del vecino mas cercano
+    // devuelve uno de los dos que si ocurrieron.
+    std::vector<f32> v { 1.0f, 2.0f, 3.0f, 4.0f };
+    const f32 p50 = Percentile(v, 0.5f);
+    CHECK((p50 == doctest::Approx(2.0f) || p50 == doctest::Approx(3.0f)));
+
+    std::vector<f32> w { 1.0f, 2.0f, 3.0f, 4.0f };
+    CHECK(Percentile(w, 0.0f) == doctest::Approx(1.0f));
+    std::vector<f32> x { 1.0f, 2.0f, 3.0f, 4.0f };
+    CHECK(Percentile(x, 1.0f) == doctest::Approx(4.0f));
+}
+
+TEST_CASE("Percentile: el p99 ve el pico que el promedio esconde") {
+    // 100 frames: 98 parejos a 4 ms y dos picos de 16. El promedio queda en
+    // 4.24 -- indistinguible de una ventana sin picos -- y el p99 los muestra.
+    std::vector<f32> v(98u, 4.0f);
+    v.push_back(16.0f);
+    v.push_back(16.0f);
+
+    f32 suma = 0.0f;
+    for (f32 x : v) suma += x;
+    const f32 media = suma / static_cast<f32>(v.size());
+    CHECK(media < 4.5f);                       // el promedio no acusa nada
+
+    CHECK(Percentile(v, 0.99f) == doctest::Approx(16.0f));   // el p99 si
+    std::vector<f32> w(98u, 4.0f);
+    w.push_back(16.0f);
+    w.push_back(16.0f);
+    CHECK(Percentile(w, 0.50f) == doctest::Approx(4.0f));    // la mediana sigue limpia
+}
+
+TEST_CASE("Percentile: el orden de entrada no cambia el resultado") {
+    std::vector<f32> asc  { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f };
+    std::vector<f32> desc { 5.0f, 4.0f, 3.0f, 2.0f, 1.0f };
+    std::vector<f32> mezcla { 3.0f, 1.0f, 5.0f, 2.0f, 4.0f };
+
+    CHECK(Percentile(asc,    0.75f) == doctest::Approx(Percentile(desc, 0.75f)));
+    CHECK(Percentile(mezcla, 0.75f) == doctest::Approx(4.0f));
+}
+
+// -- Maximo por pase ----------------------------------------------------------
+
+TEST_CASE("PassRow: el maximo por pase delata el frame que el promedio esconde") {
+    ProfilerStats stats;
+
+    // Nueve frames a 0.15 ms y uno a 4 ms. El promedio queda en 0.535: en la
+    // columna de promedio no se distingue de un pase parejo de medio ms.
+    for (int i = 0; i < 9; ++i) {
+        stats.BeginFrame();
+        ScopeSample m;
+        m.name     = "DDGI captura";
+        m.gpuNanos = 150000ull;      // 0.15 ms
+        m.cpuMs    = 0.15f;
+        stats.AddSample(m);
+        stats.EndFrame(0.0f);
+    }
+    stats.BeginFrame();
+    {
+        ScopeSample pico;
+        pico.name     = "DDGI captura";
+        pico.gpuNanos = 4000000ull;  // 4 ms
+        pico.cpuMs    = 4.0f;
+        stats.AddSample(pico);
+    }
+    // dt que cierra la ventana y fuerza el recalculo de filas.
+    stats.EndFrame(ProfilerStats::kWindow);
+
+    REQUIRE(stats.Rows().size() == 1u);
+    const PassRow& r = stats.Rows()[0];
+
+    CHECK(r.present == true);
+    CHECK(r.gpuMs   == doctest::Approx(0.535f).epsilon(0.01));
+    CHECK(r.gpuMaxMs == doctest::Approx(4.0f));
+    CHECK(r.cpuMaxMs == doctest::Approx(4.0f));
+    // Esa es la senal: el peor frame es ~7x el promedio.
+    CHECK(r.gpuMaxMs > r.gpuMs * 2.0f);
+}
+
+TEST_CASE("PassRow: el maximo se reinicia con cada ventana") {
+    ProfilerStats stats;
+
+    const auto frame = [&stats](f32 ms, f32 dt) {
+        stats.BeginFrame();
+        ScopeSample m;
+        m.name     = "Forward";
+        m.gpuNanos = static_cast<u64>(ms * 1.0e6f);
+        m.cpuMs    = ms;
+        stats.AddSample(m);
+        stats.EndFrame(dt);
+    };
+
+    frame(9.0f, ProfilerStats::kWindow);          // ventana 1: un pico
+    REQUIRE(stats.Rows().size() == 1u);
+    CHECK(stats.Rows()[0].gpuMaxMs == doctest::Approx(9.0f));
+
+    frame(1.0f, ProfilerStats::kWindow);          // ventana 2: tranquila
+    // Si el maximo no se reiniciara, el panel seguiria acusando un pico que ya
+    // paso y nadie podria verificar que un arreglo funciono.
+    CHECK(stats.Rows()[0].gpuMaxMs == doctest::Approx(1.0f));
 }

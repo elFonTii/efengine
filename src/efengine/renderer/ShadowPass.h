@@ -1,5 +1,6 @@
 #pragma once
 #include <efengine/core/Types.h>
+#include <efengine/renderer/IScenePass.h>
 #include <efengine/renderer/ShadowMap.h>
 #include <efengine/renderer/ShadowMath.h>
 #include <efengine/renderer/DirectionalLight.h>
@@ -26,7 +27,8 @@ namespace renderer {
     // y abria una banda de luz en cada arista entre paredes (peter-panning), sin
     // que hubiera ningun valor intermedio que tapara el acne sin abrir la banda.
     struct ShadowSettings {
-        bool enabled = true;
+        // El flag de encendido NO esta aca: es IScenePass::enabled, para que el
+        // pipeline pueda saltear el pase sin conocer sus settings.
 
         // Aire alrededor de la AABB de la escena, en metros. Sube el rango de
         // profundidad y el tamaño del texel, asi que conviene chico.
@@ -59,13 +61,19 @@ namespace renderer {
     };
 
     // Pre-pase: renderiza la profundidad de la escena desde la luz al ShadowMap.
-    class ShadowPass {
+    class ShadowPass : public IScenePass {
         public:
             ShadowPass(Renderer& renderer, Shader* depthShader, u32 resolution = 2048);
 
-            // Calcula la matriz light-space desde el sol + settings, renderiza la
-            // profundidad y devuelve la matriz usada.
-            const glm::mat4& Render(const scene::SceneGraph& scene, const DirectionalLight& sun);
+            // Calcula la matriz light-space desde el sol de la escena, renderiza
+            // la profundidad y publica ctx.lighting.shadow.
+            //
+            // La conversion del normal offset a metros se hace ACA y no en el
+            // caller: depende del encuadre que este pase acaba de calcular, y el
+            // shader no sabe cuanto mide un texel del shadow map en el mundo.
+            void Execute(FrameContext& ctx) override;
+
+            const char* Name() const override { return "Sombras"; }
 
             const glm::mat4& lightSpaceMatrix() const { return m_fit.matrix; }
             const Texture&   DepthTexture()     const { return m_shadowMap.DepthTexture(); }

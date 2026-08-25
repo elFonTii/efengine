@@ -67,6 +67,33 @@ namespace renderer {
         f32 backfaceFadeStart = 0.15f;
         f32 backfaceFadeEnd   = 0.30f;
 
+        // -- Diagnostico --
+
+        // Ablation test del pase Forward: pbr.frag devuelve una irradiancia
+        // CONSTANTE en vez de samplear el volumen, y no toca nada mas del
+        // shading. Es un instrumento de medicion, no un modo de imagen.
+        //
+        // Existe porque el Forward cuesta ~9.300 ciclos por pixel con 6 draws,
+        // que es 10-20x lo que explica su aritmetica: por descarte tiene que
+        // ser latencia de memoria, y el sospechoso es el sampleo del volumen
+        // (8 probes trilineales x 2 lookups octaedricos = ~16 gathers con
+        // coordenadas calculadas por pixel, sin prefetch posible).
+        //
+        // Como se lee: con esto en true el Forward tiene que caer a ~0.3 ms. Si
+        // cae, el cuello es el sampleo y la solucion es resolverlo a media
+        // resolucion (IndirectPass). Si no cae, el cuello esta en otro lado y
+        // hay que mirar ocupancia en Nsight antes de tocar nada.
+        //
+        // NO afecta a la captura de probes: ahi el sampleo es el rebote que
+        // realimenta el atlas, y apagarlo cambiaria la imagen de verdad en vez
+        // de medir el Forward.
+        bool ablateSample = false;
+
+        // El valor que devuelve el ablation. Un gris medio y no negro: con cero
+        // el compilador puede plegar la multiplicacion por albedo y borrar
+        // trabajo que en el camino real si se hace, y la medicion mentiria.
+        f32 ablateIrradiance = 0.25f;
+
         // -- Debug --
 
         // Que termino del shading escribe pbr.frag en vez de la imagen final.

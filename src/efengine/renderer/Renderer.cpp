@@ -38,16 +38,23 @@ namespace renderer {
 
     void Renderer::SetViewport(u32 width, u32 height) const { efecom::SetViewport(0, 0, width, height); }
 
-    void Renderer::Draw(const VertexArray& va, const Shader& shader) const {
+    void Renderer::Draw(const VertexArray& va, const Shader& shader, u32 instances) const {
         EF_ASSERT(va.vertexCount() > 0, "Renderer::Draw: VertexArray sin vertices");
+        if (instances == 0u) return;
 
         shader.Bind();
         va.Bind();
 
+        // El camino no instanciado no es glDraw*Instanced con 1: es la misma
+        // llamada de siempre. Instanced con count 1 es equivalente en el papel,
+        // pero cambia el fast path del driver para el 99% de los draws del motor
+        // a cambio de nada.
         if(va.hasIndexBuffer()) {
-            efecom::DrawIndexed(va.indexCount());
+            if (instances > 1u) efecom::DrawIndexedInstanced(va.indexCount(), instances);
+            else                efecom::DrawIndexed(va.indexCount());
         } else {
-            efecom::DrawArrays(va.vertexCount());
+            if (instances > 1u) efecom::DrawArraysInstanced(va.vertexCount(), instances);
+            else                efecom::DrawArrays(va.vertexCount());
         }
 
         // Ya no se desbindea programa ni VAO: cada pase bindea lo suyo antes de
@@ -99,7 +106,13 @@ namespace renderer {
         // El AO a su unidad fija. Si no hay textura, MakeAoBlock apaga el bloque
         // y pbr.frag ni la samplea.
         if (lighting.ao.texture != null) lighting.ao.texture->Bind(kAoTextureUnit);
-        const AoBlock aoBlock = MakeAoBlock(lighting.ao);
+
+        // El prepass-guia y la indirecta ya resuelta. MakeAoBlock decide con los
+        // dos en la mano que se sube y que no; aca solo se bindea lo que exista.
+        if (lighting.ao.depthNormal != null) lighting.ao.depthNormal->Bind(kDepthNormalUnit);
+        if (lighting.indirect.texture != null) lighting.indirect.texture->Bind(kIndirectTextureUnit);
+
+        const AoBlock aoBlock = MakeAoBlock(lighting.ao, lighting.indirect);
         m_aoUbo.Update(&aoBlock, sizeof(aoBlock));
     }
 
@@ -111,13 +124,21 @@ namespace renderer {
         m_ddgiUbo.Update(&block, sizeof(block));
     }
 
+    void Renderer::SetIndirectContext(const AoContext& ao, const IndirectContext& indirect) const {
+        if (ao.depthNormal != null)     ao.depthNormal->Bind(kDepthNormalUnit);
+        if (indirect.texture != null)   indirect.texture->Bind(kIndirectTextureUnit);
+
+        const AoBlock block = MakeAoBlock(ao, indirect);
+        m_aoUbo.Update(&block, sizeof(block));
+    }
+
     void Renderer::SetObjectMatrix(const glm::mat4& model) const {
         const ObjectBlock block { model };
         m_objectUbo.Update(&block, sizeof(block));
     }
 
     void Renderer::Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix,
-                          const Shader* overrideShader, const efecom::PipelineState* overrideState) {
+                          const DrawOptions& options) {
         // La matriz de modelo es del render item entero: se sube UNA vez, no una
         // por submesh como hacia el uModel viejo.
         SetObjectMatrix(modelMatrix);
@@ -130,16 +151,21 @@ namespace renderer {
             }
             const Material& mat = *it->second;
 
-            efecom::ApplyPipelineState(overrideState != null
-                                     ? *overrideState
-                                     : (mat.doubleSided ? OpaqueDoubleSidedState()
-                                                        : OpaqueState()));
+            const bool igual = (options.depth == DepthMode::Equal);
+            efecom::ApplyPipelineState(
+                options.state != null
+                    ? *options.state
+                    : (mat.doubleSided
+                         ? (igual ? OpaqueDoubleSidedEqualState() : OpaqueDoubleSidedState())
+                         : (igual ? OpaqueEqualState()            : OpaqueState())));
 
             const MaterialBlock block = mat.ToBlock();
             m_materialUbo.Update(&block, sizeof(block));
             mat.BindTextures();
 
-            Draw(mesh.vertexArray(), (overrideShader != null) ? *overrideShader : mat.shader());
+            Draw(mesh.vertexArray(),
+                 (options.shader != null) ? *options.shader : mat.shader(),
+                 options.instances);
         }
     }
 }

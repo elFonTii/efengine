@@ -162,6 +162,13 @@ namespace efecom {
     // de un frame, con offsets dinamicos. Se agrega aca sin tocar ni un shader.
     void BindUniformBuffer(u32 buffer, u32 bindingIndex);
 
+    // Buffer de almacenamiento (SSBO). Igual que el de uniforms pero sin el
+    // techo de 64 KB y indexable por gl_InstanceID desde el shader: es lo que
+    // permite que UN draw instanciado dibuje N vistas distintas, cada una con su
+    // matriz. DestroyBuffer sirve para liberarlo.
+    u32  CreateStorageBuffer(usize size);
+    void BindStorageBuffer(u32 buffer, u32 bindingIndex);
+
     // ── Vertex arrays ──────────────────────────────────────────────────────
     // Modelo de binding points (estilo DSA): el buffer se engancha a un
     // bindingIndex del VA y cada atributo (siempre floats) se asocia a él.
@@ -296,6 +303,23 @@ namespace efecom {
     // Draw (triángulos; índices u32)
     void DrawIndexed(u32 indexCount);
     void DrawArrays(u32 vertexCount);
+
+    // Los mismos, repetidos instanceCount veces. El shader distingue cada copia
+    // por gl_InstanceID; los contadores del frame siguen sumando UN draw call,
+    // que es lo que la CPU paga, y las primitivas de todas las instancias.
+    void DrawIndexedInstanced(u32 indexCount, u32 instanceCount);
+    void DrawArraysInstanced(u32 vertexCount, u32 instanceCount);
+
+    // ── Planos de recorte definidos por el shader ──────────────────────────
+    // Habilita los primeros `count` gl_ClipDistance (maximo 8 por spec). Con
+    // esto un draw instanciado puede recortar cada instancia a su propio
+    // rectangulo del render target: es lo que hace posible dibujar N vistas en
+    // un atlas 2D con un solo draw, sin un viewport por vista.
+    //
+    // OJO: mientras esten habilitados, TODO vertex shader que dibuje tiene que
+    // escribir esas distancias. Un shader que no las escribe recorta contra
+    // basura -- el resultado es indefinido, no "sin recortar".
+    void SetClipDistanceCount(u32 count);   // 0 = deshabilitar todos
 
     // Operadores de bits para las máscaras
     inline constexpr ClearMask operator|(ClearMask a, ClearMask b) {

@@ -22,6 +22,17 @@ namespace renderer {
         i32 iterations  = 6;
     };
 
+    // Brightpass -> blur ping-pong -> composite. El composite ademas TONEMAPEA:
+    // es el punto donde el frame pasa de HDR lineal a LDR sRGB.
+    //
+    // Estaban separados y el tonemap era un pase fullscreen dedicado -- leer
+    // 1920x1080 de RGBA16F, ~10 flops por pixel, escribir otro tanto. Fusionado,
+    // la curva se aplica sobre un valor que el composite ya tiene en registros y
+    // desaparecen una lectura y una escritura de pantalla completa.
+    //
+    // El orden composite -> tonemap -> FXAA se mantiene, y no es negociable:
+    // FXAA estima contraste asumiendo valores perceptuales, y sobre HDR lineal
+    // los highlights le parecen bordes.
     class BloomPass: public IPostPass {
         public:
             BloomPass(Renderer& renderer, VertexArray& fullscreenQuad,
@@ -29,6 +40,11 @@ namespace renderer {
                       u32 width, u32 height);
 
             BloomSettings& settings() { return m_settings; }
+
+            // Exposicion lineal de la camara. La consume el composite junto con
+            // la curva ACES; 1.0 es neutra.
+            void SetExposure(f32 exposure) { m_exposure = exposure; }
+            f32  exposure() const { return m_exposure; }
 
             void Apply(const Texture& input, const RenderTarget& target) override;
             void Resize(u32 width, u32 height) override;
@@ -42,6 +58,7 @@ namespace renderer {
                 Framebuffer  m_fboA;
                 Framebuffer  m_fboB;
                 BloomSettings m_settings;
+                f32           m_exposure = 1.0f;
                 // Un solo UBO para las tres etapas: se re-sube antes de cada draw.
                 UniformBuffer m_paramsUbo { sizeof(PostParamsBlock) };
     };
