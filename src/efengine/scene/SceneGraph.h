@@ -83,6 +83,15 @@ namespace scene {
 
             void AttachLight(NodeHandle handle, LightAttachment light);
 
+            void AttachCamera(NodeHandle handle, CameraAttachment camera);
+
+            // Saca la camara del nodo. Handle invalido o nodo sin camara: no-op
+            // silencioso, igual que DetachMesh (la UI puede pedirlo sobre un
+            // nodo que ya se destruyo).
+            void DetachCamera(NodeHandle handle);
+
+            void AttachCollider(NodeHandle handle, ColliderAttachment collider);
+
             // Behaviors
             Behavior* AttachBehavior(NodeHandle handle, std::unique_ptr<Behavior> behavior);
             void      Update(f32 dt);

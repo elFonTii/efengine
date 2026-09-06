@@ -148,6 +148,21 @@ namespace scene {
         m_slots[handle.index].node.light = light;
     }
 
+    void SceneGraph::AttachCamera(NodeHandle handle, CameraAttachment camera) {
+        EF_ASSERT(IsValid(handle), "SceneGraph::AttachCamera: handle invalido");
+        m_slots[handle.index].node.camera = camera;
+    }
+
+    void SceneGraph::DetachCamera(NodeHandle handle) {
+        if (!IsValid(handle)) return;
+        m_slots[handle.index].node.camera.reset();
+    }
+
+    void SceneGraph::AttachCollider(NodeHandle handle, ColliderAttachment collider) {
+        EF_ASSERT(IsValid(handle), "SceneGraph::AttachCollider: handle invalido");
+        m_slots[handle.index].node.collider = collider;
+    }
+
     Behavior* SceneGraph::AttachBehavior(NodeHandle handle, std::unique_ptr<Behavior> behavior) {
         EF_ASSERT(IsValid(handle), "SceneGraph::AttachBehavior: handle invalido");
         Node& node = m_slots[handle.index].node;
