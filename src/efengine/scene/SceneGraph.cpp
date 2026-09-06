@@ -186,6 +186,15 @@ namespace scene {
         m_primarySun = handle;
     }
 
+    glm::mat4 SceneGraph::WorldMatrixOf(NodeHandle handle) const {
+        return computeWorld(handle);
+    }
+
+    void SceneGraph::SetActiveCamera(NodeHandle handle) {
+        EF_ASSERT(IsValid(handle), "SceneGraph::SetActiveCamera: handle invalido");
+        m_activeCamera = handle;
+    }
+
     void SceneGraph::UpdateWorldTransforms() {
         // Sin el clear las listas se duplicarian en cada frame.
         m_renderables.clear();
@@ -265,7 +274,8 @@ namespace scene {
             m_freeList.push_back(static_cast<u32>(i - 1u));
         }
 
-        m_primarySun = NodeHandle{};
+        m_primarySun   = NodeHandle{};
+        m_activeCamera = NodeHandle{};
         m_renderables.clear();
         m_pointLights.clear();
         m_sun = renderer::DirectionalLight{ glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };
