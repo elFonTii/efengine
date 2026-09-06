@@ -16,6 +16,23 @@ namespace scene {
         void SetExposure(f32 exposure);
         f32 Exposure() const;
 
+        void SetFov(f32 deg);
+        void SetClipPlanes(f32 nearPlane, f32 farPlane);
+
+        // Deriva posicion y orientacion de una matriz de mundo: posicion en la
+        // 4a columna, forward = -Z local, up = +Y local. El up sale del eje Y
+        // LOCAL y no de +Y del mundo por dos razones: conserva el roll del nodo,
+        // y up y forward quedan ortogonales por construccion, asi que un nodo
+        // que mira recto para abajo no degenera la matriz de vista.
+        //
+        // Con un eje en escala cero normalizar daria NaN: en ese caso se mueve
+        // la camara pero se conserva la orientacion anterior, y se avisa una vez.
+        void SetFromWorld(const glm::mat4& world);
+
+        const glm::vec3& Up() const;
+        f32 NearPlane() const;
+        f32 FarPlane() const;
+
         // En GRADOS: es como está guardado, ProjectionMatrix le aplica radians().
         f32 Fov() const;
         const glm::vec3& Target() const;
