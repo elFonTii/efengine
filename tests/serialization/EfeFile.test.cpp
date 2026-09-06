@@ -190,7 +190,7 @@ TEST_CASE("EfeFile: lo que escribe el writer se lee como la version actual") {
     u32 chunkCount = 0u;
     REQUIRE(ReadFileHeader(r, ContentType::Scene, chunkCount));
     CHECK(r.Version() == kCurrentVersion);
-    CHECK(kCurrentVersion == 4u);
+    CHECK(kCurrentVersion == 5u);
     CHECK(w.Version() == kCurrentVersion);
 }
 
