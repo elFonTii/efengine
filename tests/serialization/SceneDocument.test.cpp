@@ -3,6 +3,7 @@
 #include <efengine/serialization/SceneDocument.h>
 #include <efengine/serialization/EfeFile.h>
 #include <vector>
+#include <cstring>
 
 using namespace efengine;
 using namespace efengine::serialization;
@@ -664,4 +665,120 @@ TEST_CASE("SceneDocument: iblIntensity sobrevive el round-trip v2") {
     SceneDocument dst;
     REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), dst));
     CHECK(dst.iblIntensity == doctest::Approx(1.75f));
+}
+
+TEST_CASE("SceneDocument v5: camara, collider y camara activa sobreviven el round-trip") {
+    SceneDocument doc;
+    doc.nodes.resize(2);
+    doc.nodes[0].nameStr = doc.strings.Intern("root");
+    doc.nodes[0].parent  = kInvalidIndex;
+
+    doc.nodes[1].nameStr = doc.strings.Intern("camara");
+    doc.nodes[1].parent  = 0u;
+    doc.nodes[1].local.position = glm::vec3(1.0f, 2.0f, 3.0f);
+
+    CameraRecord cam;
+    cam.fovDeg    = 70.0f;
+    cam.nearPlane = 0.25f;
+    cam.farPlane  = 900.0f;
+    cam.exposure  = 2.5f;
+    doc.nodes[1].camera = cam;
+
+    ColliderRecord col;
+    col.kind      = 2u;                            // scene::ShapeKind::Capsule
+    col.params    = glm::vec3(0.4f, 0.9f, 0.0f);
+    col.localOffset.position = glm::vec3(0.0f, 0.9f, 0.0f);
+    col.motion    = 1u;                            // scene::MotionType::Kinematic
+    col.isTrigger = 1u;
+    doc.nodes[1].collider = col;
+
+    doc.activeCameraNode = 1u;
+
+    std::vector<u8> bytes;
+    REQUIRE(WriteSceneDocument(doc, bytes));
+
+    SceneDocument leido;
+    REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), leido));
+
+    REQUIRE(leido.nodes.size() == 2u);
+    CHECK(leido.activeCameraNode == 1u);
+
+    CHECK(leido.nodes[0].camera.has_value()   == false);
+    CHECK(leido.nodes[0].collider.has_value() == false);
+
+    REQUIRE(leido.nodes[1].camera.has_value());
+    CHECK(leido.nodes[1].camera->fovDeg    == doctest::Approx(70.0f));
+    CHECK(leido.nodes[1].camera->nearPlane == doctest::Approx(0.25f));
+    CHECK(leido.nodes[1].camera->farPlane  == doctest::Approx(900.0f));
+    CHECK(leido.nodes[1].camera->exposure  == doctest::Approx(2.5f));
+
+    REQUIRE(leido.nodes[1].collider.has_value());
+    CHECK(leido.nodes[1].collider->kind      == 2u);
+    CHECK(leido.nodes[1].collider->params.y  == doctest::Approx(0.9f));
+    CHECK(leido.nodes[1].collider->localOffset.position.y == doctest::Approx(0.9f));
+    CHECK(leido.nodes[1].collider->motion    == 1u);
+    CHECK(leido.nodes[1].collider->isTrigger == 1u);
+}
+
+TEST_CASE("SceneDocument v5: un nodo sin adjuntos no engorda el archivo") {
+    // El tamano minimo de un NodeRecord no cambia con v5: los records nuevos
+    // solo se escriben si su bit de flag esta prendido.
+    SceneDocument doc;
+    doc.nodes.resize(1);
+    doc.nodes[0].nameStr = doc.strings.Intern("solo");
+    doc.nodes[0].parent  = kInvalidIndex;
+
+    std::vector<u8> bytes;
+    REQUIRE(WriteSceneDocument(doc, bytes));
+
+    SceneDocument leido;
+    REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), leido));
+    REQUIRE(leido.nodes.size() == 1u);
+    CHECK(leido.nodes[0].camera.has_value()   == false);
+    CHECK(leido.nodes[0].collider.has_value() == false);
+    CHECK(leido.activeCameraNode == kInvalidIndex);
+}
+
+TEST_CASE("SceneDocument v5: activeCameraNode fuera de rango se rechaza") {
+    SceneDocument doc;
+    doc.nodes.resize(1);
+    doc.nodes[0].nameStr = doc.strings.Intern("solo");
+    doc.nodes[0].parent  = kInvalidIndex;
+    doc.activeCameraNode = 7u;                    // solo hay 1 nodo
+
+    std::vector<u8> bytes;
+    REQUIRE(WriteSceneDocument(doc, bytes));
+
+    SceneDocument leido;
+    CHECK(ParseSceneDocument(bytes.data(), bytes.size(), leido) == false);
+}
+
+TEST_CASE("SceneDocument: un archivo v4 se lee sin camara y sin camara activa") {
+    // Un v4 se fabrica escribiendo un v5 y bajandole el numero de version del
+    // header: los bytes de mas del chunk SCNE quedan ahi, y leerlos o no es
+    // justamente la rama que hay que probar. El framing por byteSize se los
+    // saltea, que es la garantia que da el formato.
+    SceneDocument doc;
+    doc.nodes.resize(2);
+    doc.nodes[0].nameStr = doc.strings.Intern("root");
+    doc.nodes[0].parent  = kInvalidIndex;
+    doc.nodes[1].nameStr = doc.strings.Intern("camara");
+    doc.nodes[1].parent  = 0u;
+    doc.activeCameraNode = 1u;
+
+    std::vector<u8> bytes;
+    REQUIRE(WriteSceneDocument(doc, bytes));
+
+    // Header: magic(4) + endianCheck(4) + version(4). La version arranca en 8.
+    const u32 v4 = 4u;
+    std::memcpy(bytes.data() + 8, &v4, sizeof(v4));
+
+    SceneDocument leido;
+    REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), leido));
+
+    REQUIRE(leido.nodes.size() == 2u);
+    CHECK(leido.nodes[1].camera.has_value()   == false);
+    CHECK(leido.nodes[1].collider.has_value() == false);
+    // El binario v5 NO leyo el campo: para un v4 la escena no declara camara.
+    CHECK(leido.activeCameraNode == kInvalidIndex);
 }

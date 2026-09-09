@@ -448,6 +448,32 @@ namespace {
 
         DrawMeshSection(ctx, st.selected);
 
+        ImGui::SeparatorText("Camara");
+        if (node.camera) {
+            scene::CameraAttachment& c = *node.camera;
+
+            // Directo sobre el attachment: es data del nodo y no hay nada que
+            // recalcular. Los limites son los que hacen singular la proyeccion
+            // (un fov de 0 o de 180, un near en 0), no gusto personal.
+            ImGui::DragFloat("FOV",         &c.fovDeg,    0.5f,  1.0f,  179.0f, "%.1f");
+            ImGui::DragFloat("Near",        &c.nearPlane, 0.01f, 0.01f, 100.0f, "%.2f");
+            ImGui::DragFloat("Far",         &c.farPlane,  5.0f,  1.0f,  20000.0f, "%.0f");
+            ImGui::DragFloat("Exposicion",  &c.exposure,  0.01f, 0.0f,  5.0f,  "%.3f");
+            if (c.farPlane <= c.nearPlane) c.farPlane = c.nearPlane + 1.0f;
+
+            if (ctx.scene.ActiveCamera() == st.selected) {
+                ImGui::TextDisabled("es la camara activa de la escena");
+            } else if (ImGui::Button("Hacer activa", ImVec2(-kAnchoEtiqueta, 0.0f))) {
+                ctx.scene.SetActiveCamera(st.selected);
+            }
+
+            if (ImGui::Button("Quitar camara", ImVec2(-kAnchoEtiqueta, 0.0f))) {
+                ctx.scene.DetachCamera(st.selected);
+            }
+        } else if (ImGui::Button("Agregar camara", ImVec2(-kAnchoEtiqueta, 0.0f))) {
+            ctx.scene.AttachCamera(st.selected, scene::CameraAttachment{});
+        }
+
         if (!node.behaviors.empty()) {
             ImGui::SeparatorText("Behaviors");
             for (usize i = 0; i < node.behaviors.size(); ++i) {
@@ -623,8 +649,17 @@ namespace {
 
         if (ImGui::CollapsingHeader("Iluminacion", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::SliderFloat("Intensidad IBL", &ctx.scene.iblIntensity, 0.0f, 2.0f);
-            f32 exposure = ctx.camera.Exposure();
-            if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 5.0f)) ctx.camera.SetExposure(exposure);
+            // La exposicion tiene dos fuentes: el attachment de la camara activa
+            // cuando manda la vista previa, y este valor cuando manda la freecam.
+            // Con la vista previa prendida el slider se deshabilita en vez de
+            // mentir: escribirlo no cambiaria nada, el attachment lo pisa.
+            ImGui::BeginDisabled(st.previewCamera);
+            ImGui::SliderFloat("Exposure", &st.editorCam.exposure, 0.0f, 5.0f);
+            ImGui::EndDisabled();
+            if (st.previewCamera) {
+                ImGui::TextDisabled("manda la exposicion de la camara de la escena (%.3f)",
+                                    ctx.camera.Exposure());
+            }
         }
 
         // Los paneles de pases viven en panels/, uno por pase, y se
@@ -652,6 +687,15 @@ namespace {
         // Ultima a proposito: no produce imagen, es como se navega, y una vez
         // configurada no se vuelve a tocar.
         if (ImGui::CollapsingHeader("Camara")) {
+            ImGui::Checkbox("Vista previa de la escena", &st.previewCamera);
+            const scene::NodeHandle activa = ctx.scene.ActiveCamera();
+            if (st.previewCamera && !ctx.scene.IsValid(activa)) {
+                ImGui::TextDisabled("la escena no tiene camara activa: manda la freecam");
+            } else if (ctx.scene.IsValid(activa)) {
+                ImGui::TextDisabled("camara activa: %s", ctx.scene.Get(activa).name.c_str());
+            }
+            ImGui::Separator();
+
             scene::CameraSettings& cs = ctx.controller.settings();
             ImGui::SliderFloat("Velocidad",     &cs.moveSpeed,       1.0f,    200.0f);
             ImGui::SliderFloat("Boost (Shift)", &cs.boostMultiplier, 1.0f,    20.0f);

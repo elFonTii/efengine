@@ -64,6 +64,15 @@ namespace scene {
             // Transforms
             void UpdateWorldTransforms();
 
+            // World de un nodo resuelto AHORA, caminando solo su cadena de
+            // padres. Publico porque el cliente tiene que resolver la camara
+            // ANTES de renderizar, y UpdateWorldTransforms corre adentro de
+            // RenderScene (Application.cpp:107): en ese momento el cache
+            // Node::worldMatrix todavia esta sucio. Llamar al recorrido completo
+            // dos veces por frame duplicaria el cuello de botella de status.md 4.
+            // Handle invalido: identidad, sin log.
+            glm::mat4 WorldMatrixOf(NodeHandle handle) const;
+
             // Adjuntos
             void AttachMesh(NodeHandle handle, MeshAttachment mesh);
 
@@ -74,6 +83,15 @@ namespace scene {
 
             void AttachLight(NodeHandle handle, LightAttachment light);
 
+            void AttachCamera(NodeHandle handle, CameraAttachment camera);
+
+            // Saca la camara del nodo. Handle invalido o nodo sin camara: no-op
+            // silencioso, igual que DetachMesh (la UI puede pedirlo sobre un
+            // nodo que ya se destruyo).
+            void DetachCamera(NodeHandle handle);
+
+            void AttachCollider(NodeHandle handle, ColliderAttachment collider);
+
             // Behaviors
             Behavior* AttachBehavior(NodeHandle handle, std::unique_ptr<Behavior> behavior);
             void      Update(f32 dt);
@@ -81,6 +99,13 @@ namespace scene {
 
             void       SetPrimarySun(NodeHandle handle);
             NodeHandle PrimarySun() const { return m_primarySun; }
+
+            // Que camara ve la escena cuando no manda el editor. Mismo patron y
+            // mismo contrato que el sol primario: guarda un handle, no valida
+            // que el nodo tenga CameraAttachment, y el consumidor chequea
+            // IsValid antes de usarlo.
+            void       SetActiveCamera(NodeHandle handle);
+            NodeHandle ActiveCamera() const { return m_activeCamera; }
 
             const std::vector<RenderItem>&           Renderables() const { return m_renderables; }
             const std::vector<renderer::PointLight>& PointLights() const { return m_pointLights; }
@@ -115,6 +140,7 @@ namespace scene {
 
             // Estado juntado por UpdateWorldTransforms
             NodeHandle                        m_primarySun;
+            NodeHandle                        m_activeCamera;
             std::vector<RenderItem>           m_renderables;
             std::vector<renderer::PointLight> m_pointLights;
             renderer::DirectionalLight        m_sun { glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };

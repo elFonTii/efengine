@@ -404,3 +404,78 @@ TEST_CASE("EfeSceneAssets: indices, lookup inverso y Clear") {
     assets.Clear();
     CHECK(assets.GeneratedCount() == 0u);
 }
+
+TEST_CASE("EfeSceneSerializer: camara, collider y camara activa van y vuelven") {
+    resources::SceneAssets     assets;
+    resources::ResourceManager rm;
+    const SceneRegistry        reg = armarRegistry();
+
+    scene::SceneGraph grafo;
+    scene::NodeHandle nodo = grafo.CreateChild(grafo.Root(), "camara");
+
+    math::Transform t;
+    t.position = glm::vec3(1.0f, 2.0f, 3.0f);
+    grafo.SetLocalTransform(nodo, t);
+
+    scene::CameraAttachment cam;
+    cam.fovDeg   = 70.0f;
+    cam.exposure = 2.5f;
+    grafo.AttachCamera(nodo, cam);
+
+    scene::ColliderAttachment col;
+    col.kind      = scene::ShapeKind::Capsule;
+    col.params    = glm::vec3(0.4f, 0.9f, 0.0f);
+    col.motion    = scene::MotionType::Kinematic;
+    col.isTrigger = true;
+    grafo.AttachCollider(nodo, col);
+
+    grafo.SetActiveCamera(nodo);
+
+    SceneDocument doc;
+    REQUIRE(SceneSerializer::Extract(grafo, assets, rm, reg, doc));
+
+    // El nodo 0 es la raiz (pre-orden), asi que la camara es el 1.
+    CHECK(doc.activeCameraNode == 1u);
+    REQUIRE(doc.nodes[1].camera.has_value());
+    CHECK(doc.nodes[1].camera->fovDeg == doctest::Approx(70.0f));
+    REQUIRE(doc.nodes[1].collider.has_value());
+    CHECK(doc.nodes[1].collider->kind      == static_cast<u32>(scene::ShapeKind::Capsule));
+    CHECK(doc.nodes[1].collider->isTrigger == 1u);
+
+    // Resolve limpia los assets que recibe, asi que la vuelta usa los suyos.
+    scene::SceneGraph      vuelta;
+    resources::SceneAssets assetsVuelta;
+    REQUIRE(SceneSerializer::Resolve(doc, vuelta, assetsVuelta, rm, reg));
+
+    scene::NodeHandle recuperado = vuelta.FindByName("camara");
+    REQUIRE(vuelta.IsValid(recuperado));
+    CHECK(vuelta.ActiveCamera() == recuperado);
+
+    REQUIRE(vuelta.Get(recuperado).camera.has_value());
+    CHECK(vuelta.Get(recuperado).camera->fovDeg   == doctest::Approx(70.0f));
+    CHECK(vuelta.Get(recuperado).camera->exposure == doctest::Approx(2.5f));
+
+    REQUIRE(vuelta.Get(recuperado).collider.has_value());
+    CHECK(vuelta.Get(recuperado).collider->kind      == scene::ShapeKind::Capsule);
+    CHECK(vuelta.Get(recuperado).collider->motion    == scene::MotionType::Kinematic);
+    CHECK(vuelta.Get(recuperado).collider->isTrigger == true);
+    CHECK(vuelta.Get(recuperado).collider->params.y  == doctest::Approx(0.9f));
+}
+
+TEST_CASE("EfeSceneSerializer: una escena sin camara activa se resuelve sin quejarse") {
+    resources::SceneAssets     assets;
+    resources::ResourceManager rm;
+    const SceneRegistry        reg = armarRegistry();
+
+    scene::SceneGraph grafo;
+    grafo.CreateChild(grafo.Root(), "pelado");
+
+    SceneDocument doc;
+    REQUIRE(SceneSerializer::Extract(grafo, assets, rm, reg, doc));
+    CHECK(doc.activeCameraNode == kInvalidIndex);
+
+    scene::SceneGraph      vuelta;
+    resources::SceneAssets assetsVuelta;
+    REQUIRE(SceneSerializer::Resolve(doc, vuelta, assetsVuelta, rm, reg));
+    CHECK(vuelta.IsValid(vuelta.ActiveCamera()) == false);
+}

@@ -35,6 +35,7 @@ add_executable(efengine_tests
     scene/NodeHandle.test.cpp
     scene/SceneGraph.test.cpp
     scene/Camera.test.cpp
+    scene/NodeCamera.test.cpp
     scene/CameraController.test.cpp
     scene/Behavior.test.cpp
     scene/BehaviorFixed.test.cpp

@@ -25,6 +25,29 @@ namespace scene {
         glm::vec3 color { 1.0f };
     };
 
+    struct CameraAttachment {
+        f32 fovDeg    = 45.0f;    // vertical, en GRADOS: igual que Camera::Fov
+        f32 nearPlane = 0.1f;
+        f32 farPlane  = 5000.0f;
+        f32 exposure  = 1.025f;
+    };
+
+    // Descripcion de un cuerpo, NO un handle ni un tipo del motor de fisica.
+    // Vive en scene para que el .efe no quede atado al backend: el puente que
+    // llega en el ciclo 3 traduce esta descripcion a una forma de Jolt. En este
+    // ciclo lo unico que la toca es el serializador.
+    enum class ShapeKind  { Box, Sphere, Capsule, Mesh };
+    enum class MotionType { Static, Kinematic, Dynamic };
+
+    struct ColliderAttachment {
+        ShapeKind       kind = ShapeKind::Box;
+        // Box: halfExtents - Sphere: (r, ., .) - Capsule: (r, halfHeight, .)
+        glm::vec3       params { 0.5f };
+        math::Transform localOffset;   // respecto del nodo
+        MotionType      motion = MotionType::Static;
+        bool            isTrigger = false;
+    };
+
     class Node {
         public: 
             NodeHandle self;
@@ -40,6 +63,8 @@ namespace scene {
             // con esta estructura podemos expandir a X attachments (scripts, colliders, etc...)
             std::optional<MeshAttachment> mesh;
             std::optional<LightAttachment> light;
+            std::optional<CameraAttachment>   camera;
+            std::optional<ColliderAttachment> collider;
             std::vector<std::unique_ptr<Behavior>> behaviors;
 
             Node()                       = default;
