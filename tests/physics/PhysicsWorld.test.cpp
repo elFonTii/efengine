@@ -291,3 +291,101 @@ TEST_CASE("PhysicsWorld: Step con dt cero o negativo es no-op") {
 
     CHECK(despues.y == doctest::Approx(antes.y));
 }
+
+namespace {
+    // Un cuadrado de 20x20 en y = 0, dos triangulos.
+    const f32 kPisoVertices[] = {
+        -10.0f, 0.0f, -10.0f,
+         10.0f, 0.0f, -10.0f,
+         10.0f, 0.0f,  10.0f,
+        -10.0f, 0.0f,  10.0f,
+    };
+    // Winding antihorario visto desde +Y: la normal tiene que apuntar hacia
+    // arriba o Jolt ignora la cara y la esfera pasa de largo.
+    const u32 kPisoIndices[] = { 0, 2, 1,  0, 3, 2 };
+
+    ShapeDesc descMallaPiso() {
+        ShapeDesc d;
+        d.kind            = ShapeKind::Mesh;
+        d.meshPositions   = kPisoVertices;
+        d.meshVertexCount = 4;
+        d.meshIndices     = kPisoIndices;
+        d.meshIndexCount  = 6;
+        return d;
+    }
+}
+
+TEST_CASE("PhysicsWorld: una esfera se apoya igual sobre un piso de malla") {
+    Mundo m;
+
+    const BodyHandle piso = m.world->CreateBody(descMallaPiso(), en(glm::vec3(0.0f)),
+                                                MotionType::Static);
+    REQUIRE_FALSE(piso.IsNull());
+
+    const f32 radio = 0.5f;
+    const BodyHandle bola = m.world->CreateBody(descEsfera(radio),
+                                                en(glm::vec3(0.0f, 5.0f, 0.0f)),
+                                                MotionType::Dynamic);
+    m.world->OptimizeBroadPhase();
+
+    for (i32 i = 0; i < 180; ++i) m.world->Step(kPasoFijo);
+
+    CHECK(std::abs(posicionDe(*m.world, bola).y - radio) < kTolerancia);
+}
+
+TEST_CASE("PhysicsWorld: la malla si acepta escala no uniforme") {
+    Mundo m;
+
+    Transform t;
+    t.scale = glm::vec3(2.0f, 1.0f, 0.5f);
+
+    const BodyHandle piso = m.world->CreateBody(descMallaPiso(), t, MotionType::Static);
+
+    CHECK_FALSE(piso.IsNull());
+    CHECK(m.world->BodyCount() == 1u);
+}
+
+TEST_CASE("PhysicsWorld: una malla sin geometria no crea cuerpo") {
+    Mundo m;
+
+    ShapeDesc vacia;
+    vacia.kind = ShapeKind::Mesh;
+
+    CHECK(m.world->CreateBody(vacia, en(glm::vec3(0.0f)), MotionType::Static).IsNull());
+
+    ShapeDesc sinIndices = descMallaPiso();
+    sinIndices.meshIndices    = nullptr;
+    sinIndices.meshIndexCount = 0;
+    CHECK(m.world->CreateBody(sinIndices, en(glm::vec3(0.0f)), MotionType::Static).IsNull());
+
+    ShapeDesc indicesSueltos = descMallaPiso();
+    indicesSueltos.meshIndexCount = 5;               // no es multiplo de 3
+    CHECK(m.world->CreateBody(indicesSueltos, en(glm::vec3(0.0f)), MotionType::Static).IsNull());
+
+    CHECK(m.world->BodyCount() == 0u);
+}
+
+TEST_CASE("PhysicsWorld: un indice fuera de rango se corta antes de llegar a Jolt") {
+    Mundo m;
+
+    const u32 malos[] = { 0, 1, 99 };
+    ShapeDesc d       = descMallaPiso();
+    d.meshIndices     = malos;
+    d.meshIndexCount  = 3;
+
+    CHECK(m.world->CreateBody(d, en(glm::vec3(0.0f)), MotionType::Static).IsNull());
+    CHECK(m.world->BodyCount() == 0u);
+}
+
+TEST_CASE("PhysicsWorld: una malla dinamica se degrada a estatica en vez de reventar") {
+    Mundo m;
+
+    const BodyHandle piso = m.world->CreateBody(descMallaPiso(), en(glm::vec3(0.0f)),
+                                                MotionType::Dynamic);
+    REQUIRE_FALSE(piso.IsNull());
+
+    const glm::vec3 antes = posicionDe(*m.world, piso);
+    for (i32 i = 0; i < 120; ++i) m.world->Step(kPasoFijo);
+
+    CHECK(posicionDe(*m.world, piso).y == doctest::Approx(antes.y));
+}

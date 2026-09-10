@@ -9,6 +9,7 @@
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/ScaledShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/PhysicsSettings.h>
@@ -114,9 +115,48 @@ namespace {
                 resultado = JPH::CapsuleShapeSettings(s.desc.params.y, s.desc.params.x).Create();
                 break;
 
-            case ShapeKind::Mesh:
-                EF_LOG_ERROR("PhysicsWorld: ShapeKind::Mesh todavia no esta soportado");
-                return nullptr;
+            case ShapeKind::Mesh: {
+                const ShapeDesc& d = s.desc;
+
+                if (d.meshPositions == nullptr || d.meshVertexCount == 0
+                    || d.meshIndices == nullptr || d.meshIndexCount < 3
+                    || (d.meshIndexCount % 3) != 0) {
+                    EF_LOG_ERROR("PhysicsWorld: collider Mesh sin geometria valida "
+                                 "(%u vertices, %u indices)",
+                                 d.meshVertexCount, d.meshIndexCount);
+                    return nullptr;
+                }
+
+                JPH::VertexList vertices;
+                vertices.reserve(d.meshVertexCount);
+                for (u32 i = 0; i < d.meshVertexCount; ++i) {
+                    const f32* p = d.meshPositions + static_cast<usize>(i) * 3u;
+                    vertices.push_back(JPH::Float3(p[0], p[1], p[2]));
+                }
+
+                JPH::IndexedTriangleList triangulos;
+                triangulos.reserve(d.meshIndexCount / 3u);
+                for (u32 i = 0; i < d.meshIndexCount; i += 3u) {
+                    const u32 a = d.meshIndices[i];
+                    const u32 b = d.meshIndices[i + 1u];
+                    const u32 c = d.meshIndices[i + 2u];
+
+                    // Un indice fuera de rango adentro de Jolt es un acceso a
+                    // memoria ajena, no un error que devuelva algo.
+                    if (a >= d.meshVertexCount || b >= d.meshVertexCount
+                        || c >= d.meshVertexCount) {
+                        EF_LOG_ERROR("PhysicsWorld: collider Mesh con el indice %u fuera de "
+                                     "rango (%u vertices)",
+                                     std::max(a, std::max(b, c)), d.meshVertexCount);
+                        return nullptr;
+                    }
+
+                    triangulos.push_back(JPH::IndexedTriangle(a, b, c, 0));
+                }
+
+                resultado = JPH::MeshShapeSettings(vertices, triangulos).Create();
+                break;
+            }
         }
 
         if (resultado.HasError()) {
@@ -269,18 +309,27 @@ BodyHandle PhysicsWorld::CreateBody(const ShapeDesc& shape, const math::Transfor
     const JPH::RefConst<JPH::Shape> forma = construirForma(escalada);
     if (forma == nullptr) return BodyHandle{};
 
+    // MeshShape de Jolt no puede tener masa: pedirle Kinematic o Dynamic es un
+    // assert adentro de la libreria.
+    MotionType motionEfectivo = motion;
+    if (shape.kind == ShapeKind::Mesh && motion != MotionType::Static) {
+        EF_LOG_WARNING("PhysicsWorld::CreateBody: un collider Mesh no puede ser no-estatico; "
+                       "se crea estatico");
+        motionEfectivo = MotionType::Static;
+    }
+
     JPH::BodyCreationSettings settings(forma,
                                        JPH::RVec3(world.position.x, world.position.y,
                                                   world.position.z),
                                        quatDeEuler(world.rotation),
-                                       aJolt(motion),
-                                       capaDe(motion));
+                                       aJolt(motionEfectivo),
+                                       capaDe(motionEfectivo));
 
     JPH::BodyInterface& bi = m_impl->system.GetBodyInterface();
     const JPH::BodyID id = bi.CreateAndAddBody(
         settings,
-        motion == MotionType::Static ? JPH::EActivation::DontActivate
-                                     : JPH::EActivation::Activate);
+        motionEfectivo == MotionType::Static ? JPH::EActivation::DontActivate
+                                             : JPH::EActivation::Activate);
 
     if (id.IsInvalid()) {
         EF_LOG_ERROR("PhysicsWorld::CreateBody: Jolt rechazo el cuerpo (se lleno maxBodies?)");

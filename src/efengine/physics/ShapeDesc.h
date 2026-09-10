@@ -24,6 +24,8 @@ namespace physics {
         // adentro de la forma. Guardarlos para despues es un dangling pointer.
         const f32* meshPositions   = nullptr;   // xyz consecutivos
         u32        meshVertexCount = 0;
+        // Winding antihorario visto desde el frente: Jolt no colisiona contra
+        // las caras traseras.
         const u32* meshIndices     = nullptr;
         u32        meshIndexCount  = 0;
     };
