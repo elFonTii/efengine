@@ -4,6 +4,7 @@
 # Agregar subdirectorios de módulos
 add_subdirectory(core)
 add_subdirectory(math)
+add_subdirectory(physics)
 add_subdirectory(platform)
 add_subdirectory(renderer)
 add_subdirectory(resources)
@@ -22,6 +23,7 @@ target_include_directories(efengine PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(efengine PUBLIC
     efengine_core
     efengine_math
+    efengine_physics
     efengine_platform
     efengine_renderer
     efengine_resources
