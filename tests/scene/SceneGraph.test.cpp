@@ -431,3 +431,57 @@ TEST_CASE("IsAncestorOrSelf: reconoce al propio nodo, a sus ancestros, y rechaza
     CHECK_FALSE(e.g.IsAncestorOrSelf(e.hijo, e.a));
     CHECK_FALSE(e.g.IsAncestorOrSelf(e.b, e.hijo));
 }
+
+TEST_CASE("SceneGraph::WorldMatrixOf resuelve la cadena SIN UpdateWorldTransforms") {
+    scene::SceneGraph g;
+    scene::NodeHandle a = g.CreateChild(g.Root(), "a");
+    scene::NodeHandle b = g.CreateChild(a, "b");
+    scene::NodeHandle c = g.CreateChild(b, "c");
+
+    math::Transform t;
+    t.position = glm::vec3(1.0f, 0.0f, 0.0f);
+    g.SetLocalTransform(a, t);
+    g.SetLocalTransform(b, t);
+    g.SetLocalTransform(c, t);
+
+    // A proposito NO se llama a UpdateWorldTransforms: esa es toda la razon de
+    // existir de esta funcion. En el frame real, el cache lo refresca
+    // RenderScene DESPUES de que el cliente resuelve la camara.
+    const glm::mat4 world = g.WorldMatrixOf(c);
+
+    CHECK(world[3][0] == doctest::Approx(3.0f));
+    CHECK(world[3][1] == doctest::Approx(0.0f));
+    CHECK(g.Get(c).worldDirty == true);   // no toca el cache
+}
+
+TEST_CASE("SceneGraph::WorldMatrixOf con handle invalido devuelve identidad") {
+    scene::SceneGraph g;
+    scene::NodeHandle muerto = g.CreateChild(g.Root(), "muerto");
+    g.Destroy(muerto);
+
+    const glm::mat4 world = g.WorldMatrixOf(muerto);
+    CHECK(world[0][0] == doctest::Approx(1.0f));
+    CHECK(world[3][0] == doctest::Approx(0.0f));
+    CHECK(world[3][1] == doctest::Approx(0.0f));
+    CHECK(world[3][2] == doctest::Approx(0.0f));
+}
+
+TEST_CASE("SceneGraph: la camara activa se setea y se lee") {
+    scene::SceneGraph g;
+    scene::NodeHandle cam = g.CreateChild(g.Root(), "camara");
+
+    CHECK(g.IsValid(g.ActiveCamera()) == false);   // recien creado no hay ninguna
+    g.SetActiveCamera(cam);
+    CHECK(g.ActiveCamera() == cam);
+}
+
+TEST_CASE("SceneGraph: destruir el nodo de la camara activa invalida el handle") {
+    scene::SceneGraph g;
+    scene::NodeHandle cam = g.CreateChild(g.Root(), "camara");
+    g.SetActiveCamera(cam);
+
+    g.Destroy(cam);
+    // El handle guardado sigue igual pero deja de ser valido: la generacion del
+    // slot cambio. El consumidor chequea IsValid, como con PrimarySun.
+    CHECK(g.IsValid(g.ActiveCamera()) == false);
+}

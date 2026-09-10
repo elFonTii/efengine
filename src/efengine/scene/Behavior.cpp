@@ -6,7 +6,13 @@ namespace scene {
 
     Behavior::~Behavior() = default;
 
+    void Behavior::OnFixedUpdate(FixedUpdateContext&) {}
+
     void UpdateContext::SetLocal(const math::Transform& t) {
+        scene.SetLocalTransform(self, t);
+    }
+
+    void FixedUpdateContext::SetLocal(const math::Transform& t) {
         scene.SetLocalTransform(self, t);
     }
 

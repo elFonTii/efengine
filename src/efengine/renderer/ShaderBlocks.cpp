@@ -2,6 +2,7 @@
 #include "efengine/renderer/Renderer.h"
 
 #include <glm/gtc/matrix_inverse.hpp>
+#include <algorithm>
 #include <cstddef>
 
 namespace efengine {
@@ -60,7 +61,20 @@ namespace renderer {
     static_assert(offsetof(AoPassBlock, params1)     ==  96u, "AoPassBlock.params1");
     static_assert(offsetof(AoPassBlock, counts)      == 112u, "AoPassBlock.counts");
 
-    static_assert(sizeof(AoBlock) == 16u, "AoBlock: tamano std140 roto");
+    static_assert(sizeof(DdgiCaptureTile) == 160u, "DdgiCaptureTile: tamano std430 roto");
+    static_assert(offsetof(DdgiCaptureTile, viewProj)       ==   0u, "DdgiCaptureTile.viewProj");
+    static_assert(offsetof(DdgiCaptureTile, invViewProjRot) ==  64u, "DdgiCaptureTile.invViewProjRot");
+    static_assert(offsetof(DdgiCaptureTile, rect)           == 128u, "DdgiCaptureTile.rect");
+    static_assert(offsetof(DdgiCaptureTile, probeCenter)    == 144u, "DdgiCaptureTile.probeCenter");
+
+    static_assert(sizeof(IndirectPassBlock) == 96u, "IndirectPassBlock: tamano std140 roto");
+    static_assert(offsetof(IndirectPassBlock, viewToWorld) ==  0u, "IndirectPassBlock.viewToWorld");
+    static_assert(offsetof(IndirectPassBlock, projInfo)    == 64u, "IndirectPassBlock.projInfo");
+    static_assert(offsetof(IndirectPassBlock, counts)      == 80u, "IndirectPassBlock.counts");
+
+    static_assert(sizeof(AoBlock) == 32u, "AoBlock: tamano std140 roto");
+    static_assert(offsetof(AoBlock, params)   ==  0u, "AoBlock.params");
+    static_assert(offsetof(AoBlock, upsample) == 16u, "AoBlock.upsample");
 
     // El array del bloque tiene que tener exactamente los slots que el motor cree.
     static_assert(Renderer::kMaxLights == 4u,
@@ -141,9 +155,16 @@ namespace renderer {
         b.params1 = glm::vec4((settings.enabled && atlasValid) ? 1.0f : 0.0f,
                               settings.chebyshevSharpness,
                               static_cast<f32>(settings.debugView), 0.0f);
+        // params2.w codifica el ablation test en UN float: negativo = apagado,
+        // >= 0 = el valor constante que pbr.frag devuelve en vez de samplear.
+        // Dos campos (flag + valor) habrian obligado a crecer el bloque y a
+        // tocar los cinco shaders que lo declaran para un instrumento de medida.
         b.params2 = glm::vec4(settings.maxDistance,
                               settings.backfaceFadeStart,
-                              settings.backfaceFadeEnd, 0.0f);
+                              settings.backfaceFadeEnd,
+                              settings.ablateSample
+                                  ? std::max(settings.ablateIrradiance, 0.0f)
+                                  : -1.0f);
         return b;
     }
 

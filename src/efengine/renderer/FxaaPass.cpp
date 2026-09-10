@@ -6,6 +6,7 @@
 #include <efengine/core/Assert.h>
 
 #include <efecom/RHI.h>
+#include <efengine/renderer/GpuProfiler.h>
 
 namespace efengine {
 namespace renderer {
@@ -19,6 +20,7 @@ namespace renderer {
     void FxaaPass::Resize(u32 width, u32 height) {} 
 
     void FxaaPass::Apply(const Texture& input, const RenderTarget& target) {
+    EF_PROFILE_SCOPE("FXAA");
         target.Bind();
 
         const PostParamsBlock params {

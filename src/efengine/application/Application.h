@@ -5,7 +5,6 @@
 #include <efengine/renderer/Context.h>
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Framebuffer.h>
-#include <efengine/renderer/TonemapPass.h>
 #include <efengine/renderer/BloomPass.h>
 #include <efengine/renderer/FxaaPass.h>
 #include <efengine/renderer/PostChain.h>
@@ -13,13 +12,8 @@
 #include <efengine/core/Time.h>
 #include <efengine/platform/InputCodes.h>
 #include <efengine/platform/Input.h>
-#include <efengine/renderer/Environment.h>
-#include <efengine/renderer/SkyboxPass.h>
-#include <efengine/renderer/ShadowPass.h>
-#include <efengine/renderer/DdgiPass.h>
-#include <efengine/renderer/DdgiDebugPass.h>
-#include <efengine/renderer/AoPass.h>
-#include <efengine/renderer/SceneLighting.h>
+#include <efengine/renderer/ScenePipeline.h>
+#include <efengine/renderer/GpuProfiler.h>
 #include <optional>
 
 namespace efengine {
@@ -35,15 +29,17 @@ namespace application {
 
             platform::Window&   GetWindow()   { return m_window; }
             renderer::Renderer& GetRenderer() { return m_renderer; }
+            renderer::GpuProfiler& GetProfiler() { return m_profiler; }
             resources::ResourceManager& GetResources() { return m_resources; }
             core::Time& GetTime() { return m_time; }
             const platform::Input& GetInput() const { return m_input; }
             application::DebugUI& GetDebugUI() { return m_debugUI; }
             renderer::BloomPass& GetBloomPass() { return m_bloomPass; }
             renderer::FxaaPass& GetFxaaPass() { return m_fxaaPass; }
-            renderer::ShadowPass& GetShadowPass() { return m_shadowPass; }
-            std::optional<renderer::DdgiPass>& GetDdgiPass() { return m_ddgiPass; }
-            std::optional<renderer::AoPass>&   GetAoPass()   { return m_aoPass; }
+
+            // El unico accessor de pases de escena. Los paneles encuentran el
+            // suyo con Find<T>(): agregar un pase ya no agrega un accessor.
+            renderer::ScenePipeline& GetPipeline() { return m_pipeline; }
 
             // FRAME API
             bool Running() const { return !m_window.ShouldClose(); }
@@ -72,26 +68,21 @@ namespace application {
             renderer::Context  m_context; // 2
             renderer::Framebuffer m_sceneFB; // 3
             renderer::Renderer m_renderer; // 4
+            // Despues de m_renderer: crea consultas de GL en el ctor.
+            renderer::GpuProfiler m_profiler;
             resources::ResourceManager m_resources; // 5
             application::DebugUI m_debugUI;
             renderer::VertexArray m_fullscreenQuad; // 6
-            renderer::TonemapPass m_tonemapPass;
             renderer::BloomPass m_bloomPass;
             renderer::FxaaPass m_fxaaPass;
             renderer::PostChain m_postChain;
             core::Time m_time;
             // No participa del contrato de orden: no toca GL.
             platform::Input m_input;
-            std::optional<renderer::Environment> m_environment;
-            renderer::SkyboxPass m_skyboxPass;
-            renderer::ShadowPass m_shadowPass;
-            // Vacios si falto algun shader de DDGI: el frame sigue con IBL puro.
-            std::optional<renderer::DdgiPass>      m_ddgiPass;
-            std::optional<renderer::DdgiDebugPass> m_ddgiDebug;
-            // Vacio si falto algun shader de AO: el frame sigue sin oclusion.
-            std::optional<renderer::AoPass>        m_aoPass;
-            // Cache del ResourceManager: la esfera del volcado de probes.
-            const renderer::Model* m_ddgiProbeMesh = null;
+            // Los pases del frame, en orden. Va DESPUES de m_renderer y de
+            // m_resources: sus pases guardan referencias a los dos, y el orden
+            // de declaracion es el que decide quien muere primero.
+            renderer::ScenePipeline m_pipeline;
 
     };
 

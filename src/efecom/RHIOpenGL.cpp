@@ -152,6 +152,8 @@ namespace efecom {
         // lo escribe: un clear cambia las mascaras y el cache tiene que enterarse.
         PipelineState g_state;
         bool          g_stateValid = false;
+
+        FrameCounters g_counters;
     }
 
     void Clear(ClearMask mask) {
@@ -227,7 +229,19 @@ namespace efecom {
 
     void ResetPipelineStateCache() { g_stateValid = false; }
 
+    void ResetFrameCounters() { g_counters = FrameCounters{}; }
+
+    FrameCounters GetFrameCounters() { return g_counters; }
+
+    u32 GetDrawCallCount() { return g_counters.drawCalls; }
+
     void ApplyPipelineState(const PipelineState& s) {
+        ++g_counters.stateApplies;
+        // El operator== de PipelineState ya existe (RHI.h). Si el cache es
+        // valido y el estado pedido es identico al vigente, esta llamada no va a
+        // emitir una sola instruccion de GL: es puro overhead de CPU.
+        if (g_stateValid && s == g_state) ++g_counters.stateRedundant;
+
         const bool all = !g_stateValid;
 
         if (all || s.depthTest != g_state.depthTest) {
@@ -303,6 +317,18 @@ namespace efecom {
 
     void BindUniformBuffer(u32 buffer, u32 bindingIndex) {
         glBindBufferBase(GL_UNIFORM_BUFFER, (GLuint)bindingIndex, (GLuint)buffer);
+    }
+
+    u32 CreateStorageBuffer(usize size) {
+        u32 id = 0;
+        glCreateBuffers(1, &id);
+        EFCOM_ASSERT(id != 0, "CreateStorageBuffer: glCreateBuffers fallo (sin contexto GL)");
+        glNamedBufferData(id, (GLsizeiptr)size, nullptr, GL_DYNAMIC_DRAW);
+        return id;
+    }
+
+    void BindStorageBuffer(u32 buffer, u32 bindingIndex) {
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, (GLuint)bindingIndex, (GLuint)buffer);
     }
 
     // ── Vertex arrays ──────────────────────────────────────────────────────
@@ -480,6 +506,7 @@ namespace efecom {
 
     // ── Compute ────────────────────────────────────────────────────────────
     void DispatchCompute(u32 groupsX, u32 groupsY, u32 groupsZ) {
+        ++g_counters.dispatches;
         glDispatchCompute(groupsX, groupsY, groupsZ);
     }
 
@@ -571,13 +598,87 @@ namespace efecom {
         glNamedFramebufferRenderbuffer(framebuffer, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, renderbuffer);
     }
 
+    // ── Consultas de marca de tiempo ───────────────────────────────────────
+    bool TimestampQueriesSupported() {
+        // GL_TIMESTAMP es core desde 3.3, pero un driver puede reportar cero
+        // bits de contador, que significa "la implemento pero no la mide". Ese,
+        // y no la version de GL, es el chequeo correcto.
+        GLint bits = 0;
+        glGetQueryiv(GL_TIMESTAMP, GL_QUERY_COUNTER_BITS, &bits);
+        return bits > 0;
+    }
+
+    u32 CreateTimestampQuery() {
+        u32 id = 0;
+        glCreateQueries(GL_TIMESTAMP, 1, &id);   // GL 4.5 DSA, igual que el resto del backend
+        EFCOM_ASSERT(id != 0, "CreateTimestampQuery: glCreateQueries fallo (sin contexto GL)");
+        return id;
+    }
+
+    void DestroyTimestampQuery(u32 query) {
+        if (query == 0) return;
+        glDeleteQueries(1, &query);
+    }
+
+    void WriteTimestamp(u32 query) {
+        if (query == 0) return;
+        glQueryCounter(query, GL_TIMESTAMP);
+    }
+
+    bool TimestampAvailable(u32 query) {
+        if (query == 0) return false;
+        GLint listo = GL_FALSE;
+        glGetQueryObjectiv(query, GL_QUERY_RESULT_AVAILABLE, &listo);
+        return listo == GL_TRUE;
+    }
+
+    u64 TimestampNanos(u32 query) {
+        if (query == 0) return 0ull;
+        GLuint64 nanos = 0;
+        glGetQueryObjectui64v(query, GL_QUERY_RESULT, &nanos);
+        return static_cast<u64>(nanos);
+    }
+
     // ── Draw ───────────────────────────────────────────────────────────────
     void DrawIndexed(u32 indexCount) {
+        ++g_counters.drawCalls;
+        g_counters.triangles += indexCount / 3u;
         glDrawElements(GL_TRIANGLES, (GLsizei)indexCount, GL_UNSIGNED_INT, nullptr);
     }
 
     void DrawArrays(u32 vertexCount) {
+        ++g_counters.drawCalls;
+        g_counters.triangles += vertexCount / 3u;
         glDrawArrays(GL_TRIANGLES, 0, (GLsizei)vertexCount);
+    }
+
+    // UN draw call en el contador aunque sean N instancias: el contador existe
+    // para medir lo que la CPU emite, y eso es exactamente lo que el
+    // instanciado ahorra. Los triangulos si se cuentan todos -- ese numero mide
+    // el trabajo de la GPU, que no cambia.
+    void DrawIndexedInstanced(u32 indexCount, u32 instanceCount) {
+        if (instanceCount == 0u) return;
+        ++g_counters.drawCalls;
+        g_counters.triangles += (indexCount / 3u) * instanceCount;
+        glDrawElementsInstanced(GL_TRIANGLES, (GLsizei)indexCount, GL_UNSIGNED_INT,
+                                nullptr, (GLsizei)instanceCount);
+    }
+
+    void DrawArraysInstanced(u32 vertexCount, u32 instanceCount) {
+        if (instanceCount == 0u) return;
+        ++g_counters.drawCalls;
+        g_counters.triangles += (vertexCount / 3u) * instanceCount;
+        glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)vertexCount, (GLsizei)instanceCount);
+    }
+
+    void SetClipDistanceCount(u32 count) {
+        // El spec garantiza 8. Pasarse seria un GL_INVALID_ENUM por plano, que
+        // el callback de debug reportaria como ruido sin decir de donde sale.
+        const u32 tope = (count > 8u) ? 8u : count;
+        for (u32 i = 0u; i < 8u; ++i) {
+            if (i < tope) glEnable(GL_CLIP_DISTANCE0 + i);
+            else          glDisable(GL_CLIP_DISTANCE0 + i);
+        }
     }
 
 }

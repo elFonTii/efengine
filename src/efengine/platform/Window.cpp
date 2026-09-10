@@ -36,6 +36,7 @@ namespace platform {
 
         glfwMakeContextCurrent(m_handle);
         glfwSwapInterval(props.vsync ? 1 : 0);
+        m_vsync = props.vsync;
 
         i32 fbWidth = 0, fbHeight = 0 ;
         glfwGetFramebufferSize(m_handle, &fbWidth, &fbHeight);
@@ -71,7 +72,8 @@ namespace platform {
         : m_handle(std::exchange(other.m_handle, null))
         , m_width(std::exchange(other.m_width, 0))
         , m_height(std::exchange(other.m_height, 0))
-        , m_listener(std::exchange(other.m_listener, null)){
+        , m_listener(std::exchange(other.m_listener, null))
+        , m_vsync(other.m_vsync){
             if(m_handle != null) {
                 glfwSetWindowUserPointer(m_handle, this); // sino apuntaría al objeto original y no al copiado.
             }
@@ -92,6 +94,7 @@ namespace platform {
             m_width  = std::exchange(other.m_width, 0);
             m_height = std::exchange(other.m_height, 0);
             m_listener = std::exchange(other.m_listener, null);
+            m_vsync    = other.m_vsync;
 
             if(m_handle != null) {
                 glfwSetWindowUserPointer(m_handle, this); // sino apuntaría al objeto original y no al copiado.
@@ -103,6 +106,14 @@ namespace platform {
 
     void Window::PollEvents() {
         glfwPollEvents();
+    }
+
+    void Window::SetVSync(bool enabled) {
+        if (m_vsync == enabled) return;
+        // glfwSwapInterval opera sobre el contexto CURRENT, que es este: la
+        // ventana lo dejo activo en el ctor y nadie mas lo cambia.
+        glfwSwapInterval(enabled ? 1 : 0);
+        m_vsync = enabled;
     }
 
     void Window::SwapBuffers() {

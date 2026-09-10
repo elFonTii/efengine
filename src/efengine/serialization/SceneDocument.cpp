@@ -9,6 +9,7 @@ namespace serialization {
         strings.Clear();
         iblIntensity   = 1.0f;
         primarySunNode = kInvalidIndex;
+        activeCameraNode = kInvalidIndex;
         materials.clear();
         nodes.clear();
     }
@@ -24,6 +25,7 @@ namespace serialization {
         marker = BeginChunk(w, ChunkId::Settings);
         w.Field(doc.iblIntensity);
         w.Field(doc.primarySunNode);
+        w.Field(doc.activeCameraNode);
         EndChunk(w, marker);
 
         marker = BeginChunk(w, ChunkId::Materials);
@@ -80,6 +82,11 @@ namespace serialization {
                                     "descartado, iblIntensity = 1.0", legacyAmbient);
                     }
                     r.Field(out.primarySunNode);
+                    // v5 al final del chunk. Leyendo v4 no se toca y queda en
+                    // kInvalidIndex: la escena vieja no declara camara.
+                    if (r.Version() >= 5u) {
+                        r.Field(out.activeCameraNode);
+                    }
                     break;
                 case ChunkId::Materials:
                     SerializeVector(r, out.materials, MinEncodedMaterial(r.Version()));
@@ -120,6 +127,12 @@ namespace serialization {
         if (out.primarySunNode != kInvalidIndex
             && out.primarySunNode >= static_cast<u32>(out.nodes.size())) {
             EF_LOG_ERROR("SceneDocument: primarySunNode fuera de rango");
+            out.Clear();
+            return false;
+        }
+        if (out.activeCameraNode != kInvalidIndex
+            && out.activeCameraNode >= static_cast<u32>(out.nodes.size())) {
+            EF_LOG_ERROR("SceneDocument: activeCameraNode fuera de rango");
             out.Clear();
             return false;
         }

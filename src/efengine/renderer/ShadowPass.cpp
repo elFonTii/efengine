@@ -2,6 +2,7 @@
 
 #include <efecom/RHI.h>
 
+#include <efengine/renderer/FrameContext.h>
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/ShadowMath.h>
@@ -10,6 +11,7 @@
 #include <efengine/renderer/Mesh.h>
 #include <efengine/scene/SceneGraph.h>
 #include <efengine/core/Assert.h>
+#include <efengine/renderer/GpuProfiler.h>
 
 namespace efengine {
 namespace renderer {
@@ -22,7 +24,11 @@ namespace renderer {
         m_settings.resolution = resolution;
     }
 
-    const glm::mat4& ShadowPass::Render(const scene::SceneGraph& scene, const DirectionalLight& sun) {
+    void ShadowPass::Execute(FrameContext& ctx) {
+        // El scope del profiler lo abre ahora el ScenePipeline con Name().
+        const scene::SceneGraph& scene = ctx.scene;
+        const DirectionalLight&  sun   = ctx.scene.Sun();
+
         // El encuadre sale de la escena, no de sliders. Antes el centro era un
         // glm::vec3(0) fijo, asi que una sala que no estuviera en el origen se
         // salia sola de la caja ortografica.
@@ -55,7 +61,19 @@ namespace renderer {
             }
         }
 
-        return m_fit.matrix;
+        // Lo que antes armaba Application con el valor de retorno de Render.
+        ctx.lighting.shadow.map              = &m_shadowMap.DepthTexture();
+        ctx.lighting.shadow.lightSpaceMatrix = m_fit.matrix;
+        ctx.lighting.shadow.enabled          = true;
+        ctx.lighting.shadow.biasMin          = m_settings.biasMin;
+        ctx.lighting.shadow.biasMax          = m_settings.biasMax;
+
+        // El normal offset se dial en texels pero viaja en metros: el shader no
+        // sabe cuanto mide un texel del shadow map en el mundo, y eso depende
+        // del encuadre que este pase acaba de calcular.
+        const f32 texel = 2.0f * m_fit.orthoHalfSize
+                        / static_cast<f32>(m_shadowMap.resolution());
+        ctx.lighting.shadow.normalOffset = m_settings.normalOffsetTexels * texel;
     }
 
 }

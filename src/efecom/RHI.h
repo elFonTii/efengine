@@ -120,6 +120,29 @@ namespace efecom {
     // (el backend de ImGui lo hace en cada Render).
     void ResetPipelineStateCache();
 
+    // ── Contadores del frame ────────────────────────────────────────────────
+    // Viven en el RHI y no en el Renderer a proposito: aca abajo NO HAY FORMA
+    // de dibujar sin ser contado. Puesto un nivel mas arriba, cualquier camino
+    // de dibujo nuevo se escaparia de la cuenta por olvido.
+    struct FrameCounters {
+        u32 drawCalls  = 0u;
+        u32 triangles  = 0u;
+        u32 dispatches = 0u;
+
+        // Cuantas veces se PIDIO aplicar estado, y cuantas de esas no cambiaron
+        // absolutamente nada. La segunda es evidencia directa para el ciclo de
+        // densidad de draws: Renderer::Submit reaplica estado por malla.
+        u32 stateApplies   = 0u;
+        u32 stateRedundant = 0u;
+    };
+
+    void          ResetFrameCounters();
+    FrameCounters GetFrameCounters();
+
+    // Solo el contador de draws. Existe aparte porque el profiler lo lee dos
+    // veces por scope y no necesita copiar el struct entero.
+    u32 GetDrawCallCount();
+
     // ── Buffers (VBO / EBO) ────────────────────────────────────────────────
     // Buffer estático: crea y sube los datos de una vez. Sirve tanto para
     // vértices como para índices (el uso lo decide el vertex array).
@@ -138,6 +161,13 @@ namespace efecom {
     // BindUniformBufferRange(buffer, binding, offset, size) sobre un ring buffer
     // de un frame, con offsets dinamicos. Se agrega aca sin tocar ni un shader.
     void BindUniformBuffer(u32 buffer, u32 bindingIndex);
+
+    // Buffer de almacenamiento (SSBO). Igual que el de uniforms pero sin el
+    // techo de 64 KB y indexable por gl_InstanceID desde el shader: es lo que
+    // permite que UN draw instanciado dibuje N vistas distintas, cada una con su
+    // matriz. DestroyBuffer sirve para liberarlo.
+    u32  CreateStorageBuffer(usize size);
+    void BindStorageBuffer(u32 buffer, u32 bindingIndex);
 
     // ── Vertex arrays ──────────────────────────────────────────────────────
     // Modelo de binding points (estilo DSA): el buffer se engancha a un
@@ -244,9 +274,52 @@ namespace efecom {
     void DestroyRenderbuffer(u32 renderbuffer);
     void FramebufferDepthRenderbuffer(u32 framebuffer, u32 renderbuffer);
 
+    // ── Consultas de marca de tiempo ────────────────────────────────────────
+    // Una consulta guarda UNA marca, no un intervalo: para medir un pase hacen
+    // falta dos, una antes y otra despues, y el tiempo es la resta.
+    //
+    // Se eligieron marcas y no el cronometro por bloque (GL_TIME_ELAPSED)
+    // porque ese ultimo NO SE PUEDE ANIDAR: solo puede haber uno activo a la
+    // vez, y un scope adentro de otro tiraria error de GL dejando los numeros
+    // mal EN SILENCIO. Dos marcas independientes se anidan sin problema.
+    bool TimestampQueriesSupported();
+
+    u32  CreateTimestampQuery();
+    void DestroyTimestampQuery(u32 query);
+
+    // Encola "sellame el reloj cuando llegues aca" en el stream de comandos. No
+    // bloquea: cuando esta funcion vuelve, la GPU seguramente todavia no llego.
+    void WriteTimestamp(u32 query);
+
+    // Si el resultado ya esta. NO bloquea. Hay que preguntar esto ANTES de
+    // TimestampNanos, siempre.
+    bool TimestampAvailable(u32 query);
+
+    // El valor sellado, en nanosegundos. Llamarla sin que Available haya dado
+    // true DETIENE LA CPU hasta que la GPU termine: el medidor se convierte en
+    // el cuello de botella y mide su propia interferencia.
+    u64  TimestampNanos(u32 query);
+
     // Draw (triángulos; índices u32)
     void DrawIndexed(u32 indexCount);
     void DrawArrays(u32 vertexCount);
+
+    // Los mismos, repetidos instanceCount veces. El shader distingue cada copia
+    // por gl_InstanceID; los contadores del frame siguen sumando UN draw call,
+    // que es lo que la CPU paga, y las primitivas de todas las instancias.
+    void DrawIndexedInstanced(u32 indexCount, u32 instanceCount);
+    void DrawArraysInstanced(u32 vertexCount, u32 instanceCount);
+
+    // ── Planos de recorte definidos por el shader ──────────────────────────
+    // Habilita los primeros `count` gl_ClipDistance (maximo 8 por spec). Con
+    // esto un draw instanciado puede recortar cada instancia a su propio
+    // rectangulo del render target: es lo que hace posible dibujar N vistas en
+    // un atlas 2D con un solo draw, sin un viewport por vista.
+    //
+    // OJO: mientras esten habilitados, TODO vertex shader que dibuje tiene que
+    // escribir esas distancias. Un shader que no las escribe recorta contra
+    // basura -- el resultado es indefinido, no "sin recortar".
+    void SetClipDistanceCount(u32 count);   // 0 = deshabilitar todos
 
     // Operadores de bits para las máscaras
     inline constexpr ClearMask operator|(ClearMask a, ClearMask b) {

@@ -27,6 +27,7 @@ namespace serialization {
             const SceneRegistry&              reg;
             SceneDocument&                    doc;
             u32                               sunFileIndex = kInvalidIndex;
+            u32                               cameraFileIndex = kInvalidIndex;
         };
 
         void extractMesh(ExtractCtx& ctx, const scene::MeshAttachment& att, NodeRecord& rec) {
@@ -108,6 +109,23 @@ namespace serialization {
                                        ? LightKindId::Directional : LightKindId::Point;
                 rec.light->color = node.light->color;
             }
+            if (node.camera) {
+                rec.camera.emplace();
+                rec.camera->fovDeg    = node.camera->fovDeg;
+                rec.camera->nearPlane = node.camera->nearPlane;
+                rec.camera->farPlane  = node.camera->farPlane;
+                rec.camera->exposure  = node.camera->exposure;
+            }
+
+            if (node.collider) {
+                rec.collider.emplace();
+                rec.collider->kind        = static_cast<u32>(node.collider->kind);
+                rec.collider->params      = node.collider->params;
+                rec.collider->localOffset = node.collider->localOffset;
+                rec.collider->motion      = static_cast<u32>(node.collider->motion);
+                rec.collider->isTrigger   = node.collider->isTrigger ? 1u : 0u;
+            }
+
             extractBehaviors(ctx, node, rec);
 
             // Se empuja ANTES de recursar: eso es lo que garantiza el pre-orden.
@@ -115,6 +133,7 @@ namespace serialization {
             ctx.doc.nodes.push_back(std::move(rec));
 
             if (handle == ctx.graph.PrimarySun()) ctx.sunFileIndex = myIndex;
+            if (handle == ctx.graph.ActiveCamera()) ctx.cameraFileIndex = myIndex;
 
             for (scene::NodeHandle child : node.children) {
                 if (ctx.graph.IsValid(child)) extractNode(ctx, child, myIndex);
@@ -203,7 +222,8 @@ namespace serialization {
             return false;
         }
         extractNode(ctx, graph.Root(), kInvalidIndex);
-        out.primarySunNode = ctx.sunFileIndex;
+        out.primarySunNode   = ctx.sunFileIndex;
+        out.activeCameraNode = ctx.cameraFileIndex;
         return true;
     }
 
@@ -299,6 +319,32 @@ namespace serialization {
                 outGraph.AttachLight(handle, scene::LightAttachment{ kind, rec.light->color });
             }
 
+            if (rec.camera) {
+                scene::CameraAttachment cam;
+                cam.fovDeg    = rec.camera->fovDeg;
+                cam.nearPlane = rec.camera->nearPlane;
+                cam.farPlane  = rec.camera->farPlane;
+                cam.exposure  = rec.camera->exposure;
+                outGraph.AttachCamera(handle, cam);
+            }
+
+            if (rec.collider) {
+                scene::ColliderAttachment col;
+                // Un kind o un motion fuera de rango vienen de un archivo
+                // corrupto o de una version futura: se cae al default en vez de
+                // castear basura a un enum.
+                col.kind = (rec.collider->kind <= static_cast<u32>(scene::ShapeKind::Mesh))
+                               ? static_cast<scene::ShapeKind>(rec.collider->kind)
+                               : scene::ShapeKind::Box;
+                col.params      = rec.collider->params;
+                col.localOffset = rec.collider->localOffset;
+                col.motion = (rec.collider->motion <= static_cast<u32>(scene::MotionType::Dynamic))
+                                 ? static_cast<scene::MotionType>(rec.collider->motion)
+                                 : scene::MotionType::Static;
+                col.isTrigger = (rec.collider->isTrigger != 0u);
+                outGraph.AttachCollider(handle, col);
+            }
+
             for (const BehaviorRecord& br : rec.behaviors) {
                 const std::string typeName(doc.strings.View(br.typeNameStr));
                 const BehaviorRegistry::Entry* entry = reg.behaviors.FindByName(typeName);
@@ -323,6 +369,9 @@ namespace serialization {
 
         if (doc.primarySunNode != kInvalidIndex && doc.primarySunNode < handles.size()) {
             outGraph.SetPrimarySun(handles[doc.primarySunNode]);
+        }
+        if (doc.activeCameraNode != kInvalidIndex && doc.activeCameraNode < handles.size()) {
+            outGraph.SetActiveCamera(handles[doc.activeCameraNode]);
         }
         outGraph.iblIntensity = doc.iblIntensity;
         return true;

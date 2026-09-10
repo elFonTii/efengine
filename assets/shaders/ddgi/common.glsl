@@ -28,7 +28,30 @@ layout(binding = 13) uniform sampler2D uDdgiDistance;
 const int   kDdgiBorder = 1;
 const float kDdgiPI     = 3.14159265359;
 
+// Texels de UNA cara del target de captura. Tiene que coincidir con
+// kProbeFaceSize^2 de DdgiVolume.h; hay un static_assert en DdgiPass.cpp que lo
+// ata. Lo usan los dos blends para dimensionar el cache de shared memory con el
+// que recorren la captura cara por cara.
+//
+// Por cara y no las seis juntas: seis caras serian 1536 entradas, y con los dos
+// arrays que el blend necesita eso pasa de los 32 KB que el spec de GL garantiza
+// por workgroup. Una cara son 256 entradas, 8 KB, y entra en cualquier
+// implementacion.
+const int kDdgiFaceTexels = 256;
+
 bool DdgiEnabled() { return uDdgiParams1.x > 0.5; }
+
+// -- Ablation test (params2.w) -----------------------------------------------
+// Instrumento de MEDICION, no un modo de imagen: con esto encendido, pbr.frag
+// devuelve una irradiancia constante en vez de samplear el volumen y deja el
+// resto del shading intacto. Aisla el coste de los ~16 gathers del sampleo
+// dentro del pase Forward, que es la unica forma de saber si el Forward esta
+// parado en latencia de memoria o en otra cosa.
+//
+// Un solo float codifica las dos cosas: negativo = apagado, >= 0 = el valor.
+// Ver el comentario de MakeDdgiBlock en ShaderBlocks.cpp.
+bool  DdgiAblate()            { return uDdgiParams2.w >= 0.0; }
+float DdgiAblateIrradiance()  { return uDdgiParams2.w; }
 
 // -- Modo de debug de vista --------------------------------------------------
 // Viaja en params1.z. Lo consume pbr.frag para escribir UN termino del shading

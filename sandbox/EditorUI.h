@@ -6,6 +6,7 @@
 #include <efengine/core/Types.h>
 #include <efengine/renderer/MaterialDef.h>
 #include <efengine/scene/NodeHandle.h>
+#include <efengine/scene/Node.h>          // scene::CameraAttachment
 
 #include <string>
 
@@ -40,6 +41,17 @@ namespace sandbox {
         bool animateSun   = false;
         u32  spawnCounter = 0;
 
+        // Vista previa: se renderiza desde la camara activa de la escena en vez de
+        // la freecam. Es un cambio de VISTA, no un modo de juego: no toca los
+        // behaviors, no captura el cursor y no cambia el ciclo del frame.
+        bool previewCamera = false;
+
+        // La camara del editor tambien es un CameraAttachment. Tenerla como dato y
+        // no como estado escondido en scene::Camera es lo que evita tener que
+        // "restaurar" nada al apagar la vista previa: cada frame, uno de los dos
+        // caminos llena la camara entera.
+        efengine::scene::CameraAttachment editorCam;
+
         // Ruta del .efe abierto. Vacia = la escena no tiene archivo: es la sala
         // de Cornell recien armada, o un arranque en el que el Load fallo. Sin
         // ruta, "Guardar" no tiene destino.
@@ -62,6 +74,7 @@ namespace sandbox {
         bool showMaterials = true;
         bool showRender    = true;
         bool showStats     = true;
+        bool showPerf      = false;
 
         // Pedido de reconstruir el layout de paneles desde cero. Lo prende el menu
         // "Ventanas" y lo apaga el editor en el mismo frame en que lo atiende.

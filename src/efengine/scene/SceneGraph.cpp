@@ -148,6 +148,21 @@ namespace scene {
         m_slots[handle.index].node.light = light;
     }
 
+    void SceneGraph::AttachCamera(NodeHandle handle, CameraAttachment camera) {
+        EF_ASSERT(IsValid(handle), "SceneGraph::AttachCamera: handle invalido");
+        m_slots[handle.index].node.camera = camera;
+    }
+
+    void SceneGraph::DetachCamera(NodeHandle handle) {
+        if (!IsValid(handle)) return;
+        m_slots[handle.index].node.camera.reset();
+    }
+
+    void SceneGraph::AttachCollider(NodeHandle handle, ColliderAttachment collider) {
+        EF_ASSERT(IsValid(handle), "SceneGraph::AttachCollider: handle invalido");
+        m_slots[handle.index].node.collider = collider;
+    }
+
     Behavior* SceneGraph::AttachBehavior(NodeHandle handle, std::unique_ptr<Behavior> behavior) {
         EF_ASSERT(IsValid(handle), "SceneGraph::AttachBehavior: handle invalido");
         Node& node = m_slots[handle.index].node;
@@ -168,9 +183,31 @@ namespace scene {
         }
     }
 
+    void SceneGraph::FixedUpdate(f32 fixedDt) {
+        for (Slot& slot : m_slots) {
+            if (!slot.alive) continue;
+            Node& node = slot.node;
+            if (node.behaviors.empty()) continue;
+
+            FixedUpdateContext ctx{ *this, node.self, node, fixedDt };
+            for (std::unique_ptr<Behavior>& b : node.behaviors) {
+                if (b && b->enabled) b->OnFixedUpdate(ctx);
+            }
+        }
+    }
+
     void SceneGraph::SetPrimarySun(NodeHandle handle) {
         EF_ASSERT(IsValid(handle), "SceneGraph::SetPrimarySun: handle invalido");
         m_primarySun = handle;
+    }
+
+    glm::mat4 SceneGraph::WorldMatrixOf(NodeHandle handle) const {
+        return computeWorld(handle);
+    }
+
+    void SceneGraph::SetActiveCamera(NodeHandle handle) {
+        EF_ASSERT(IsValid(handle), "SceneGraph::SetActiveCamera: handle invalido");
+        m_activeCamera = handle;
     }
 
     void SceneGraph::UpdateWorldTransforms() {
@@ -252,7 +289,8 @@ namespace scene {
             m_freeList.push_back(static_cast<u32>(i - 1u));
         }
 
-        m_primarySun = NodeHandle{};
+        m_primarySun   = NodeHandle{};
+        m_activeCamera = NodeHandle{};
         m_renderables.clear();
         m_pointLights.clear();
         m_sun = renderer::DirectionalLight{ glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };

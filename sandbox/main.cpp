@@ -12,6 +12,7 @@
 #include <efengine/serialization/BinaryReader.h>
 #include <efengine/scene/Camera.h>
 #include <efengine/scene/CameraController.h>
+#include <efengine/scene/NodeCamera.h>
 #include <efengine/scene/SceneGraph.h>
 #include <efengine/scene/Behavior.h>
 #include <efengine/math/Transform.h>
@@ -203,9 +204,37 @@ int main() {
         // Despues de DrawEditor para que use la seleccion de ESTE frame.
         if (in.WasPressed(platform::Key::F)) sandbox::FocusSelection(editor);
 
-        controller.Update(in, app.DeltaTime());
-        app.GetWindow().SetCursorCaptured(controller.WantsCursorCaptured());
-        cam.SetAspect(app.GetWindow().GetAspectRatio());
+        // Una sola scene::Camera, llenada por exactamente uno de los dos
+        // caminos. Con una sola, el gizmo del sol y FocusSelection miran siempre
+        // lo mismo que se esta renderizando.
+        const f32 aspect = app.GetWindow().GetAspectRatio();
+        bool viendoPorLaEscena = false;
+
+        if (editorState.previewCamera) {
+            viendoPorLaEscena = scene::ApplyNodeCamera(cam, scene, scene.ActiveCamera(), aspect);
+            // La freecam no se actualiza mientras dura la vista previa: su pose
+            // no se pierde, simplemente no se mueve. Y el cursor no se captura:
+            // esto no es un modo de juego.
+            app.GetWindow().SetCursorCaptured(false);
+        }
+
+        if (!viendoPorLaEscena) {
+            controller.Update(in, app.DeltaTime());
+            app.GetWindow().SetCursorCaptured(controller.WantsCursorCaptured());
+            cam.SetFov(editorState.editorCam.fovDeg);
+            cam.SetClipPlanes(editorState.editorCam.nearPlane, editorState.editorCam.farPlane);
+            cam.SetExposure(editorState.editorCam.exposure);
+            cam.SetAspect(aspect);
+        }
+
+        // Pump de paso fijo. Corre ANTES de Update para que los behaviors
+        // variables vean la simulacion de este frame y no la del anterior (mismo
+        // orden que Unity). A partir del ciclo 3 aca adentro tambien va el step
+        // de fisica y el drenado de triggers.
+        core::Time& time = app.GetTime();
+        for (i32 i = 0; i < time.FixedSteps(); ++i) {
+            scene.FixedUpdate(time.FixedDelta());
+        }
 
         scene.Update(app.DeltaTime());
 
