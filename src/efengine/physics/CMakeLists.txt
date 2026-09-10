@@ -9,6 +9,7 @@ add_library(efengine_physics OBJECT)
 target_sources(efengine_physics PRIVATE
     ShapeDesc.cpp
     JoltRuntime.cpp
+    PhysicsWorld.cpp
 )
 
 target_include_directories(efengine_physics PUBLIC ${CMAKE_SOURCE_DIR}/src)
