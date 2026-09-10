@@ -79,6 +79,15 @@ FetchContent_Declare(
     GIT_TAG v1.91.5-docking
 )
 
+# JoltPhysics - Motor de fisica. Su CMakeLists NO esta en la raiz del repo sino
+# en Build/, de ahi el SOURCE_SUBDIR: mismo caso que GLAD.
+FetchContent_Declare(
+    JoltPhysics
+    GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
+    GIT_TAG v5.6.0
+    SOURCE_SUBDIR Build
+)
+
 # Opciones de GLFW: no compilar sus docs/tests/examples.
 # GLFW crea un target 'docs' propio si encuentra Doxygen, que colisiona con el
 # nuestro. Apagarlos evita la colisión y acelera el build.
@@ -140,6 +149,35 @@ target_include_directories(imgui PUBLIC
     ${imgui_SOURCE_DIR}/misc/cpp
 )
 target_link_libraries(imgui PUBLIC glfw)
+
+# Opciones de Jolt. Deben fijarse ANTES de MakeAvailable(JoltPhysics).
+#
+# Las dos primeras no son cosmeticas: rompen el build del proyecto ENTERO, no
+# solo el de Jolt.
+#   - OVERRIDE_CXX_FLAGS viene en ON y hace que Jolt reescriba CMAKE_CXX_FLAGS
+#     global, o sea le pisa las flags a todos los demas targets.
+#   - USE_STATIC_MSVC_RUNTIME_LIBRARY viene en ON (/MT) y el resto del proyecto
+#     es /MD: sin apagarlo, LNK2038 por runtime mismatch.
+set(OVERRIDE_CXX_FLAGS                  OFF CACHE BOOL "" FORCE)
+set(USE_STATIC_MSVC_RUNTIME_LIBRARY     OFF CACHE BOOL "" FORCE)
+
+# Excepciones y RTTI ya vienen apagados por default en Jolt y coinciden con la
+# regla del README. Se fijan explicitos para que un cambio de default de Jolt no
+# rompa la regla en silencio.
+set(CPP_EXCEPTIONS_ENABLED              OFF CACHE BOOL "" FORCE)
+set(CPP_RTTI_ENABLED                    OFF CACHE BOOL "" FORCE)
+
+# Build minimo: su debug renderer no se usa (el nuestro es ImDrawList, ciclo 3b)
+# y su profiler tampoco (ya tenemos GpuProfiler).
+set(DEBUG_RENDERER_IN_DEBUG_AND_RELEASE OFF CACHE BOOL "" FORCE)
+set(PROFILER_IN_DEBUG_AND_RELEASE       OFF CACHE BOOL "" FORCE)
+set(ENABLE_ALL_WARNINGS                 OFF CACHE BOOL "" FORCE)
+set(TARGET_UNIT_TESTS                   OFF CACHE BOOL "" FORCE)
+set(TARGET_HELLO_WORLD                  OFF CACHE BOOL "" FORCE)
+set(TARGET_PERFORMANCE_TEST             OFF CACHE BOOL "" FORCE)
+set(TARGET_SAMPLES                      OFF CACHE BOOL "" FORCE)
+set(TARGET_VIEWER                       OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(JoltPhysics)
 
 # GLAD 2.x no crea un target "glad" por sí solo: hay que generarlo con
 # glad_add_library().
