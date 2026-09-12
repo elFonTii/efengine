@@ -16,6 +16,7 @@
 #include <efengine/scene/SceneGraph.h>
 #include <efengine/scene/Behavior.h>
 #include <efengine/math/Transform.h>
+#include <efengine/gameplay/GameWorld.h>
 #include <efengine/core/Types.h>
 #include <efengine/core/Log.h>
 
@@ -163,6 +164,11 @@ int main() {
     resources::SceneAssets assets; // Dueño de los materiales y de las mallas generadas de la escena.
     scene::SceneGraph scene;
 
+    // Si Jolt no arranca, el sandbox sigue andando sin fisica: lo unico que se
+    // pierde es el boton Simular.
+    std::unique_ptr<gameplay::GameWorld> game = gameplay::GameWorld::Create(scene);
+    if (game == null) EF_LOG_ERROR("El sandbox arranca sin fisica");
+
     scene::Camera cam;
     cam.SetAspect(app.GetWindow().GetAspectRatio());
     scene::CameraController controller(&cam);
@@ -171,7 +177,7 @@ int main() {
 
     // El estado de la UI vive aca (el loop es el dueno); el editor solo lo usa.
     sandbox::EditorState editorState;
-    sandbox::EditorContext editor { app, scene, cam, controller, assets, rm, registry, editorState };
+    sandbox::EditorContext editor { app, scene, cam, controller, assets, rm, registry, editorState, game.get() };
     // El .efe que se abre solo. El menu "Escena" carga cualquier otro de
     // assets/scenes, y la sala de Cornell sigue estando ahi.
     constexpr const char* kBootScene = "assets/scenes/sandbox.efe";
@@ -232,11 +238,12 @@ int main() {
         // orden que Unity). A partir del ciclo 3 aca adentro tambien va el step
         // de fisica y el drenado de triggers.
         core::Time& time = app.GetTime();
-        for (i32 i = 0; i < time.FixedSteps(); ++i) {
-            scene.FixedUpdate(time.FixedDelta());
+        if (game != null) {
+            game->Tick(time);
+        } else {
+            for (i32 i = 0; i < time.FixedSteps(); ++i) scene.FixedUpdate(time.FixedDelta());
+            scene.Update(app.DeltaTime());
         }
-
-        scene.Update(app.DeltaTime());
 
         app.RenderScene(scene, cam);
         app.EndFrame();

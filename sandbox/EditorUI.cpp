@@ -7,6 +7,7 @@
 #include <efengine/application/Application.h>
 #include <efengine/core/Log.h>
 #include <efengine/core/Time.h>
+#include <efengine/gameplay/GameWorld.h>
 #include <efengine/renderer/BloomPass.h>
 #include <efengine/renderer/FxaaPass.h>
 #include <efengine/renderer/GpuProfiler.h>
@@ -278,6 +279,15 @@ namespace {
                 setBehaviorsEnabled(ctx.scene, st.sun, st.animateSun);
             }
             ImGui::Separator();
+            // Mismo patron que "Animate": el item lleva el bool y el if corre en
+            // el frame en que cambia.
+            bool simulando = ctx.game != null && ctx.game->Simulating();
+            if (ImGui::MenuItem("Simular", nullptr, &simulando, ctx.game != null)) {
+                if (simulando) ctx.game->BeginSimulation();
+                else           ctx.game->EndSimulation();
+            }
+            if (ctx.game == null) ImGui::TextDisabled("  sin fisica: Jolt no arranco");
+            ImGui::Separator();
             if (ImGui::MenuItem("Salir", "Esc")) ctx.app.Close();
             ImGui::EndMenu();
         }
@@ -291,6 +301,7 @@ namespace {
             ImGui::MenuItem("Render",           nullptr, &st.showRender);
             ImGui::MenuItem("Overlay de debug", nullptr, &st.showStats);
             ImGui::MenuItem("Rendimiento",      nullptr, &st.showPerf);
+            ImGui::MenuItem("Colliders",        nullptr, &st.showColliders);
             ImGui::Separator();
             if (ImGui::MenuItem("Restablecer layout")) {
                 st.resetLayout = true;
