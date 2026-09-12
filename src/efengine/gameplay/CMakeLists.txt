@@ -10,6 +10,7 @@ add_library(efengine_gameplay OBJECT)
 
 target_sources(efengine_gameplay PRIVATE
     CollisionMesh.cpp
+    GameWorld.cpp
     PhysicsBinding.cpp
 )
 

@@ -44,6 +44,7 @@ add_executable(efengine_tests
     physics/PhysicsWorld.test.cpp
     gameplay/CollisionMesh.test.cpp
     gameplay/PhysicsBinding.test.cpp
+    gameplay/GameWorld.test.cpp
     serialization/BinaryIO.test.cpp
     serialization/StringTable.test.cpp
     serialization/EfeFile.test.cpp
