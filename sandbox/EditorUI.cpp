@@ -3,6 +3,7 @@
 #include "AuthoringUI.h"
 #include "TestScene.h"
 #include "SunGizmo.h"
+#include "ColliderGizmo.h"
 
 #include <efengine/application/Application.h>
 #include <efengine/core/Log.h>
@@ -914,6 +915,7 @@ void DrawEditor(EditorContext& ctx) {
     if (ctx.state.showPerf)      drawPerfPanel(ctx);
 
     DrawSunGizmo(ctx, dockId);
+    DrawColliderGizmos(ctx, dockId);
 }
 
 } // namespace sandbox

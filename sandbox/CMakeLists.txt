@@ -9,6 +9,7 @@ add_executable(sandbox
     AuthoringUI.cpp
     TestScene.cpp
     SunGizmo.cpp
+    ColliderGizmo.cpp
     panels/Panels.cpp
     panels/ShadowPanel.cpp
     panels/DdgiPanel.cpp
