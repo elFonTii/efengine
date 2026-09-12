@@ -10,6 +10,7 @@ add_library(efengine_gameplay OBJECT)
 
 target_sources(efengine_gameplay PRIVATE
     CollisionMesh.cpp
+    PhysicsBinding.cpp
 )
 
 target_include_directories(efengine_gameplay PUBLIC ${CMAKE_SOURCE_DIR}/src)
