@@ -6,6 +6,9 @@
 #include <vector>
 
 namespace efengine {
+
+namespace renderer { class Model; }
+
 namespace gameplay {
 
     // Geometria de colision en el formato que pide physics::ShapeDesc: las
@@ -21,6 +24,11 @@ namespace gameplay {
     void AppendSubmesh(CollisionMesh& out,
                        const std::vector<glm::vec3>& positions,
                        const std::vector<u32>& indices);
+
+    // Camina las submallas del modelo y las concatena. No usa GL, pero construir
+    // un Model si, asi que esta mitad no tiene test propio: lo que se testea es
+    // AppendSubmesh.
+    CollisionMesh BuildCollisionMesh(const renderer::Model& model);
 
 }
 }

@@ -1,5 +1,8 @@
 #include "efengine/gameplay/CollisionMesh.h"
 
+#include "efengine/renderer/Mesh.h"
+#include "efengine/renderer/Model.h"
+
 namespace efengine {
 namespace gameplay {
 
@@ -18,6 +21,14 @@ namespace gameplay {
 
         out.indices.reserve(out.indices.size() + indices.size());
         for (const u32 i : indices) out.indices.push_back(base + i);
+    }
+
+    CollisionMesh BuildCollisionMesh(const renderer::Model& model) {
+        CollisionMesh out;
+        for (const renderer::Mesh& mesh : model.meshes()) {
+            AppendSubmesh(out, mesh.positions(), mesh.indices());
+        }
+        return out;
     }
 
 }
