@@ -485,6 +485,68 @@ namespace {
             ctx.scene.AttachCamera(st.selected, scene::CameraAttachment{});
         }
 
+        ImGui::SeparatorText("Collider");
+        if (node.collider) {
+            scene::ColliderAttachment& col = *node.collider;
+
+            const char* kFormas[] = { "Box", "Sphere", "Capsule", "Mesh" };
+            int forma = static_cast<int>(col.kind);
+            if (ImGui::Combo("Forma", &forma, kFormas, IM_ARRAYSIZE(kFormas))) {
+                col.kind = static_cast<scene::ShapeKind>(forma);
+            }
+
+            // Cada forma lee params distinto: mostrar los tres siempre seria
+            // pedirle al usuario que adivine cual importa.
+            switch (col.kind) {
+                case scene::ShapeKind::Box:
+                    ImGui::DragFloat3("Semiejes", glm::value_ptr(col.params), 0.05f, 0.001f, 1000.0f);
+                    break;
+                case scene::ShapeKind::Sphere:
+                    ImGui::DragFloat("Radio", &col.params.x, 0.05f, 0.001f, 1000.0f);
+                    break;
+                case scene::ShapeKind::Capsule:
+                    ImGui::DragFloat("Radio",      &col.params.x, 0.05f, 0.001f, 1000.0f);
+                    ImGui::DragFloat("Semialtura", &col.params.y, 0.05f, 0.001f, 1000.0f);
+                    break;
+                case scene::ShapeKind::Mesh:
+                    ImGui::TextDisabled("la forma sale de la malla del nodo");
+                    break;
+            }
+
+            ImGui::DragFloat3("Offset pos", glm::value_ptr(col.localOffset.position), 0.05f);
+            ImGui::DragFloat3("Offset rot", glm::value_ptr(col.localOffset.rotation), 0.5f);
+
+            const char* kMovimientos[] = { "Static", "Kinematic", "Dynamic" };
+            int mov = static_cast<int>(col.motion);
+            if (ImGui::Combo("Movimiento", &mov, kMovimientos, IM_ARRAYSIZE(kMovimientos))) {
+                col.motion = static_cast<scene::MotionType>(mov);
+            }
+
+            // El campo ya viaja en el .efe, pero el binding todavia no lo
+            // traduce: un checkbox que no hace nada es peor que uno apagado.
+            ImGui::BeginDisabled(true);
+            bool trigger = col.isTrigger;
+            ImGui::Checkbox("Es trigger", &trigger);
+            ImGui::EndDisabled();
+            ImGui::TextDisabled("los triggers llegan en el ciclo 6");
+
+            if (col.kind == scene::ShapeKind::Mesh && !node.mesh) {
+                ImGui::TextDisabled("sin malla en el nodo: no va a tener cuerpo");
+            }
+            if (col.kind == scene::ShapeKind::Mesh && col.motion != scene::MotionType::Static) {
+                ImGui::TextDisabled("una malla no puede moverse: se crea estatica");
+            }
+            if (ctx.game != null && ctx.game->Simulating()) {
+                ImGui::TextDisabled("los cambios se aplican al reiniciar la simulacion");
+            }
+
+            if (ImGui::Button("Quitar collider", ImVec2(-kAnchoEtiqueta, 0.0f))) {
+                ctx.scene.DetachCollider(st.selected);
+            }
+        } else if (ImGui::Button("Agregar collider", ImVec2(-kAnchoEtiqueta, 0.0f))) {
+            ctx.scene.AttachCollider(st.selected, scene::ColliderAttachment{});
+        }
+
         if (!node.behaviors.empty()) {
             ImGui::SeparatorText("Behaviors");
             for (usize i = 0; i < node.behaviors.size(); ++i) {
