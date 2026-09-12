@@ -174,3 +174,160 @@ TEST_CASE("PhysicsBinding: una forma degenerada no entra al mapeo") {
     CHECK(b.binding->BoundCount() == 0u);
     CHECK(b.binding->BodyOf(n).IsNull());
 }
+
+namespace {
+    constexpr f32 kPasoFijo = 1.0f / 60.0f;
+
+    // Jolt hunde los cuerpos a proposito (penetration slop, 0.02 m por default):
+    // una esfera de radio r reposa en r - 0.02, no en r exacto. Sin este margen
+    // el test parece flaky y termina en un +-0.5 que ya no prueba nada.
+    constexpr f32 kTolerancia = 0.03f;
+
+    void correr(Banco& b, i32 pasos) {
+        for (i32 i = 0; i < pasos; ++i) {
+            b.binding->PushKinematic();
+            b.world->Step(kPasoFijo);
+            b.binding->WriteBack();
+        }
+    }
+
+    // Piso de 20x1x20 con la cara de arriba en y = 0.
+    scene::NodeHandle piso(scene::SceneGraph& g) {
+        return conCollider(g, g.Root(), "piso", glm::vec3(0.0f, -0.5f, 0.0f),
+                           scene::ShapeKind::Box, glm::vec3(10.0f, 0.5f, 10.0f),
+                           scene::MotionType::Static);
+    }
+}
+
+TEST_CASE("PhysicsBinding: un dinamico cae y el local del nodo baja") {
+    Banco b;
+    piso(b.scene);
+    const scene::NodeHandle esfera = conCollider(b.scene, b.scene.Root(), "esfera",
+                                                 glm::vec3(0.0f, 5.0f, 0.0f),
+                                                 scene::ShapeKind::Sphere, glm::vec3(0.5f, 0.0f, 0.0f),
+                                                 scene::MotionType::Dynamic);
+    b.binding->Build();
+
+    correr(b, 180);
+    b.binding->Interpolate(1.0f);
+
+    CHECK(std::fabs(b.scene.Get(esfera).local.position.y - 0.5f) < kTolerancia);
+}
+
+TEST_CASE("PhysicsBinding: un estatico no se mueve") {
+    Banco b;
+    const scene::NodeHandle p = piso(b.scene);
+    b.binding->Build();
+
+    correr(b, 60);
+    b.binding->Interpolate(1.0f);
+
+    CHECK(b.scene.Get(p).local.position.y == doctest::Approx(-0.5f));
+}
+
+TEST_CASE("PhysicsBinding: un kinematico sigue al nodo") {
+    Banco b;
+    const scene::NodeHandle plataforma = conCollider(b.scene, b.scene.Root(), "plataforma",
+                                                     glm::vec3(0.0f), scene::ShapeKind::Box,
+                                                     glm::vec3(1.0f), scene::MotionType::Kinematic);
+    b.binding->Build();
+
+    math::Transform t = b.scene.Get(plataforma).local;
+    t.position = glm::vec3(0.0f, 4.0f, 0.0f);
+    b.scene.SetLocalTransform(plataforma, t);
+
+    correr(b, 1);
+
+    // SetBodyPose teletransporta, y un kinematico con velocidad cero no se mueve
+    // en el Step: la posicion queda exacta, no aproximada.
+    CHECK(poseDe(*b.world, b.binding->BodyOf(plataforma)).y == doctest::Approx(4.0f));
+}
+
+TEST_CASE("PhysicsBinding: Interpolate(0) da la pose vieja y Interpolate(1) la nueva") {
+    Banco b;
+    piso(b.scene);
+    const scene::NodeHandle esfera = conCollider(b.scene, b.scene.Root(), "esfera",
+                                                 glm::vec3(0.0f, 5.0f, 0.0f),
+                                                 scene::ShapeKind::Sphere, glm::vec3(0.5f, 0.0f, 0.0f),
+                                                 scene::MotionType::Dynamic);
+    b.binding->Build();
+    correr(b, 1);   // prev = 5.0, curr = un poquito mas abajo
+
+    b.binding->Interpolate(0.0f);
+    const f32 enPrev = b.scene.Get(esfera).local.position.y;
+
+    b.binding->Interpolate(1.0f);
+    const f32 enCurr = b.scene.Get(esfera).local.position.y;
+
+    b.binding->Interpolate(0.5f);
+    const f32 enMedio = b.scene.Get(esfera).local.position.y;
+
+    CHECK(enPrev == doctest::Approx(5.0f));
+    CHECK(enCurr < enPrev);
+    CHECK(enMedio < enPrev);
+    CHECK(enMedio > enCurr);
+}
+
+TEST_CASE("PhysicsBinding: el write-back de un hijo devuelve un local relativo al padre") {
+    Banco b;
+    piso(b.scene);
+
+    const scene::NodeHandle padre = b.scene.CreateChild(b.scene.Root(), "padre");
+    math::Transform tp;
+    tp.position = glm::vec3(0.0f, 10.0f, 0.0f);
+    b.scene.SetLocalTransform(padre, tp);
+
+    // Mundo: y = 10 + 5 = 15. Al apoyarse en y = 0.5 de MUNDO, su local tiene que
+    // quedar en 0.5 - 10 = -9.5.
+    const scene::NodeHandle esfera = conCollider(b.scene, padre, "esfera", glm::vec3(0.0f, 5.0f, 0.0f),
+                                                 scene::ShapeKind::Sphere, glm::vec3(0.5f, 0.0f, 0.0f),
+                                                 scene::MotionType::Dynamic);
+    b.binding->Build();
+
+    correr(b, 240);
+    b.binding->Interpolate(1.0f);
+
+    CHECK(std::fabs(b.scene.Get(esfera).local.position.y - (-9.5f)) < kTolerancia);
+}
+
+TEST_CASE("PhysicsBinding: la escala del padre la absorbe la forma") {
+    Banco b;
+    piso(b.scene);
+
+    const scene::NodeHandle padre = b.scene.CreateChild(b.scene.Root(), "padre");
+    math::Transform tp;
+    tp.position = glm::vec3(0.0f, 0.0f, 0.0f);
+    tp.scale    = glm::vec3(2.0f);
+    b.scene.SetLocalTransform(padre, tp);
+
+    // Radio 0.5 escalado x2 = 1.0: reposa en y = 1.0 de MUNDO, o sea local 0.5.
+    const scene::NodeHandle esfera = conCollider(b.scene, padre, "esfera", glm::vec3(0.0f, 3.0f, 0.0f),
+                                                 scene::ShapeKind::Sphere, glm::vec3(0.5f, 0.0f, 0.0f),
+                                                 scene::MotionType::Dynamic);
+    b.binding->Build();
+
+    correr(b, 240);
+    b.binding->Interpolate(1.0f);
+
+    const f32 mundoY = b.scene.Get(esfera).local.position.y * 2.0f;
+    CHECK(std::fabs(mundoY - 1.0f) < kTolerancia);
+}
+
+TEST_CASE("PhysicsBinding: un nodo destruido en pleno vuelo se saca del mapeo") {
+    Banco b;
+    piso(b.scene);
+    const scene::NodeHandle esfera = conCollider(b.scene, b.scene.Root(), "esfera",
+                                                 glm::vec3(0.0f, 5.0f, 0.0f),
+                                                 scene::ShapeKind::Sphere, glm::vec3(0.5f, 0.0f, 0.0f),
+                                                 scene::MotionType::Dynamic);
+    b.binding->Build();
+    REQUIRE(b.binding->BoundCount() == 2u);
+
+    correr(b, 10);
+    b.scene.Destroy(esfera);
+    correr(b, 1);
+
+    CHECK(b.binding->BoundCount() == 1u);
+    CHECK(b.world->BodyCount() == 1u);
+    CHECK(b.binding->BodyOf(esfera).IsNull());
+}

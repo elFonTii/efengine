@@ -7,6 +7,9 @@
 #include "efengine/scene/Node.h"
 #include "efengine/scene/SceneGraph.h"
 
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+
 namespace efengine {
 namespace gameplay {
 
@@ -28,6 +31,15 @@ namespace {
             case scene::MotionType::Static:    break;
         }
         return physics::MotionType::Static;
+    }
+
+    // Cuaternion de un Euler del motor. Sale de Transform::Matrix() a proposito:
+    // es la unica definicion del orden Ry * Rx * Rz que hay en el repo, y
+    // duplicarla seria otra convencion que mantener sincronizada.
+    glm::quat quatDe(const glm::vec3& eulerGrados) {
+        math::Transform soloRotacion;
+        soloRotacion.rotation = eulerGrados;
+        return glm::quat_cast(glm::mat3(soloRotacion.Matrix()));
     }
 }
 
@@ -146,9 +158,68 @@ u32 PhysicsBinding::BoundCount() const {
     return static_cast<u32>(m_bodies.size());
 }
 
-void PhysicsBinding::PushKinematic() {}
-void PhysicsBinding::WriteBack() {}
-void PhysicsBinding::Interpolate(f32) {}
+void PhysicsBinding::PushKinematic() {
+    for (const Bound& b : m_bodies) {
+        if (b.motion != physics::MotionType::Kinematic) continue;
+
+        const scene::Node* node = m_scene.TryGet(b.node);
+        if (node == null || !node->collider) continue;
+
+        const glm::mat4 bodyWorld = m_scene.WorldMatrixOf(b.node) * node->collider->localOffset.Matrix();
+        const math::Transform t   = math::DecomposeTRS(bodyWorld);
+
+        physics::BodyPose pose;
+        pose.position = t.position;
+        pose.rotation = quatDe(t.rotation);
+        m_world.SetBodyPose(b.body, pose);
+    }
+}
+
+void PhysicsBinding::WriteBack() {
+    usize i = 0;
+    while (i < m_bodies.size()) {
+        if (!m_scene.IsValid(m_bodies[i].node)) {
+            removeAt(i);   // el nodo se destruyo con el mundo andando
+            continue;
+        }
+
+        Bound& b = m_bodies[i];
+        if (b.motion == physics::MotionType::Dynamic) {
+            b.prev = b.curr;
+            m_world.GetBodyPose(b.body, b.curr);
+        }
+        ++i;
+    }
+}
+
+void PhysicsBinding::Interpolate(f32 alpha) {
+    for (const Bound& b : m_bodies) {
+        if (b.motion != physics::MotionType::Dynamic) continue;
+
+        const scene::Node* node = m_scene.TryGet(b.node);
+        if (node == null || !node->collider) continue;
+
+        const glm::vec3 pos = glm::mix(b.prev.position, b.curr.position, alpha);
+        const glm::quat rot = glm::slerp(b.prev.rotation, b.curr.rotation, alpha);
+        const glm::mat4 bodyWorld = glm::translate(glm::mat4(1.0f), pos) * glm::mat4_cast(rot);
+
+        // Solo la parte rigida del offset: su escala ya se la comio la forma en
+        // CreateBody, y volver a aplicarla la contaria dos veces.
+        math::Transform offset = node->collider->localOffset;
+        offset.scale = glm::vec3(1.0f);
+
+        const glm::mat4 nodeWorld   = bodyWorld * glm::inverse(offset.Matrix());
+        const glm::mat4 parentWorld = m_scene.WorldMatrixOf(node->parent);
+        const math::Transform t     = math::DecomposeTRS(glm::inverse(parentWorld) * nodeWorld);
+
+        // La escala del nodo no se toca: la pose de un cuerpo es rigida y no
+        // trae escala, asi que no hay nada que escribir.
+        math::Transform local = node->local;
+        local.position = t.position;
+        local.rotation = t.rotation;
+        m_scene.SetLocalTransform(b.node, local);
+    }
+}
 
 }
 }
