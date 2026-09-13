@@ -1,5 +1,7 @@
 #include "efengine/renderer/ProfilerStats.h"
 
+#include <algorithm>
+#include <cstddef>
 #include <cstring>
 
 namespace efengine {
@@ -7,6 +9,25 @@ namespace renderer {
 
     f32 NanosToMs(u64 nanos) {
         return static_cast<f32>(static_cast<f64>(nanos) / 1.0e6);
+    }
+
+    f32 Percentile(std::vector<f32>& muestras, f32 q) {
+        if (muestras.empty()) return 0.0f;
+        if (muestras.size() == 1u) return muestras[0];
+
+        const f32 qc = std::clamp(q, 0.0f, 1.0f);
+
+        // Vecino mas cercano y no interpolacion lineal: lo que se quiere leer es
+        // "hubo un frame que costo esto", no un numero promediado entre dos
+        // frames que nunca ocurrio. Para un pico eso importa.
+        const usize n = muestras.size();
+        usize k = static_cast<usize>(qc * static_cast<f32>(n - 1u) + 0.5f);
+        if (k >= n) k = n - 1u;
+
+        std::nth_element(muestras.begin(),
+                         muestras.begin() + static_cast<std::ptrdiff_t>(k),
+                         muestras.end());
+        return muestras[k];
     }
 
     usize ProfilerStats::IndiceDe(const char* name) {
@@ -38,6 +59,10 @@ namespace renderer {
         a.cpuMs += static_cast<f64>(sample.cpuMs);
         a.draws += static_cast<f64>(sample.drawCalls);
         a.frames += 1u;
+
+        const f32 gpuMs = NanosToMs(sample.gpuNanos);
+        if (gpuMs        > a.gpuMax) a.gpuMax = gpuMs;
+        if (sample.cpuMs > a.cpuMax) a.cpuMax = sample.cpuMs;
     }
 
     void ProfilerStats::EndFrame(f32 dt) {
@@ -60,6 +85,8 @@ namespace renderer {
                 fila.gpuMs     = static_cast<f32>(a.gpuMs / n);
                 fila.cpuMs     = static_cast<f32>(a.cpuMs / n);
                 fila.drawCalls = static_cast<f32>(a.draws / n);
+                fila.gpuMaxMs  = a.gpuMax;
+                fila.cpuMaxMs  = a.cpuMax;
             }
             // Si no corrio, la fila queda en ceros con present=false. La fila NO
             // se borra: sacarla haria saltar el orden de las demas en el panel.
@@ -69,6 +96,8 @@ namespace renderer {
             a.gpuMs  = 0.0;
             a.cpuMs  = 0.0;
             a.draws  = 0.0;
+            a.gpuMax = 0.0f;
+            a.cpuMax = 0.0f;
             a.frames = 0u;
         }
 

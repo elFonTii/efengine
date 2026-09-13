@@ -27,7 +27,7 @@ namespace renderer {
     }
 
 void BloomPass::Apply(const Texture& input, const RenderTarget& target) {
-    EF_PROFILE_SCOPE("Bloom");
+    EF_PROFILE_SCOPE("Bloom + tonemap");
     m_paramsUbo.BindTo(kPassBinding);
 
     // brightpass: escena full-res -> m_fboA (1/2 res)
@@ -62,10 +62,17 @@ void BloomPass::Apply(const Texture& input, const RenderTarget& target) {
         horizontal = !horizontal;
     }
 
-    // Composite aditivo: escena full-res + blur (1/2 res, upscale LINEAR) sale al target
+    // Composite aditivo + tone mapping: escena full-res + blur (1/2 res, upscale
+    // LINEAR), la suma en HDR lineal, y de ahi a LDR sRGB con ACES. Sale al
+    // target ya en LDR, listo para FXAA.
+    //
+    // La suma va ANTES de la curva a proposito: sumar dos imagenes ya
+    // tonemapeadas no es sumar luz, y el halo saldria apagado justo donde mas
+    // brilla.
     target.Bind();
     {
-        const PostParamsBlock p { glm::vec4(m_settings.intensity, 0.0f, 0.0f, 0.0f) };
+        const PostParamsBlock p {
+            glm::vec4(m_settings.intensity, m_exposure, 0.0f, 0.0f) };
         m_paramsUbo.Update(&p, sizeof(p));
     }
     m_composite->Bind();

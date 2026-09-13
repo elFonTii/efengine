@@ -75,5 +75,24 @@ namespace renderer {
     // Round-robin contiguo con wrap. El shader hace (first + slot) % total.
     UpdateRange NextRange(u32 cursor, u32 perFrame, u32 total);
 
+    // -- Tiles del target de captura ----------------------------------------
+    // El target de captura es un atlas 2D: 6 caras en fila por kMaxProbesPerFrame
+    // slots apilados, cada celda de kProbeFaceSize. La captura instanciada dibuja
+    // TODAS las celdas del frame con un solo draw por objeto, asi que cada
+    // instancia tiene que saber a que rectangulo del atlas mandar su geometria.
+    //
+    // Devuelve ese rectangulo como una escala y un offset en NDC: xy escala el
+    // clip de la vista y zw lo corre. Aplicado como (clip.xy * escala + offset *
+    // clip.w), lleva el cubo canonico de la vista exactamente sobre la celda.
+    //
+    // Funcion pura y con test propio porque es geometria de indices: un signo
+    // cambiado espeja el tile, y en un atlas de radiancia eso no se ve como un
+    // error -- se ve como un probe que integro luz de otro lado.
+    glm::vec4 CaptureTileRect(u32 face, u32 slot);
+
+    // Cuantas vistas emite un frame que actualiza `probes` probes: una por cara
+    // de cada uno. Es el conteo de instancias del draw.
+    inline u32 CaptureTileCount(u32 probes) { return probes * 6u; }
+
 }
 }

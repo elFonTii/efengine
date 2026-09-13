@@ -13,6 +13,20 @@ namespace renderer {
     // mayoria de estos pases.
     f32 NanosToMs(u64 nanos);
 
+    // Percentil q (0..1) de un conjunto de muestras, por el metodo del vecino
+    // mas cercano. REORDENA `muestras`: usa nth_element, que es O(n) y no pide
+    // ordenar todo -- para un percentil no hace falta.
+    //
+    // Existe porque el promedio miente exactamente donde importa. Un frame de
+    // 4.3 ms de media con dos picos de 15 ms se siente peor que uno de 6 ms
+    // parejo, y el promedio dice lo contrario. El p99 es lo que hace visible
+    // esa diferencia, y por eso el plan de optimizacion pide medirlo.
+    //
+    // Con menos de dos muestras devuelve la unica que hay (o 0 si no hay
+    // ninguna): un percentil sobre un solo dato no significa nada, pero
+    // devolver basura significa menos.
+    f32 Percentile(std::vector<f32>& muestras, f32 q);
+
     // Lo que UN scope aporta en UN frame. Lo arma GpuProfiler al cosechar.
     struct ScopeSample {
         const char* name     = nullptr;
@@ -28,6 +42,17 @@ namespace renderer {
         f32         cpuMs     = 0.0f;
         f32         drawCalls = 0.0f;  // promedio: no tiene por que ser entero
         bool        present   = false; // false = no corrio en toda la ventana
+
+        // El PEOR frame de la ventana, por pase. Es el instrumento para
+        // atribuir un pico de frametime: el promedio de un pase que cuesta
+        // 0.15 ms casi siempre y 4 ms una vez cada 200 frames sigue diciendo
+        // ~0.17 ms, y en el panel no se distingue de uno parejo. El maximo lo
+        // delata de inmediato.
+        //
+        // Sin esto, "hay dos picos en el grafico de frametime" no se puede
+        // convertir en "los produce ESTE pase" sin abrir Nsight.
+        f32         gpuMaxMs  = 0.0f;
+        f32         cpuMaxMs  = 0.0f;
     };
 
     // Acumula muestras por pase y las promedia cada kWindow segundos.
@@ -63,6 +88,8 @@ namespace renderer {
                 f64 gpuMs = 0.0;
                 f64 cpuMs = 0.0;
                 f64 draws = 0.0;
+                f32 gpuMax = 0.0f;
+                f32 cpuMax = 0.0f;
                 // Cuantos frames de la ventana tuvieron este pase. NO es igual
                 // al total de frames: un pase apagado no aporta ninguno, y
                 // dividir por el total daria un promedio artificialmente bajo.

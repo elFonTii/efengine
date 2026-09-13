@@ -14,6 +14,21 @@ out vec3 vFragPos;
 out vec2 vUV;
 out mat3 vTBN;
 
+// -- Contrato del depth prepass ----------------------------------------------
+// El forward dibuja con GL_EQUAL contra la profundidad que dejo el prepass
+// (ao/depth_normal.vert). Para que la igualdad se cumpla, los dos programas
+// tienen que producir gl_Position con los MISMOS BITS, y eso no lo garantiza
+// escribir la misma formula: el compilador puede reasociar la cadena de
+// matrices, o contraer un multiply-add, distinto en cada uno.
+//
+// `invariant` es precisamente la garantia de que la misma expresion con las
+// mismas entradas da el mismo resultado en programas distintos. Sin ella la
+// igualdad falla por un ULP y la geometria desaparece a parches -- el modo de
+// fallar del depth prepass es total, no gradual.
+//
+// La expresion de gl_Position tambien tiene que quedar identica en los dos.
+invariant gl_Position;
+
 layout(std140, binding = 0) uniform Frame {
     mat4 uView;
     mat4 uProjection;

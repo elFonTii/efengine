@@ -49,11 +49,40 @@ TEST_CASE("OpaqueDoubleSidedState: identico al opaco salvo el cull") {
     CHECK(OpaqueDoubleSidedState() == esperado);
 }
 
-TEST_CASE("SkyboxState: sin depth test ni escritura de profundidad") {
+TEST_CASE("SkyboxState: testea profundidad con LessEqual pero no la escribe") {
     const PipelineState s = SkyboxState();
-    CHECK(s.depthTest  == false);
+    // skybox.vert emite z = w, o sea profundidad NDC 1.0. Con LessEqual eso pasa
+    // donde el buffer sigue en el 1.0 del clear y falla donde la geometria ya
+    // escribio algo mas cerca: con el depth prepass corriendo antes, el cielo
+    // deja de sombrear los pixeles que la geometria va a tapar.
+    //
+    // No escribe profundidad: el fondo tiene que quedar en 1.0 para que el
+    // GL_EQUAL del forward siga funcionando.
+    CHECK(s.depthTest  == true);
     CHECK(s.depthWrite == false);
+    CHECK(s.depthFunc  == DepthFunc::LessEqual);
     CHECK(s.cullMode   == CullMode::None);
+}
+
+TEST_CASE("Los estados Equal testean igualdad y no escriben profundidad") {
+    // Es como dibuja el forward cuando el depth prepass ya resolvio la
+    // visibilidad: todo lo que no este exactamente a la profundidad que el
+    // prepass dejo esta tapado y se descarta antes del fragment shader.
+    const PipelineState s = OpaqueEqualState();
+    CHECK(s.depthTest  == true);
+    CHECK(s.depthWrite == false);
+    CHECK(s.depthFunc  == DepthFunc::Equal);
+    CHECK(s.cullMode   == CullMode::Back);
+
+    // El culling tiene que seguir al par no-Equal: el prepass culleo segun el
+    // material, y si el forward culleara distinto testearia contra la
+    // profundidad de un triangulo que el prepass nunca dibujo.
+    CHECK(OpaqueEqualState().cullMode            == OpaqueState().cullMode);
+    CHECK(OpaqueDoubleSidedEqualState().cullMode == OpaqueDoubleSidedState().cullMode);
+
+    PipelineState esperado = OpaqueEqualState();
+    esperado.cullMode = CullMode::None;
+    CHECK(OpaqueDoubleSidedEqualState() == esperado);
 }
 
 TEST_CASE("FullscreenState: un quad que no participa de la profundidad") {
@@ -73,7 +102,11 @@ TEST_CASE("ShadowDepthState: escribe profundidad, igual que el opaco") {
 
 TEST_CASE("El estado opaco cullea la cara de atras; el double-sided no") {
     CHECK(OpaqueState().cullMode            == CullMode::Back);
-    CHECK(ShadowDepthState().cullMode       == CullMode::Back);
+    // ShadowDepthState NO cullea, a proposito: las paredes de un modelo de
+    // habitacion son de una sola cara mirando hacia adentro, y desde el sol se ve
+    // su cara trasera. Con CullMode::Back se descartaban sin escribir
+    // profundidad y el sol atravesaba las paredes. Ver PipelineStates.cpp.
+    CHECK(ShadowDepthState().cullMode       == CullMode::None);
     CHECK(OpaqueDoubleSidedState().cullMode == CullMode::None);
     // Los pases que dibujan un quad fullscreen no tienen cara de atras que cullear.
     CHECK(SkyboxState().cullMode     == CullMode::None);

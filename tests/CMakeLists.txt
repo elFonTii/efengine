@@ -13,6 +13,7 @@ add_executable(efengine_tests
     renderer/VertexLayout.test.cpp
     renderer/Vertex.test.cpp
     renderer/PostChain.test.cpp
+    renderer/ScenePipeline.test.cpp
     renderer/Cubemap.test.cpp
     renderer/ShadowMath.test.cpp
     renderer/AoMath.test.cpp
@@ -34,10 +35,13 @@ add_executable(efengine_tests
     scene/NodeHandle.test.cpp
     scene/SceneGraph.test.cpp
     scene/Camera.test.cpp
+    scene/NodeCamera.test.cpp
     scene/CameraController.test.cpp
     scene/Behavior.test.cpp
     scene/BehaviorFixed.test.cpp
     scene/SceneGraphClear.test.cpp
+    physics/ShapeDesc.test.cpp
+    physics/PhysicsWorld.test.cpp
     serialization/BinaryIO.test.cpp
     serialization/StringTable.test.cpp
     serialization/EfeFile.test.cpp

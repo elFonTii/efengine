@@ -68,6 +68,24 @@ namespace serialization {
         glm::vec3   color = glm::vec3(1.0f);
     };
 
+    struct CameraRecord {
+        f32 fovDeg    = 45.0f;
+        f32 nearPlane = 0.1f;
+        f32 farPlane  = 5000.0f;
+        f32 exposure  = 1.025f;
+    };
+
+    // Los enums y el bool viajan como u32, igual que LightRecord::kind y
+    // MaterialRecord::doubleSided: el tamano de bool no esta garantizado y el
+    // formato no puede depender de eso.
+    struct ColliderRecord {
+        u32             kind = 0u;              // scene::ShapeKind
+        glm::vec3       params { 0.5f };
+        math::Transform localOffset;
+        u32             motion = 0u;            // scene::MotionType
+        u32             isTrigger = 0u;
+    };
+
     struct BehaviorRecord {
         u32 typeNameStr = 0u;
         u32 enabled     = 1u;
@@ -75,8 +93,10 @@ namespace serialization {
     };
 
     namespace NodeFlags {
-        inline constexpr u32 HasMesh  = 1u << 0;
-        inline constexpr u32 HasLight = 1u << 1;
+        inline constexpr u32 HasMesh     = 1u << 0;
+        inline constexpr u32 HasLight    = 1u << 1;
+        inline constexpr u32 HasCamera   = 1u << 2;   // v5
+        inline constexpr u32 HasCollider = 1u << 3;   // v5
     }
 
     struct NodeRecord {
@@ -85,6 +105,8 @@ namespace serialization {
         math::Transform local;
         std::optional<MeshRecord>   mesh;
         std::optional<LightRecord>  light;
+        std::optional<CameraRecord>   camera;     // v5
+        std::optional<ColliderRecord> collider;   // v5
         std::vector<BehaviorRecord> behaviors;
     };
 
@@ -94,6 +116,10 @@ namespace serialization {
         // En v1 este f32 era ambientFactor (un ambiente constante que nunca se conecto).
         f32 iblIntensity   = 1.0f;
         u32 primarySunNode = kInvalidIndex;
+        // v5. Indice de archivo del nodo cuya camara ve la escena. kInvalidIndex
+        // = la escena no declara camara y solo se la puede mirar con una de
+        // editor.
+        u32 activeCameraNode = kInvalidIndex;
         std::vector<MaterialRecord> materials;
         std::vector<NodeRecord>     nodes; 
 
@@ -186,6 +212,23 @@ namespace serialization {
     }
 
     template <class Ar>
+    void Serialize(Ar& ar, CameraRecord& c) {
+        ar.Field(c.fovDeg);
+        ar.Field(c.nearPlane);
+        ar.Field(c.farPlane);
+        ar.Field(c.exposure);
+    }
+
+    template <class Ar>
+    void Serialize(Ar& ar, ColliderRecord& c) {
+        ar.Field(c.kind);
+        ar.Field(c.params);
+        Serialize(ar, c.localOffset);
+        ar.Field(c.motion);
+        ar.Field(c.isTrigger);
+    }
+
+    template <class Ar>
     void Serialize(Ar& ar, BehaviorRecord& b) {
         ar.Field(b.typeNameStr);
         ar.Field(b.enabled);
@@ -198,8 +241,10 @@ namespace serialization {
         ar.Field(n.parent);
 
         u32 flags = 0u;
-        if (n.mesh)  flags |= NodeFlags::HasMesh;
-        if (n.light) flags |= NodeFlags::HasLight;
+        if (n.mesh)     flags |= NodeFlags::HasMesh;
+        if (n.light)    flags |= NodeFlags::HasLight;
+        if (n.camera)   flags |= NodeFlags::HasCamera;
+        if (n.collider) flags |= NodeFlags::HasCollider;
         ar.Field(flags);
 
         Serialize(ar, n.local);
@@ -219,6 +264,24 @@ namespace serialization {
         }
 
         SerializeVector(ar, n.behaviors, kMinEncodedBehavior);
+
+        // v5, al final del record. No hace falta ramificar por version: un
+        // archivo v4 lo escribio un writer que solo prendia dos bits, asi que
+        // estos flags vienen en cero y no se lee nada de mas. kMinEncodedNode
+        // tampoco cambia: un nodo sin adjuntos sigue midiendo lo mismo.
+        if (flags & NodeFlags::HasCamera) {
+            if (!n.camera) n.camera.emplace();
+            Serialize(ar, *n.camera);
+        } else {
+            n.camera.reset();
+        }
+
+        if (flags & NodeFlags::HasCollider) {
+            if (!n.collider) n.collider.emplace();
+            Serialize(ar, *n.collider);
+        } else {
+            n.collider.reset();
+        }
     }
 
     bool WriteSceneDocument(SceneDocument& doc, std::vector<u8>& out);

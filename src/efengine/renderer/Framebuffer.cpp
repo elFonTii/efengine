@@ -8,40 +8,56 @@
 namespace efengine {
 namespace renderer {
 
-    Framebuffer::Framebuffer(u32 width, u32 height) : m_color(Texture::CreateColorAttachment(width, height)), m_width(width), m_height(height) {
+    Framebuffer::Framebuffer(u32 width, u32 height)
+        : Framebuffer(width, height, efecom::CreateDepthRenderbuffer(width, height), true) {}
+
+    Framebuffer::Framebuffer(u32 width, u32 height, u32 externalDepthRbo)
+        : Framebuffer(width, height, externalDepthRbo, false) {
+        // Un handle en cero deja el FBO sin profundidad: dibujar contra el
+        // saldria sin depth test, que es una diferencia visual grande y muda.
+        EF_ASSERT(externalDepthRbo != 0,
+                  "Framebuffer: depth prestado invalido (handle 0)");
+    }
+
+    Framebuffer::Framebuffer(u32 width, u32 height, u32 depthRbo, bool ownsDepth)
+        : m_depthRbo(depthRbo), m_ownsDepth(ownsDepth)
+        , m_color(Texture::CreateColorAttachment(width, height))
+        , m_width(width), m_height(height) {
         m_id = efecom::CreateFramebuffer();
         EF_ASSERT(m_id != 0, "Framebuffer::Framebuffer: No hay contexto GL");
 
         efecom::FramebufferColorTexture(m_id, m_color.id());
-
-        m_depthRbo = efecom::CreateDepthRenderbuffer(width, height); // reserva buffer 24bits
         efecom::FramebufferDepthRenderbuffer(m_id, m_depthRbo);
 
         EF_GPU_CHECK(efecom::FramebufferComplete(m_id), "Framebuffer incompleto");
     }
 
     Framebuffer::~Framebuffer() {
-        if (m_depthRbo != 0) efecom::DestroyRenderbuffer(m_depthRbo);
-        if (m_id != 0)       efecom::DestroyFramebuffer(m_id);
+        // Solo el dueno destruye el renderbuffer. Un prestado que lo destruyera
+        // dejaria al dueno con un attachment muerto.
+        if (m_ownsDepth && m_depthRbo != 0) efecom::DestroyRenderbuffer(m_depthRbo);
+        if (m_id != 0)                      efecom::DestroyFramebuffer(m_id);
     }
 
     Framebuffer::Framebuffer(Framebuffer&& other) noexcept
     : m_id(std::exchange(other.m_id, 0))
     , m_depthRbo(std::exchange(other.m_depthRbo, 0))
+    , m_ownsDepth(std::exchange(other.m_ownsDepth, true))
     , m_color(std::move(other.m_color))
     , m_width(std::exchange(other.m_width, 0))
     , m_height(std::exchange(other.m_height, 0)) {}
 
     Framebuffer& Framebuffer::operator=(Framebuffer&& other) noexcept {
         if(this != &other) {
-            if (m_depthRbo != 0) efecom::DestroyRenderbuffer(m_depthRbo);
-            if (m_id != 0)       efecom::DestroyFramebuffer(m_id);
+            if (m_ownsDepth && m_depthRbo != 0) efecom::DestroyRenderbuffer(m_depthRbo);
+            if (m_id != 0)                      efecom::DestroyFramebuffer(m_id);
 
-            m_id = std::exchange(other.m_id, 0);
-            m_depthRbo = std::exchange(other.m_depthRbo, 0);
-            m_color = std::move(other.m_color);
-            m_width = std::move(other.m_width);
-            m_height = std::move(other.m_height);
+            m_id        = std::exchange(other.m_id, 0);
+            m_depthRbo  = std::exchange(other.m_depthRbo, 0);
+            m_ownsDepth = std::exchange(other.m_ownsDepth, true);
+            m_color     = std::move(other.m_color);
+            m_width     = std::exchange(other.m_width, 0);
+            m_height    = std::exchange(other.m_height, 0);
         }
         return *this;
     }
@@ -65,9 +81,26 @@ namespace renderer {
     };
 
     void Framebuffer::Resize(u32 width, u32 height) {
+        // Sobre un prestado no hay forma de acertar: el renderbuffer nuevo lo
+        // crea el DUENO, y este objeto no sabe cual es. Reconstruirlo con uno
+        // propio romperia el prepass en silencio -- el forward testearia contra
+        // una profundidad que nadie escribio y no dibujaria nada.
+        EF_ASSERT(m_ownsDepth,
+                  "Framebuffer::Resize: este FBO tiene el depth prestado; usa la "
+                  "sobrecarga que recibe el renderbuffer nuevo del dueno");
+
         if(width == m_width && height == m_height) return;
 
         *this = Framebuffer(width, height);
+    }
+
+    void Framebuffer::Resize(u32 width, u32 height, u32 externalDepthRbo) {
+        // El handle tambien es parte del estado: el dueno pudo haberse realocado
+        // sin cambiar de tamano, y quedarse con el viejo seria un attachment
+        // muerto.
+        if (width == m_width && height == m_height && externalDepthRbo == m_depthRbo) return;
+
+        *this = Framebuffer(width, height, externalDepthRbo);
     }
 }
 }

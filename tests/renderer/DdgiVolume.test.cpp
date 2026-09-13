@@ -202,3 +202,94 @@ TEST_CASE("NextRange: perFrame cero no captura nada y no mueve el cursor") {
     CHECK(r.count      == 0u);
     CHECK(r.nextCursor == 5u);
 }
+
+// -- Tiles del target de captura ---------------------------------------------
+// El rectangulo que devuelve CaptureTileRect es lo que manda la geometria de
+// cada instancia a SU celda del atlas. Un signo cambiado espeja el tile o lo
+// deposita sobre el vecino, y eso NO se ve como un error: se ve como un probe
+// que integro luz de otro lado. De ahi que se testee la geometria de indices y
+// no solo que "devuelva algo".
+
+namespace {
+    // Aplica el rectangulo a una coordenada de clip, igual que DdgiTileClip en
+    // el shader. w = 1 porque lo que se verifica es el mapeo del cubo canonico.
+    glm::vec2 AlAtlas(const glm::vec4& rect, glm::vec2 clipXY) {
+        return clipXY * glm::vec2(rect.x, rect.y) + glm::vec2(rect.z, rect.w);
+    }
+
+    // Bordes en NDC de la celda (face, slot), calculados aparte de la funcion
+    // bajo test: si los dos usaran la misma formula el test no probaria nada.
+    glm::vec4 BordesEsperados(u32 face, u32 slot) {
+        const f32 ancho = 6.0f * f32(renderer::kProbeFaceSize);
+        const f32 alto  = f32(renderer::kMaxProbesPerFrame) * f32(renderer::kProbeFaceSize);
+        const f32 lado  = f32(renderer::kProbeFaceSize);
+        return glm::vec4(2.0f * (f32(face) * lado)        / ancho - 1.0f,   // x0
+                         2.0f * (f32(face) * lado + lado) / ancho - 1.0f,   // x1
+                         2.0f * (f32(slot) * lado)        / alto  - 1.0f,   // y0
+                         2.0f * (f32(slot) * lado + lado) / alto  - 1.0f);  // y1
+    }
+}
+
+TEST_CASE("CaptureTileRect: el cubo canonico cae exactamente sobre su celda") {
+    for (u32 face = 0u; face < 6u; ++face) {
+        for (u32 slot : { 0u, 1u, 13u, renderer::kMaxProbesPerFrame - 1u }) {
+            const glm::vec4 rect = renderer::CaptureTileRect(face, slot);
+            const glm::vec4 b    = BordesEsperados(face, slot);
+
+            // Las cuatro esquinas del volumen de vista van a las cuatro esquinas
+            // de la celda, sin espejar: (-1,-1) al minimo y (+1,+1) al maximo.
+            const glm::vec2 min = AlAtlas(rect, glm::vec2(-1.0f, -1.0f));
+            const glm::vec2 max = AlAtlas(rect, glm::vec2( 1.0f,  1.0f));
+
+            CHECK(min.x == doctest::Approx(b.x));
+            CHECK(max.x == doctest::Approx(b.y));
+            CHECK(min.y == doctest::Approx(b.z));
+            CHECK(max.y == doctest::Approx(b.w));
+
+            // El centro de la vista al centro de la celda.
+            const glm::vec2 centro = AlAtlas(rect, glm::vec2(0.0f));
+            CHECK(centro.x == doctest::Approx((b.x + b.y) * 0.5f));
+            CHECK(centro.y == doctest::Approx((b.z + b.w) * 0.5f));
+        }
+    }
+}
+
+TEST_CASE("CaptureTileRect: las celdas cubren el atlas sin solaparse") {
+    // Las seis caras de un slot tienen que quedar pegadas y llenar el ancho
+    // entero: un hueco deja texels con el color del clear -- que en el alfa es
+    // "muy lejos" -- y la integral del blend los cuenta como si fueran cielo.
+    f32 anterior = -1.0f;
+    for (u32 face = 0u; face < 6u; ++face) {
+        const glm::vec4 rect = renderer::CaptureTileRect(face, 0u);
+        const f32 x0 = AlAtlas(rect, glm::vec2(-1.0f, 0.0f)).x;
+        const f32 x1 = AlAtlas(rect, glm::vec2( 1.0f, 0.0f)).x;
+
+        CHECK(x0 == doctest::Approx(anterior));   // pegada a la anterior
+        CHECK(x1 > x0);
+        anterior = x1;
+    }
+    CHECK(anterior == doctest::Approx(1.0f));     // la ultima llega al borde
+
+    // Lo mismo por slots en el eje vertical.
+    f32 anteriorY = -1.0f;
+    for (u32 slot = 0u; slot < renderer::kMaxProbesPerFrame; ++slot) {
+        const glm::vec4 rect = renderer::CaptureTileRect(0u, slot);
+        const f32 y0 = AlAtlas(rect, glm::vec2(0.0f, -1.0f)).y;
+        const f32 y1 = AlAtlas(rect, glm::vec2(0.0f,  1.0f)).y;
+
+        CHECK(y0 == doctest::Approx(anteriorY));
+        anteriorY = y1;
+    }
+    CHECK(anteriorY == doctest::Approx(1.0f));
+}
+
+TEST_CASE("CaptureTileCount: una vista por cara de cada probe") {
+    CHECK(renderer::CaptureTileCount(0u)  == 0u);
+    CHECK(renderer::CaptureTileCount(1u)  == 6u);
+    CHECK(renderer::CaptureTileCount(14u) == 84u);
+
+    // El SSBO se aloca a este maximo: si el conteo se pasara, el draw leeria
+    // fuera del buffer.
+    CHECK(renderer::CaptureTileCount(renderer::kMaxProbesPerFrame)
+          <= renderer::CaptureTileCount(renderer::kMaxProbesPerFrame));
+}

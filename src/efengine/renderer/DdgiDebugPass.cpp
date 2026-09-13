@@ -1,5 +1,8 @@
 #include "efengine/renderer/DdgiDebugPass.h"
 
+#include <efengine/renderer/DdgiPass.h>
+#include <efengine/renderer/FrameContext.h>
+
 #include <efecom/RHI.h>
 
 #include <efengine/core/Assert.h>
@@ -18,8 +21,10 @@ namespace efengine {
 namespace renderer {
 
     DdgiDebugPass::DdgiDebugPass(Renderer& renderer, VertexArray& fullscreenQuad,
-                                 Shader* blit, Shader* probe)
-        : m_renderer(renderer), m_quad(fullscreenQuad), m_blit(blit), m_probe(probe) {
+                                 Shader* blit, Shader* probe,
+                                 const DdgiPass* ddgi, const Model* sphere)
+        : m_renderer(renderer), m_quad(fullscreenQuad), m_blit(blit), m_probe(probe)
+        , m_ddgi(ddgi), m_sphere(sphere) {
         EF_ASSERT(m_blit  != null, "DdgiDebugPass: shader de blit nulo");
         EF_ASSERT(m_probe != null, "DdgiDebugPass: shader de esfera de probe nulo");
     }
@@ -74,6 +79,19 @@ namespace renderer {
             for (const Mesh& mesh : sphere.meshes()) {
                 m_renderer.Draw(mesh.vertexArray(), *m_probe);
             }
+        }
+    }
+
+    void DdgiDebugPass::Execute(FrameContext& ctx) {
+        if (m_ddgi == null || !m_ddgi->settings().debugProbes) return;
+
+        const DdgiSettings& ds = m_ddgi->settings();
+        // Modo 3 = el mismo volcado pero mirando el alfa: sin esto la distancia
+        // capturada no es verificable desde el panel.
+        if (ds.debugMode >= 2u) {
+            DrawCaptureBlit(m_ddgi->captureTarget(), ds.debugMode == 3u);
+        } else if (m_sphere != null) {
+            DrawProbes(ds.grid, ds, *m_sphere);
         }
     }
 
