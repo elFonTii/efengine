@@ -40,6 +40,8 @@ add_executable(efengine_tests
     scene/Behavior.test.cpp
     scene/BehaviorFixed.test.cpp
     scene/SceneGraphClear.test.cpp
+    physics/ShapeDesc.test.cpp
+    physics/PhysicsWorld.test.cpp
     serialization/BinaryIO.test.cpp
     serialization/StringTable.test.cpp
     serialization/EfeFile.test.cpp
