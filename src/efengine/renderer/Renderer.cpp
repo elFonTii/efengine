@@ -168,5 +168,44 @@ namespace renderer {
                  options.instances);
         }
     }
+
+    BatchStats Renderer::SubmitBatch(const std::vector<BatchDraw>& draws,
+                                     const DrawOptions& options) {
+        BatchStats stats;
+        if (draws.empty()) return stats;
+
+        EF_ASSERT(options.state != null && options.shader != null,
+                  "Renderer::SubmitBatch: requiere state y shader forzados");
+
+        // Una sola vez para toda la lista, no una por submalla.
+        efecom::ApplyPipelineState(*options.state);
+
+        const Material*  materialVigente = null;
+        const glm::mat4* worldVigente    = null;
+
+        for (const BatchDraw& d : draws) {
+            if (d.va == null || d.material == null || d.world == null) continue;
+
+            // Comparacion por puntero: la lista viene ordenada por material y
+            // despues por objeto, asi que los dos saltos son rachas largas.
+            if (worldVigente != d.world) {
+                SetObjectMatrix(*d.world);
+                worldVigente = d.world;
+            }
+
+            if (materialVigente != d.material) {
+                const MaterialBlock block = d.material->ToBlock();
+                m_materialUbo.Update(&block, sizeof(block));
+                d.material->BindTextures();
+                materialVigente = d.material;
+                ++stats.materialUploads;
+            }
+
+            Draw(*d.va, *options.shader, options.instances);
+            ++stats.draws;
+        }
+
+        return stats;
+    }
 }
 }

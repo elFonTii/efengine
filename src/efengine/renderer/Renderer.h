@@ -2,6 +2,7 @@
 
 #include <efecom/RHI.h>
 #include <efengine/core/Types.h>
+#include <efengine/renderer/BatchDraw.h>
 #include <efengine/renderer/VertexArray.h>
 #include <efengine/renderer/Model.h>
 #include <efengine/renderer/Material.h>
@@ -90,6 +91,19 @@ namespace renderer {
 
             void Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix,
                         const DrawOptions& options = DrawOptions());
+
+            // Dibuja una lista YA CULLEADA y YA ORDENADA por material.
+            //
+            // Se separa de Submit en vez de extenderlo porque hace una cosa que
+            // Submit no puede hacer: saltear el MaterialBlock y los binds de
+            // textura cuando el material no cambio respecto del draw anterior.
+            // Submit recibe un modelo entero y no sabe que dibujo el llamador
+            // antes; esto recibe la lista completa y si.
+            //
+            // Requiere shader y state forzados: existe para pases que dibujan
+            // todo con un solo programa, que es donde el salteo tiene sentido.
+            BatchStats SubmitBatch(const std::vector<BatchDraw>& draws,
+                                   const DrawOptions& options);
 
             // Sube la matriz de modelo al bloque Object (binding 2). Publico
             // porque ShadowPass tambien dibuja por objeto y necesita el mismo bloque.
