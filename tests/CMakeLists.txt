@@ -30,6 +30,7 @@ add_executable(efengine_tests
     renderer/ProfilerStats.test.cpp
     resources/FileIO.test.cpp
     resources/ModelLoader.test.cpp
+    resources/AssimpMaterial.test.cpp
     resources/ShaderPreprocessor.test.cpp
     resources/ResourceManager.test.cpp
     resources/SceneAssets.test.cpp
