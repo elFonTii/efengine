@@ -3,6 +3,7 @@
 #include <efengine/renderer/PointLight.h>
 #include <efengine/renderer/DirectionalLight.h>
 #include <efengine/renderer/Bounds.h>
+#include <efengine/renderer/Cull.h>
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -121,6 +122,15 @@ namespace scene {
             // Center() o Radius().
             const renderer::AABB& WorldBounds() const { return m_worldBounds; }
 
+            // Una entrada por SUBMALLA de cada renderable, con su AABB en
+            // mundo. Paralela a Renderables(): span.item indexa esa lista y
+            // span.mesh la de submallas de su modelo.
+            //
+            // Existe aparte de Renderables porque la granularidad del culling
+            // es la submalla: un .fbx importado entra como UN item con miles de
+            // submallas, y cullear por item no descarta nada.
+            const std::vector<renderer::MeshSpan>& MeshSpans() const { return m_meshSpans; }
+
         private:
             struct Slot {
                 Node node;
@@ -149,6 +159,7 @@ namespace scene {
             std::vector<renderer::PointLight> m_pointLights;
             renderer::DirectionalLight        m_sun { glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };
             renderer::AABB                    m_worldBounds = renderer::AABB::Empty();
+            std::vector<renderer::MeshSpan>   m_meshSpans;
     };
 }
 }

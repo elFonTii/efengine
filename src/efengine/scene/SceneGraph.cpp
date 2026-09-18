@@ -220,14 +220,29 @@ namespace scene {
         m_renderables.clear();
         m_pointLights.clear();
         m_worldBounds = renderer::AABB::Empty();
+        m_meshSpans.clear();
 
         updateNode(m_root, glm::mat4(1.0f), false);
 
-        // La caja de la escena sale de la lista que updateNode acaba de armar, no
-        // de recorrer el grafo otra vez.
-        for (const RenderItem& item : m_renderables) {
+        // La caja de la escena y las cajas por submalla salen de la lista que
+        // updateNode acaba de armar, en un solo recorrido.
+        for (u32 i = 0u; i < static_cast<u32>(m_renderables.size()); ++i) {
+            const RenderItem& item = m_renderables[i];
             if (item.model == null) continue;
+
             m_worldBounds = renderer::AccumulateBounds(m_worldBounds, item.model->bounds(), item.world);
+
+            const std::vector<renderer::Mesh>& mallas = item.model->meshes();
+            for (u32 m = 0u; m < static_cast<u32>(mallas.size()); ++m) {
+                const renderer::AABB& local = mallas[m].bounds();
+                if (!local.Valid()) continue;
+
+                renderer::MeshSpan span;
+                span.item   = i;
+                span.mesh   = m;
+                span.bounds = local.Transformed(item.world);
+                m_meshSpans.push_back(span);
+            }
         }
 
         // Sol: direccion desde el world del nodo primario; color desde su adjunto.
@@ -298,6 +313,7 @@ namespace scene {
         m_activeCamera = NodeHandle{};
         m_renderables.clear();
         m_pointLights.clear();
+        m_meshSpans.clear();
         m_sun = renderer::DirectionalLight{ glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };
 
         m_root = allocate("root", NodeHandle{});

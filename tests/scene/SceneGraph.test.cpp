@@ -504,3 +504,43 @@ TEST_CASE("SceneGraph: DetachCollider saca el collider y es no-op si no hay nada
     g.DetachCollider(scene::NodeHandle{});
     CHECK_FALSE(g.Get(n).collider.has_value());
 }
+
+TEST_CASE("SceneGraph::MeshSpans: un modelo sin submallas no aporta spans") {
+    scene::SceneGraph g;
+    renderer::Model model = MakeEmptyModelSG();
+
+    scene::NodeHandle n = g.CreateNode("malla");
+    g.AttachMesh(n, { &model, {} });
+    g.UpdateWorldTransforms();
+
+    REQUIRE(g.Renderables().size() == 1u);
+    CHECK(g.MeshSpans().empty());
+}
+
+TEST_CASE("SceneGraph::MeshSpans: se rearma en cada UpdateWorldTransforms") {
+    // Sin el clear los spans se duplicarian frame a frame, igual que pasaria
+    // con Renderables.
+    scene::SceneGraph g;
+    renderer::Model model = MakeEmptyModelSG();
+
+    scene::NodeHandle n = g.CreateNode("malla");
+    g.AttachMesh(n, { &model, {} });
+
+    g.UpdateWorldTransforms();
+    const size_t primero = g.MeshSpans().size();
+    g.UpdateWorldTransforms();
+
+    CHECK(g.MeshSpans().size() == primero);
+}
+
+TEST_CASE("SceneGraph::Clear vacia los spans") {
+    scene::SceneGraph g;
+    renderer::Model model = MakeEmptyModelSG();
+
+    scene::NodeHandle n = g.CreateNode("malla");
+    g.AttachMesh(n, { &model, {} });
+    g.UpdateWorldTransforms();
+
+    g.Clear();
+    CHECK(g.MeshSpans().empty());
+}
