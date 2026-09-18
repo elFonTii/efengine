@@ -86,5 +86,13 @@ namespace renderer {
                           f32 fovDeg, f32 aspect, f32 sliceNear, f32 sliceFar,
                           u32 resolution, f32 lightExtension);
 
+    // AABB de mundo que hay que dibujar en el shadow map de esta cascada.
+    //
+    // NO es la caja de la cascada: es la caja estirada hacia DONDE ESTA LA LUZ,
+    // por lo mismo que FitCascade corre el plano cercano. La AABB es un superset
+    // conservador de la caja ortografica (que en general esta rotada), y eso esta
+    // bien: de mas dibuja una submalla que no se ve, de menos borra una sombra.
+    AABB CascadeCullVolume(const CascadeFit& fit, const glm::vec3& direction);
+
 }
 }

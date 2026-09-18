@@ -181,3 +181,46 @@ TEST_CASE("FitCascade: las 8 esquinas de la rebanada caen dentro de la caja") {
         CHECK(ndc.z <= doctest::Approx( 1.0f).epsilon(0.01));
     }
 }
+
+using efengine::renderer::AABB;
+using efengine::renderer::CascadeCullVolume;
+
+TEST_CASE("CascadeCullVolume: contiene la esfera de la cascada") {
+    const glm::vec3 dir { 0.0f, -1.0f, 0.0f };
+    const glm::mat4 iv = InvViewDe(glm::vec3(0.0f), glm::vec3(0, 0, -1));
+    const CascadeFit f = FitCascade(dir, iv, 60.0f, 1.777f, 1.0f, 50.0f, 2048u, 30.0f);
+    const AABB v = CascadeCullVolume(f, dir);
+
+    CHECK(v.Valid());
+    CHECK(v.min.x <= f.center.x - f.radius);
+    CHECK(v.max.x >= f.center.x + f.radius);
+    CHECK(v.min.z <= f.center.z - f.radius);
+    CHECK(v.max.z >= f.center.z + f.radius);
+}
+
+TEST_CASE("CascadeCullVolume: se extiende HACIA la luz, no en contra") {
+    // El bug clasico de CSM: un techo fuera de la rebanada pero arriba en la
+    // direccion del sol si proyecta sombra adentro. Cullearlo lo borra, y se ve
+    // como sombras que aparecen de golpe al acercarse.
+    const glm::vec3 dir { 0.0f, -1.0f, 0.0f };   // el sol viaja hacia abajo
+    const glm::mat4 iv = InvViewDe(glm::vec3(0.0f), glm::vec3(0, 0, -1));
+    const CascadeFit f = FitCascade(dir, iv, 60.0f, 1.777f, 1.0f, 50.0f, 2048u, 100.0f);
+    const AABB v = CascadeCullVolume(f, dir);
+
+    // Arriba (de donde VIENE la luz) tiene que sobrar mucho.
+    CHECK(v.max.y >= f.center.y + f.radius + 90.0f);
+    // Abajo no: la extension no agranda por el lado opuesto.
+    CHECK(v.min.y <= f.center.y - f.radius);
+    CHECK(v.min.y >  f.center.y - f.radius - 90.0f);
+}
+
+TEST_CASE("CascadeCullVolume: con luz horizontal se extiende en horizontal") {
+    const glm::vec3 dir { 1.0f, 0.0f, 0.0f };    // la luz viaja hacia +X
+    const glm::mat4 iv = InvViewDe(glm::vec3(0.0f), glm::vec3(0, 0, -1));
+    const CascadeFit f = FitCascade(dir, iv, 60.0f, 1.777f, 1.0f, 50.0f, 2048u, 100.0f);
+    const AABB v = CascadeCullVolume(f, dir);
+
+    // Viene de -X, asi que sobra por -X.
+    CHECK(v.min.x <= f.center.x - f.radius - 90.0f);
+    CHECK(v.max.x <  f.center.x + f.radius + 90.0f);
+}

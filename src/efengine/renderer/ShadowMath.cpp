@@ -154,5 +154,24 @@ namespace renderer {
         return fit;
     }
 
+
+    AABB CascadeCullVolume(const CascadeFit& fit, const glm::vec3& direction) {
+        const glm::vec3 dir = glm::normalize(direction);
+        // depthRange = 2*radio + extension, asi que esto recupera la extension.
+        const f32 extension = glm::max(fit.depthRange - 2.0f * fit.radius, 0.0f);
+
+        AABB v;
+        v.min = fit.center - glm::vec3(fit.radius);
+        v.max = fit.center + glm::vec3(fit.radius);
+
+        // -dir apunta a donde ESTA la luz. Estirar por ahi y solo por ahi:
+        // estirar en los dos sentidos duplicaria la geometria dibujada sin
+        // agregar una sola sombra.
+        const glm::vec3 haciaLaLuz = -dir * extension;
+        v.min += glm::min(haciaLaLuz, glm::vec3(0.0f));
+        v.max += glm::max(haciaLaLuz, glm::vec3(0.0f));
+        return v;
+    }
+
 }
 }
