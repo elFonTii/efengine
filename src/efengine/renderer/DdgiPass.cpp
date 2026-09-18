@@ -12,6 +12,7 @@
 #include <efengine/renderer/PipelineStates.h>
 #include <efengine/renderer/ShaderBlocks.h>
 #include <efengine/renderer/VertexArray.h>
+#include <efengine/renderer/Cull.h>
 #include <efengine/scene/SceneGraph.h>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -359,10 +360,52 @@ namespace renderer {
             opciones.shader    = m_shaders.capture;
             opciones.state     = &estadoCaptura;
             opciones.instances = instancias;
-            for (const scene::RenderItem& item : scene.Renderables()) {
+
+            // El volumen que el lote de este frame puede ver. Es exacto, no
+            // conservador: ver el comentario de BatchBounds.
+            const AABB volumen = BatchBounds(m_atlasGrid, m_range, m_settings.maxDistance);
+            CullAabb(scene.MeshSpans(), volumen, m_visible);
+
+            // De indices a draws. La busqueda del material vive aca y no en el
+            // Renderer para no meterle scene:: a su interfaz: el ciclo
+            // renderer <-> scene ya es deuda conocida (status.md 2.2) y esto no
+            // lo profundiza.
+            const std::vector<scene::RenderItem>& items = scene.Renderables();
+            const std::vector<MeshSpan>&          spans = scene.MeshSpans();
+
+            m_draws.clear();
+            for (u32 indice : m_visible) {
+                const MeshSpan&          span = spans[indice];
+                const scene::RenderItem& item = items[span.item];
                 if (item.model == null || item.materials == null) continue;
-                m_renderer.Submit(*item.model, *item.materials, item.world, opciones);
+
+                const Mesh& malla = item.model->meshes()[span.mesh];
+                auto it = item.materials->find(malla.materialName());
+                if (it == item.materials->end() || it->second == null) continue;
+
+                BatchDraw d;
+                d.va       = &malla.vertexArray();
+                d.material = it->second;
+                d.world    = &item.world;
+                m_draws.push_back(d);
             }
+
+            // Ordenar por material y despues por objeto es lo que hace que
+            // SubmitBatch pueda saltear el MaterialBlock y la matriz de modelo.
+            // Por PUNTERO y no por nombre: comparar ~3.000 strings por frame
+            // costaria mas que lo que el ordenamiento ahorra.
+            std::stable_sort(m_draws.begin(), m_draws.end(),
+                [](const BatchDraw& a, const BatchDraw& b) {
+                    if (a.material != b.material) return a.material < b.material;
+                    return a.world < b.world;
+                });
+
+            const BatchStats stats = m_renderer.SubmitBatch(m_draws, opciones);
+
+            m_totalSpans          = static_cast<u32>(spans.size());
+            m_visibleSpans        = static_cast<u32>(m_visible.size());
+            m_lastDraws           = stats.draws;
+            m_lastMaterialUploads = stats.materialUploads;
 
             // Los planos son estado GLOBAL: dejarlos habilitados haria que el
             // resto del frame -- que no escribe gl_ClipDistance -- recorte contra

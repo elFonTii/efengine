@@ -7,6 +7,8 @@
 #include <efengine/renderer/Texture.h>
 #include <efengine/renderer/ShadowContext.h>
 #include <efengine/renderer/IblContext.h>
+#include <efengine/renderer/Cull.h>
+#include <efengine/renderer/BatchDraw.h>
 
 #include <efengine/renderer/ShaderBlocks.h>
 
@@ -70,6 +72,11 @@ namespace renderer {
             u32  cursor()     const { return m_cursor; }
             f32  lastMs()     const { return m_lastMs; }
 
+            u32 visibleSpans()        const { return m_visibleSpans; }
+            u32 totalSpans()          const { return m_totalSpans; }
+            u32 lastDraws()           const { return m_lastDraws; }
+            u32 lastMaterialUploads() const { return m_lastMaterialUploads; }
+
             // Si esto es false, Context() no entrega los atlas y pbr.frag esta
             // cayendo a IBL puro: DDGI aporta exactamente cero. Es el primer
             // dato a mirar cuando "no se ve la GI", porque todos los demas
@@ -128,6 +135,16 @@ namespace renderer {
             u32          m_sweepsDone     = 0u;
             bool         m_blendedOnce    = false;   // gate de atlasValid
             f32          m_lastMs         = 0.0f;
+
+            // Los dos buffers son miembros para no alocar por frame: el de
+            // indices que devuelve el culling, y el de draws ya resueltos.
+            std::vector<u32>       m_visible;
+            std::vector<BatchDraw> m_draws;
+
+            u32 m_visibleSpans        = 0u;
+            u32 m_totalSpans          = 0u;
+            u32 m_lastDraws           = 0u;
+            u32 m_lastMaterialUploads = 0u;
     };
 
 }
