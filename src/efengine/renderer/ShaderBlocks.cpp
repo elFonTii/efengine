@@ -11,6 +11,15 @@ namespace renderer {
     // ── Contrato std140, verificado en tiempo de compilacion ───────────────
     // Si alguno de estos falla, el shader lee basura en silencio: la GPU no avisa
     // que el mirror C++ y el bloque GLSL dejaron de coincidir.
+    static_assert(sizeof(CascadeBlock) == 304u, "CascadeBlock: tamano std140 roto");
+    static_assert(offsetof(CascadeBlock, matrices)      ==   0u, "CascadeBlock.matrices");
+    static_assert(offsetof(CascadeBlock, splitFar)      == 256u, "CascadeBlock.splitFar");
+    static_assert(offsetof(CascadeBlock, normalOffsets) == 272u, "CascadeBlock.normalOffsets");
+    static_assert(offsetof(CascadeBlock, params)        == 288u, "CascadeBlock.params");
+
+    static_assert(kMaxCascades == 4u,
+                  "CascadeBlock: los arrays son de 4; sincronizar con kMaxCascades y con el shader");
+
     static_assert(sizeof(FrameBlock) == 304u, "FrameBlock: tamano std140 roto");
     static_assert(offsetof(FrameBlock, view)             ==   0u, "FrameBlock.view");
     static_assert(offsetof(FrameBlock, projection)       ==  64u, "FrameBlock.projection");
@@ -165,6 +174,32 @@ namespace renderer {
                               settings.ablateSample
                                   ? std::max(settings.ablateIrradiance, 0.0f)
                                   : -1.0f);
+        return b;
+    }
+
+
+    CascadeBlock MakeCascadeBlock(const CascadeContext& ctx) {
+        CascadeBlock b {};
+        const u32 count = ctx.enabled ? glm::min(ctx.count, kMaxCascades) : 0u;
+
+        // Un corte inalcanzable en los slots que no se usan: si quedaran en cero,
+        // la seleccion por profundidad mandaria TODO a la primera cascada muerta.
+        f32 ultimo = 0.0f;
+        for (u32 i = 0; i < kMaxCascades; ++i) {
+            if (i < count) {
+                b.matrices[i]      = ctx.fits[i].matrix;
+                b.splitFar[i]      = ctx.fits[i].splitFar;
+                b.normalOffsets[i] = ctx.fits[i].texelWorldSize * ctx.normalOffsetTexels;
+                ultimo = ctx.fits[i].splitFar;
+            } else {
+                b.matrices[i]      = glm::mat4(1.0f);
+                b.splitFar[i]      = ultimo;
+                b.normalOffsets[i] = 0.0f;
+            }
+        }
+
+        b.params = glm::vec4(static_cast<f32>(count), ctx.blendRatio,
+                             ctx.debugView ? 1.0f : 0.0f, 0.0f);
         return b;
     }
 

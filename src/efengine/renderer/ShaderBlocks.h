@@ -6,6 +6,7 @@
 #include <efengine/renderer/ShadowContext.h>
 #include <efengine/renderer/IblContext.h>
 #include <efengine/renderer/DdgiSettings.h>
+#include <efengine/renderer/CascadeContext.h>
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -23,6 +24,7 @@ namespace renderer {
     inline constexpr u32 kPassBinding     = 4u;   // 1x por invocacion de pase
     inline constexpr u32 kDdgiBinding     = 5u;   // 1x por frame — solo lo declaran los shaders de DDGI
     inline constexpr u32 kAoBinding       = 6u;   // 1x por frame — solo lo declara pbr.frag
+    inline constexpr u32 kCascadeBinding  = 7u;   // 1x por frame — solo lo declara pbr.frag
 
     // Unidades de sampler de los atlas de DDGI. 0-7 material, 8 sombra, 9/10/11 IBL.
     inline constexpr u32 kIrradianceAtlasUnit = 12u;
@@ -177,6 +179,19 @@ namespace renderer {
         // la indirecta apagada, y ahi hay que subir uno y no el otro.
         glm::vec4 upsample;
     };
+
+    // Las 4 matrices y los 4 escalares por cascada. Los escalares van empaquetados
+    // en vec4 y no en arrays de float porque std140 le da 16 bytes a cada elemento
+    // de un array de escalares: seria 4x el espacio y un layout que hay que
+    // recordar en vez de leer.
+    struct alignas(16) CascadeBlock {
+        glm::mat4 matrices[4];      // 4 == kMaxCascades
+        glm::vec4 splitFar;         // corte lejano de cada cascada, en distancia de vista
+        glm::vec4 normalOffsets;    // normal offset de cada cascada, en METROS
+        glm::vec4 params;           // x=count (0 = apagado), y=blendRatio, z=debugView
+    };
+
+    CascadeBlock MakeCascadeBlock(const CascadeContext& ctx);
 
     // ── Funciones puras que arman los bloques ──────────────────────────────
     // No tocan la GPU: son las que vuelven testeable headless lo que antes era
