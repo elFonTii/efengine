@@ -9,6 +9,7 @@
 #include <efengine/renderer/Mesh.h>
 #include <efengine/renderer/Model.h>
 #include <efengine/resources/MaterialBuilder.h>
+#include <efengine/resources/MaterialImport.h>
 #include <efengine/resources/ResourceManager.h>
 #include <efengine/resources/SceneAssets.h>
 #include <efengine/scene/Node.h>
@@ -119,12 +120,15 @@ void BuildProbeScene(EditorContext& ctx, const char* fbxPath) {
         EF_LOG_INFO("ProbeScene:   material '%s'", n.c_str());
     }
 
+    renderer::MaterialMap materiales = resources::ImportMaterials(ctx.rm, ctx.assets, fbxPath);
+    if (materiales.empty()) {
+        // El archivo no declaraba materiales: el gris plano sigue siendo el plan B.
+        materiales = renderer::MakeUniformMaterialMap(r.materiales, ctx.assets.MaterialAt(gris));
+    }
+
     const scene::NodeHandle h = ctx.scene.CreateChild(ctx.scene.Root(), "probe");
     ctx.scene.SetLocalTransform(h, math::Transform{});
-    ctx.scene.AttachMesh(h, scene::MeshAttachment{
-        modelo,
-        renderer::MakeUniformMaterialMap(r.materiales, ctx.assets.MaterialAt(gris))
-    });
+    ctx.scene.AttachMesh(h, scene::MeshAttachment{ modelo, std::move(materiales) });
 
     // El nombre importa: RefreshHandles busca "directional_light".
     const scene::NodeHandle sol = ctx.scene.CreateChild(ctx.scene.Root(), "directional_light");
