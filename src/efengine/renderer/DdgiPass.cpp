@@ -17,6 +17,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
+#include <functional>
 #include <efengine/renderer/GpuProfiler.h>
 
 #include <chrono>
@@ -383,9 +384,18 @@ namespace renderer {
 
             m_draws.clear();
             for (u32 indice : m_visible) {
-                const MeshSpan&          span = spans[indice];
+                const MeshSpan& span = spans[indice];
+                // Los indices vienen de la lista que armo UpdateWorldTransforms;
+                // el assert deja escrito que este pase corre sobre el MISMO
+                // frame de esa lista y no sobre una escena ya modificada.
+                EF_ASSERT(span.item < static_cast<u32>(items.size()),
+                          "DdgiPass: span.item fuera de Renderables");
+
                 const scene::RenderItem& item = items[span.item];
                 if (item.model == null || item.materials == null) continue;
+
+                EF_ASSERT(span.mesh < static_cast<u32>(item.model->meshes().size()),
+                          "DdgiPass: span.mesh fuera de las submallas del modelo");
 
                 const Mesh& malla = item.model->meshes()[span.mesh];
                 auto it = item.materials->find(malla.materialName());
@@ -404,13 +414,17 @@ namespace renderer {
             // costaria mas que lo que el ordenamiento ahorra.
             std::stable_sort(m_draws.begin(), m_draws.end(),
                 [](const BatchDraw& a, const BatchDraw& b) {
-                    if (a.material != b.material) return a.material < b.material;
-                    return a.world < b.world;
+                    // std::less y no < : comparar punteros a objetos distintos
+                    // con < es unspecified, y sin orden total stable_sort tiene
+                    // UB.
+                    if (a.material != b.material) {
+                        return std::less<const Material*>{}(a.material, b.material);
+                    }
+                    return std::less<const glm::mat4*>{}(a.world, b.world);
                 });
 
             const BatchStats stats = m_renderer.SubmitBatch(m_draws, opciones);
 
-            m_totalSpans          = static_cast<u32>(spans.size());
             m_visibleSpans        = static_cast<u32>(m_visible.size());
             m_lastDraws           = stats.draws;
             m_lastMaterialUploads = stats.materialUploads;

@@ -174,8 +174,10 @@ namespace renderer {
         BatchStats stats;
         if (draws.empty()) return stats;
 
-        EF_ASSERT(options.state != null && options.shader != null,
-                  "Renderer::SubmitBatch: requiere state y shader forzados");
+        EF_ASSERT(options.state != null,
+                  "Renderer::SubmitBatch: requiere un PipelineState forzado");
+        EF_ASSERT(options.shader != null,
+                  "Renderer::SubmitBatch: requiere un shader forzado");
 
         // Una sola vez para toda la lista, no una por submalla.
         efecom::ApplyPipelineState(*options.state);
