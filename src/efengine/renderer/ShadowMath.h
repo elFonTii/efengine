@@ -45,5 +45,18 @@ namespace renderer {
         const AABB&      bounds,
         f32              padding);
 
+    // Tope de cascadas. El array del bloque std140 tiene exactamente estos slots.
+    inline constexpr u32 kMaxCascades = 4u;
+
+    // Reparte [nearPlane, shadowDistance] en 'count' cascadas y escribe el plano
+    // LEJANO de cada una en outFar (count valores).
+    //
+    // lambda mezcla los dos repartos clasicos: 0 = uniforme, 1 = logaritmico. El
+    // uniforme deja la cascada 0 inutilmente grande; el logaritmico deja la
+    // ultima demasiado gruesa. El default de 0.75 esta cerca del logaritmico
+    // porque la resolucion importa mucho mas cerca de la camara.
+    void ComputeCascadeSplits(f32 nearPlane, f32 shadowDistance, u32 count,
+                              f32 lambda, f32* outFar);
+
 }
 }

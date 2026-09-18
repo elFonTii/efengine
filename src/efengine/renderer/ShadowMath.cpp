@@ -48,5 +48,29 @@ namespace renderer {
         return fit;
     }
 
+    void ComputeCascadeSplits(f32 nearPlane, f32 shadowDistance, u32 count,
+                              f32 lambda, f32* outFar) {
+        if (outFar == null || count == 0u) return;
+        if (count > kMaxCascades) count = kMaxCascades;
+
+        // El reparto logaritmico divide por near, asi que un near de cero o un
+        // rango invertido lo mandan a infinito. El piso lo mantiene finito; el
+        // encuadre de una cascada degenerada igual no dibuja nada.
+        const f32 cerca  = glm::max(nearPlane, EPSILON);
+        const f32 lejos  = glm::max(shadowDistance, cerca + EPSILON);
+        const f32 mezcla = glm::clamp(lambda, 0.0f, 1.0f);
+
+        for (u32 i = 0; i < count; ++i) {
+            const f32 fraccion    = static_cast<f32>(i + 1u) / static_cast<f32>(count);
+            const f32 uniforme    = cerca + (lejos - cerca) * fraccion;
+            const f32 logaritmico = cerca * std::pow(lejos / cerca, fraccion);
+            outFar[i] = glm::mix(uniforme, logaritmico, mezcla);
+        }
+        // El ultimo corte tiene que dar EXACTAMENTE shadowDistance: si queda
+        // corto por error de redondeo, se abre una franja sin sombra justo en el
+        // borde, que es donde menos se la espera.
+        outFar[count - 1u] = lejos;
+    }
+
 }
 }
