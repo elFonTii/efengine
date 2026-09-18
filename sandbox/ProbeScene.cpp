@@ -136,7 +136,7 @@ void BuildProbeScene(EditorContext& ctx, const char* fbxPath) {
     tSol.rotation = math::EulerFromForward(glm::normalize(glm::vec3(0.30f, -0.62f, 0.72f)));
     ctx.scene.SetLocalTransform(sol, tSol);
     ctx.scene.AttachLight(sol, scene::LightAttachment{ scene::LightKind::Directional,
-                                                       glm::vec3(3.0f, 3.0f, 3.0f) });
+                                                       glm::vec3(8.0f, 7.5f, 6.0f) });
     ctx.scene.SetPrimarySun(sol);
 
     ctx.state.selected = h;   // F encuadra el modelo sin tener que buscarlo

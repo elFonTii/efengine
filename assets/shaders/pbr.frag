@@ -49,7 +49,7 @@ layout(binding = 6) uniform sampler2D uOpacityMap;
 layout(binding = 7) uniform sampler2D uEmissiveMap;
 
 // De 8 en adelante: los mapas de frame.
-layout(binding = 8)  uniform sampler2D   uShadowMap;
+layout(binding = 8)  uniform sampler2DArray uCascadeMaps;
 layout(binding = 9)  uniform samplerCube uIrradianceMap;
 layout(binding = 10) uniform samplerCube uPrefilterMap;
 layout(binding = 11) uniform sampler2D   uBrdfLUT;
@@ -72,6 +72,16 @@ layout(std140, binding = 6) uniform AoParams {
     vec4 uUpsample;
 };
 layout(binding = 14) uniform sampler2D uAoTexture;
+
+// -- Cascadas del sol (binding 7, unidad 8) -----------------------------------
+// Bloque propio por lo mismo que AoParams: Frame lo declaran nueve shaders y
+// solo este necesita las cascadas.
+layout(std140, binding = 7) uniform Cascades {
+    mat4 uCascadeMatrices[4];
+    vec4 uCascadeSplitFar;      // corte lejano de cada cascada (distancia de vista)
+    vec4 uCascadeOffsets;       // normal offset de cada cascada, en METROS
+    vec4 uCascadeParams;        // x=count (0 = apagado), y=blendRatio, z=debugView
+};
 
 // -- Señales resueltas a resolucion reducida (unidades 15 y 16) ---------------
 // uIndirect trae la irradiancia indirecta de DDGI ya escalada (rgb) y el fade
@@ -176,47 +186,96 @@ vec3 CookTorranceBRDF(vec3 N, vec3 V, vec3 L, vec3 F0, vec3 albedo, float metall
     return (kD * albedo / PI + specular) * NdotL;
 }
 
-// Factor de sombra [0=iluminado, 1=en sombra] con PCF 3×3.
-// Ng es la normal GEOMÉTRICA (no la del normal map: el offset de abajo es un
+// Factor de sombra [0=iluminado, 1=en sombra] con PCF 3x3 sobre N cascadas.
+// Ng es la normal GEOMETRICA (no la del normal map: el offset de abajo es un
 // desplazamiento real en el mundo y no tiene que bailar con la textura) y L
 // apunta hacia la luz. Las dos en espacio mundo.
-float ShadowFactor(vec3 Ng, vec3 L) {
-    // Normal-offset bias: en vez de empujar la profundidad HACIA LA LUZ, corre
-    // el punto de muestreo a lo largo de la normal.
-    //
-    // La diferencia se ve justo en las aristas entre paredes. Ahí el oclusor
-    // toca al receptor, la diferencia de profundidad es cero, y cualquier bias
-    // de profundidad los separa e ilumina una banda a lo largo del rincón
-    // (peter-panning). Corrido a lo largo de la normal, en cambio, el punto se
-    // despega de SU propia superficie pero sigue igual de tapado por la pared
-    // vecina, así que la banda no se abre.
-    //
-    // El sin(θ) escala con lo rasante que llega la luz, que es como crece la
-    // huella del texel sobre la superficie: cero de frente (donde tampoco hay
-    // acné), máximo al ras.
-    float NdotL    = dot(Ng, L);
-    float sinTheta = sqrt(clamp(1.0 - NdotL * NdotL, 0.0, 1.0));
-    vec3  muestra  = vFragPos + Ng * (uShadowParams.w * sinTheta);
 
-    vec4 lp   = uLightSpaceMatrix * vec4(muestra, 1.0);
-    vec3 proj = lp.xyz / lp.w;          // divide perspectiva (ortho: w=1)
-    proj      = proj * 0.5 + 0.5;       // [-1,1] → [0,1]
-    if (proj.z > 1.0) return 0.0;       // más allá del far plane → sin sombra
+// Profundidad en espacio de VISTA del fragmento, positiva hacia adelante. Se
+// compara contra los cortes, que se calcularon en esa misma unidad: usar la
+// distancia radial al ojo desalinea la seleccion contra el encuadre y abre una
+// banda curva donde la cascada cambia antes de lo que debe.
+float ViewDepth() {
+    return -(uView * vec4(vFragPos, 1.0)).z;
+}
 
-    // Bias de profundidad slope-scaled: queda como escotilla, en 0 por default.
-    // Su unidad es fracción del rango de profundidad de la luz; como ese rango
-    // y el texel escalan los dos con el radio de la escena, biasMax * (la
-    // resolución del shadow map) da directamente cuántos texels de holgura son.
+int PickCascade(float viewDepth) {
+    int count = int(uCascadeParams.x);
+    for (int i = 0; i < count; ++i) {
+        if (viewDepth < uCascadeSplitFar[i]) return i;
+    }
+    return -1;   // mas alla de la ultima: sin sombra
+}
+
+float SampleCascade(int i, vec3 Ng, float NdotL, float sinTheta) {
+    vec3 muestra = vFragPos + Ng * (uCascadeOffsets[i] * sinTheta);
+
+    vec4 lp   = uCascadeMatrices[i] * vec4(muestra, 1.0);
+    vec3 proj = lp.xyz / lp.w;
+    proj      = proj * 0.5 + 0.5;
+    if (proj.z > 1.0) return 0.0;
+
     float bias   = max(uShadowParams.z * (1.0 - NdotL), uShadowParams.y);
     float shadow = 0.0;
-    vec2  texel  = 1.0 / vec2(textureSize(uShadowMap, 0));
+    vec2  texel  = 1.0 / vec2(textureSize(uCascadeMaps, 0).xy);
     for (int x = -1; x <= 1; ++x) {
         for (int y = -1; y <= 1; ++y) {
-            float closest = texture(uShadowMap, proj.xy + vec2(x, y) * texel).r;
+            float closest = texture(uCascadeMaps,
+                                    vec3(proj.xy + vec2(x, y) * texel, float(i))).r;
             shadow += (proj.z - bias > closest) ? 1.0 : 0.0;
         }
     }
     return shadow / 9.0;
+}
+
+float ShadowFactor(vec3 Ng, vec3 L) {
+    // Normal-offset bias: en vez de empujar la profundidad HACIA LA LUZ, corre el
+    // punto de muestreo a lo largo de la normal. La diferencia se ve en las
+    // aristas entre paredes, donde el oclusor toca al receptor y cualquier bias
+    // de profundidad los separa e ilumina una banda a lo largo del rincon
+    // (peter-panning).
+    //
+    // El sin(theta) escala con lo rasante que llega la luz, que es como crece la
+    // huella del texel sobre la superficie: cero de frente, maximo al ras.
+    float NdotL    = dot(Ng, L);
+    float sinTheta = sqrt(clamp(1.0 - NdotL * NdotL, 0.0, 1.0));
+
+    if (uCascadeParams.x < 0.5) return 0.0;
+
+    float profundidad = ViewDepth();
+    int   i = PickCascade(profundidad);
+    if (i < 0) return 0.0;
+
+    float sombra = SampleCascade(i, Ng, NdotL, sinTheta);
+
+    // La costura entre cascadas es un salto en el ancho del filtro y se lee como
+    // una linea recta cruzando el piso. En la fraccion final de cada cascada se
+    // samplean las dos y se interpola: 18 taps en vez de 9, solo en la banda.
+    int count = int(uCascadeParams.x);
+    if (i + 1 < count) {
+        float cerca = (i == 0) ? 0.0 : uCascadeSplitFar[i - 1];
+        float ancho = uCascadeSplitFar[i] - cerca;
+        float banda = ancho * uCascadeParams.y;
+        if (banda > 0.0) {
+            float t = (profundidad - (uCascadeSplitFar[i] - banda)) / banda;
+            if (t > 0.0) {
+                sombra = mix(sombra, SampleCascade(i + 1, Ng, NdotL, sinTheta),
+                             clamp(t, 0.0, 1.0));
+            }
+        }
+    }
+    return sombra;
+}
+
+// Color plano por cascada. Es la unica forma de VER donde caen los cortes en vez
+// de deducirlo de si la sombra se ve bien.
+vec3 CascadeDebugColor() {
+    int i = PickCascade(ViewDepth());
+    if (i == 0) return vec3(1.0, 0.3, 0.3);
+    if (i == 1) return vec3(0.3, 1.0, 0.3);
+    if (i == 2) return vec3(0.3, 0.5, 1.0);
+    if (i == 3) return vec3(1.0, 1.0, 0.3);
+    return vec3(0.5);
 }
 
 // Parallax Occlusion Mapping: desplaza la UV según el ángulo de visión para
@@ -484,5 +543,10 @@ void main() {
 
     // Radiancia lineal HDR sin tonemapear: el tone mapping + gamma ahora ocurren
     // una sola vez en el present pass (assets/shaders/tonemap.frag), Ciclo 1 HDR.
+    if (uCascadeParams.z > 0.5) {
+        FragColor = vec4(CascadeDebugColor(), 1.0);
+        return;
+    }
+
     FragColor = vec4(color, 1.0);
 }

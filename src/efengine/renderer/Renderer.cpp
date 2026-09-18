@@ -9,6 +9,7 @@
 #include <efengine/renderer/PipelineStates.h>
 #include <efengine/renderer/DdgiSettings.h>
 #include <efengine/renderer/AoMath.h>
+#include <efengine/renderer/CascadedShadowMap.h>
 
 namespace efengine {
 namespace renderer {
@@ -19,7 +20,8 @@ namespace renderer {
         , m_objectUbo(sizeof(ObjectBlock))
         , m_materialUbo(sizeof(MaterialBlock))
         , m_ddgiUbo(sizeof(DdgiBlock))
-        , m_aoUbo(sizeof(AoBlock)) {
+        , m_aoUbo(sizeof(AoBlock))
+        , m_cascadeUbo(sizeof(CascadeBlock)) {
         // glBindBufferBase es estado GLOBAL, no por programa: alcanza engancharlos
         // una vez aca. Por eso desaparecio el set m_frameShaders, que existia solo
         // para no re-setear los mismos uniforms en cada programa del frame.
@@ -29,6 +31,7 @@ namespace renderer {
         m_materialUbo.BindTo(kMaterialBinding);
         m_ddgiUbo.BindTo(kDdgiBinding);
         m_aoUbo.BindTo(kAoBinding);
+        m_cascadeUbo.BindTo(kCascadeBinding);
     }
 
     void Renderer::Clear(f32 r, f32 g, f32 b, f32 a) const {
@@ -75,7 +78,11 @@ namespace renderer {
 
         // Los mapas de frame van a sus unidades fijas. Los samplers ya saben su
         // unidad por layout(binding=N): aca solo se bindea la textura.
-        if (shadow.map != null) shadow.map->Bind(8);
+        // La unidad 8 es del array de cascadas: el mapa unico de ShadowPass ya no
+        // se bindea aca, lo sigue usando la captura de DDGI con su propio programa.
+        if (lighting.cascades.enabled && lighting.cascades.map != null) {
+            lighting.cascades.map->BindTexture(8u);
+        }
         if (ibl.irradiance != null && ibl.prefiltered != null && ibl.brdfLut != null) {
             ibl.irradiance->Bind(9);
             ibl.prefiltered->Bind(10);
@@ -114,6 +121,9 @@ namespace renderer {
 
         const AoBlock aoBlock = MakeAoBlock(lighting.ao, lighting.indirect);
         m_aoUbo.Update(&aoBlock, sizeof(aoBlock));
+
+        const CascadeBlock cascadas = MakeCascadeBlock(lighting.cascades);
+        m_cascadeUbo.Update(&cascadas, sizeof(cascadas));
     }
 
     void Renderer::SetFrameBlock(const FrameBlock& block) const {

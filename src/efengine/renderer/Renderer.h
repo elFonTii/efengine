@@ -143,6 +143,7 @@ namespace renderer {
             UniformBuffer m_materialUbo;
             UniformBuffer m_ddgiUbo;
             UniformBuffer m_aoUbo;
+            UniformBuffer m_cascadeUbo;
     };
 
 }
