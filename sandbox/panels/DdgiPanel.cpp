@@ -103,6 +103,12 @@ using namespace efengine;
         // Tiempo de CPU emitiendo las llamadas, no de GPU ejecutandolas: sirve
         // para detectar que el round-robin se fue de escala, no como profiler.
         ImGui::TextDisabled("pase (CPU): %.3f ms", pass.lastMs());
+        const u32 totales  = pass.totalSpans();
+        const u32 visibles = pass.visibleSpans();
+        const f32 porcentaje = (totales > 0u) ? (100.0f * f32(visibles) / f32(totales)) : 0.0f;
+        ImGui::TextDisabled("submallas: %u / %u visibles (%.1f%%)", visibles, totales, porcentaje);
+        ImGui::TextDisabled("draws: %u   subidas de material: %u",
+                            pass.lastDraws(), pass.lastMaterialUploads());
 
         // -- Sampleo -----------------------------------------------------------
         ImGui::SeparatorText("Sampleo");
