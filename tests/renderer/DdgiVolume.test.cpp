@@ -152,11 +152,26 @@ TEST_CASE("NextRange: avanza el cursor y respeta perFrame") {
     CHECK(r2.nextCursor == 16u);
 }
 
-TEST_CASE("NextRange: el cursor envuelve al llegar al total") {
+TEST_CASE("NextRange: el ultimo lote se corta en el final de la grilla") {
+    // Si en vez de cortarse envolviera (250..255, 0..1), los centros del lote
+    // irian de la ultima esquina a la primera y BatchBounds devolveria la
+    // grilla entera: ese frame volveria a dibujar toda la escena.
     const UpdateRange r = NextRange(250u, 8u, 256u);
     CHECK(r.first      == 250u);
-    CHECK(r.count      ==   8u);   // el rango envuelve: 250..255, 0..1
-    CHECK(r.nextCursor ==   2u);
+    CHECK(r.count      ==   6u);
+    CHECK(r.nextCursor ==   0u);
+}
+
+TEST_CASE("NextRange: ningun rango cruza el final de la grilla") {
+    const u32 total = 100u, perFrame = 7u;
+
+    u32 cursor = 0u;
+    for (u32 frame = 0u; frame < 50u; ++frame) {
+        const UpdateRange r = NextRange(cursor, perFrame, total);
+        CHECK(r.first + r.count <= total);
+        CHECK(r.count > 0u);
+        cursor = r.nextCursor;
+    }
 }
 
 TEST_CASE("NextRange: perFrame mayor que total no repite probes") {
@@ -179,15 +194,17 @@ TEST_CASE("NextRange: un barrido completo visita cada probe exactamente una vez"
     std::vector<u32> visitas(total, 0u);
 
     u32 cursor = 0u;
-    // 15 frames * 7 = 105 >= 100: alcanza para un barrido completo.
-    for (u32 frame = 0u; frame < 15u; ++frame) {
+    u32 frames = 0u;
+    do {
         const UpdateRange r = NextRange(cursor, perFrame, total);
-        for (u32 s = 0u; s < r.count; ++s) visitas[(r.first + s) % total] += 1u;
+        REQUIRE(r.first + r.count <= total);
+        for (u32 s = 0u; s < r.count; ++s) visitas[r.first + s] += 1u;
         cursor = r.nextCursor;
-    }
+        ++frames;
+    } while (cursor != 0u && frames < 100u);
 
     for (u32 i = 0u; i < total; ++i) {
-        CHECK(visitas[i] >= 1u);   // ninguno se salteo
+        CHECK(visitas[i] == 1u);   // ni salteado ni repetido
     }
 }
 

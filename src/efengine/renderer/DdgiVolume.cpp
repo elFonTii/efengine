@@ -89,8 +89,11 @@ namespace renderer {
             return r;
         }
 
-        r.first      = cursor % total;
-        r.count      = std::min(perFrame, total);
+        r.first = cursor % total;
+        // Cortado en el final de la grilla, NO envuelto: un rango que envuelve
+        // tiene centros en las dos esquinas opuestas, y la AABB de BatchBounds
+        // pasa a ser la grilla entera -- ese frame no cullea nada.
+        r.count      = std::min(perFrame, total - r.first);
         r.nextCursor = (r.first + r.count) % total;
         return r;
     }
@@ -101,8 +104,9 @@ namespace renderer {
 
         AABB out = AABB::Empty();
         for (u32 slot = 0u; slot < range.count; ++slot) {
-            // El % es el mismo wrap que hace el blend: el ultimo lote de un
-            // barrido agarra el final y el principio de la grilla.
+            // El % es el mismo wrap que hace el blend. Con los rangos que
+            // devuelve NextRange es un no-op, pero la funcion sigue siendo
+            // correcta si alguien la llama con un rango que envuelve.
             const glm::vec3 c = ProbeWorldPosition(grid, (range.first + slot) % total);
             out.min = glm::min(out.min, c);
             out.max = glm::max(out.max, c);
