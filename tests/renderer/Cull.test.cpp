@@ -4,6 +4,9 @@
 #include <doctest/doctest.h>
 #include <efengine/renderer/Cull.h>
 
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <cmath>
 #include <limits>
 #include <vector>
 
@@ -109,4 +112,69 @@ TEST_CASE("CullAabb: lista vacia no revienta") {
     std::vector<u32> out;
     CullAabb(spans, AABB::Empty(), out);
     CHECK(out.empty());
+}
+
+// -- AppendMeshSpan -----------------------------------------------------------
+// Lo que SceneGraph::UpdateWorldTransforms tenia inline y no podia testear
+// nadie: Mesh construye un VertexArray, que necesita contexto GL.
+
+TEST_CASE("AppendMeshSpan: una traslacion mueve la caja sin agrandarla") {
+    const glm::mat4 world = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 0.0f, -5.0f));
+
+    std::vector<MeshSpan> out;
+    AppendMeshSpan(3u, 7u, Caja(glm::vec3(-1.0f), glm::vec3(1.0f)), world, out);
+
+    REQUIRE(out.size() == 1u);
+    CHECK(out[0].bounds.min.x == doctest::Approx( 9.0f));
+    CHECK(out[0].bounds.max.x == doctest::Approx(11.0f));
+    CHECK(out[0].bounds.min.z == doctest::Approx(-6.0f));
+    CHECK(out[0].bounds.max.z == doctest::Approx(-4.0f));
+}
+
+TEST_CASE("AppendMeshSpan: una rotacion de 45 grados agranda la caja") {
+    // La AABB de mundo de una caja rotada es mayor que la local: el centro va
+    // como punto y los extents se escalan con el abs() del 3x3.
+    const glm::mat4 world = glm::rotate(glm::mat4(1.0f), glm::radians(45.0f),
+                                        glm::vec3(0.0f, 0.0f, 1.0f));
+
+    std::vector<MeshSpan> out;
+    AppendMeshSpan(0u, 0u, Caja(glm::vec3(-1.0f), glm::vec3(1.0f)), world, out);
+
+    REQUIRE(out.size() == 1u);
+    const f32 esperado = std::sqrt(2.0f);
+    CHECK(out[0].bounds.max.x == doctest::Approx(esperado));
+    CHECK(out[0].bounds.max.y == doctest::Approx(esperado));
+    CHECK(out[0].bounds.max.z == doctest::Approx(1.0f));   // el eje del giro no crece
+}
+
+TEST_CASE("AppendMeshSpan: item y mesh son los indices que se le pasaron") {
+    std::vector<MeshSpan> out;
+    AppendMeshSpan(12u, 345u, Caja(glm::vec3(0.0f), glm::vec3(1.0f)), glm::mat4(1.0f), out);
+
+    REQUIRE(out.size() == 1u);
+    CHECK(out[0].item == 12u);
+    CHECK(out[0].mesh == 345u);
+}
+
+TEST_CASE("AppendMeshSpan: una AABB invalida no genera span") {
+    // Transformed() sobre Empty() opera con +inf y -inf y devuelve NaN, que
+    // haria fallar todos los Overlaps posteriores en silencio.
+    std::vector<MeshSpan> out;
+    AppendMeshSpan(0u, 0u, AABB::Empty(), glm::mat4(1.0f), out);
+    CHECK(out.empty());
+
+    AABB rota = Caja(glm::vec3(0.0f), glm::vec3(1.0f));
+    rota.min.y = 5.0f;
+    AppendMeshSpan(0u, 0u, rota, glm::mat4(1.0f), out);
+    CHECK(out.empty());
+}
+
+TEST_CASE("AppendMeshSpan: agrega sin pisar lo que la salida ya tenia") {
+    std::vector<MeshSpan> out { Span(99u, 98u, Caja(glm::vec3(0.0f), glm::vec3(1.0f))) };
+
+    AppendMeshSpan(1u, 2u, Caja(glm::vec3(0.0f), glm::vec3(1.0f)), glm::mat4(1.0f), out);
+
+    REQUIRE(out.size() == 2u);
+    CHECK(out[0].item == 99u);
+    CHECK(out[1].item ==  1u);
 }

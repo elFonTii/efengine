@@ -234,14 +234,7 @@ namespace scene {
 
             const std::vector<renderer::Mesh>& mallas = item.model->meshes();
             for (u32 m = 0u; m < static_cast<u32>(mallas.size()); ++m) {
-                const renderer::AABB& local = mallas[m].bounds();
-                if (!local.Valid()) continue;
-
-                renderer::MeshSpan span;
-                span.item   = i;
-                span.mesh   = m;
-                span.bounds = local.Transformed(item.world);
-                m_meshSpans.push_back(span);
+                renderer::AppendMeshSpan(i, m, mallas[m].bounds(), item.world, m_meshSpans);
             }
         }
 

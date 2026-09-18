@@ -517,9 +517,10 @@ TEST_CASE("SceneGraph::MeshSpans: un modelo sin submallas no aporta spans") {
     CHECK(g.MeshSpans().empty());
 }
 
-TEST_CASE("SceneGraph::MeshSpans: se rearma en cada UpdateWorldTransforms") {
-    // Sin el clear los spans se duplicarian frame a frame, igual que pasaria
-    // con Renderables.
+TEST_CASE("SceneGraph::MeshSpans: dos updates seguidos no acumulan") {
+    // Con un modelo sin submallas esto no verifica el rearmado, solo que la
+    // cuenta no crezca. La transformacion de cada span la cubre AppendMeshSpan
+    // en tests/renderer/Cull.test.cpp: aca Mesh no se puede construir sin GL.
     scene::SceneGraph g;
     renderer::Model model = MakeEmptyModelSG();
 

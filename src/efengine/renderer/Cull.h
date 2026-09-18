@@ -16,6 +16,15 @@ namespace renderer {
         AABB bounds {};     // en espacio de mundo
     };
 
+    // Agrega a 'out' el span de UNA submalla ubicada en el mundo, sin tocar lo
+    // que 'out' ya tenia: el llamador recorre items y submallas y va acumulando.
+    //
+    // Un 'local' invalido no aporta span, y ese chequeo es el motivo de que la
+    // funcion exista aparte: Transformed() sobre una caja invalida opera con
+    // infinitos y devuelve NaN, que se propaga por todo el culling.
+    void AppendMeshSpan(u32 item, u32 mesh, const AABB& local, const glm::mat4& world,
+                        std::vector<MeshSpan>& out);
+
     // Inclusivo en el contacto: geometria que apoya justo sobre el plano del
     // volumen cuenta como visible. Una pared que deja de bloquear luz es peor
     // que una submalla de mas.
