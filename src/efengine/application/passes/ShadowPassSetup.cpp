@@ -14,11 +14,19 @@ namespace application {
     void RegisterShadowPass(renderer::ScenePipeline& pipeline, const PassDeps& d) {
         // El ctor assertea si el shader es null: un shadow map sin shader de
         // profundidad no tiene degradacion posible.
-        pipeline.Add(std::make_unique<renderer::ShadowPass>(
+        auto pase = std::make_unique<renderer::ShadowPass>(
             d.renderer,
             d.resources.GetShader("shadow_depth",
                 "assets/shaders/shadow_depth.vert",
-                "assets/shaders/shadow_depth.frag")));
+                "assets/shaders/shadow_depth.frag"));
+        // Su unico consumidor es la captura de DDGI, que arranca apagada: sin
+        // esto el pase dibuja la escena entera para nadie.
+        //
+        // DEUDA TECNICA: quedan dos caminos de sombra vivos, este encuadrado a la
+        // escena y las cascadas encuadradas a la camara. Se unifican cuando DDGI
+        // se prenda en serio.
+        pase->enabled = false;
+        pipeline.Add(std::move(pase));
     }
 
 }
