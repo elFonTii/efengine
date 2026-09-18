@@ -104,9 +104,23 @@ namespace efecom {
     void SetMessageSink(MessageSink sink) { g_messageSink = sink; }
 
     // ── Inicialización / contexto ───────────────────────────────────────────
+    static f32 g_maxAnisotropy = 1.0f;
+
+    f32 GetMaxAnisotropy() { return g_maxAnisotropy; }
+
+    f32 ClampAnisotropy(f32 requested, f32 deviceMax) {
+        if (deviceMax < 1.0f) deviceMax = 1.0f;
+        if (requested < 1.0f) return 1.0f;
+        return (requested < deviceMax) ? requested : deviceMax;
+    }
+
     bool Initialize(ProcAddressLoader loader) {
         EFCOM_ASSERT(loader != nullptr, "Initialize: loader no puede ser null");
         if (gladLoadGL((GLADloadfunc)loader) == 0) return false;
+
+        // Una sola consulta: el maximo no cambia mientras viva el contexto.
+        glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &g_maxAnisotropy);
+        if (g_maxAnisotropy < 1.0f) g_maxAnisotropy = 1.0f;
 
 #ifdef _DEBUG
         // SYNCHRONOUS es lo que hace util al callback: sin el dispara en
@@ -419,6 +433,10 @@ namespace efecom {
         glTextureParameteri(id, GL_TEXTURE_WRAP_T, to_gl(desc.wrapT));
         if (desc.wrapS == TextureWrap::ClampToBorder || desc.wrapT == TextureWrap::ClampToBorder) {
             glTextureParameterfv(id, GL_TEXTURE_BORDER_COLOR, desc.borderColor);
+        }
+        if (desc.maxAnisotropy > 1.0f) {
+            glTextureParameterf(id, GL_TEXTURE_MAX_ANISOTROPY,
+                                ClampAnisotropy(desc.maxAnisotropy, g_maxAnisotropy));
         }
 
         // Storage inmutable: el tamano y el formato quedan fijos. Es lo correcto

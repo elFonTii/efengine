@@ -218,7 +218,17 @@ namespace efecom {
         TextureWrap   wrapT     = TextureWrap::Repeat;
         bool          generateMipmaps = false;
         f32           borderColor[4]  = { 1.0f, 1.0f, 1.0f, 1.0f }; // para ClampToBorder
+        // 1.0 = sin filtrado anisotropico (el default de GL). Se clampea contra
+        // el maximo del device antes de llegar al driver.
+        f32           maxAnisotropy   = 1.0f;
     };
+
+    // Maximo de anisotropia que soporta el device (>= 1.0). Valido tras Initialize.
+    f32 GetMaxAnisotropy();
+
+    // Puro: acota lo pedido al rango que acepta el driver. Pedir de mas es un
+    // GL_INVALID_VALUE, no un degradado silencioso.
+    f32 ClampAnisotropy(f32 requested, f32 deviceMax);
 
     // pixels puede ser null (texturas vacías para attachments).
     u32  CreateTexture2D(const Texture2DDesc& desc, const void* pixels);

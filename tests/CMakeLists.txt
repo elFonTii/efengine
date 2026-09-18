@@ -17,6 +17,7 @@ add_executable(efengine_tests
     renderer/Cubemap.test.cpp
     renderer/ShadowMath.test.cpp
     renderer/AoMath.test.cpp
+    renderer/Anisotropy.test.cpp
     renderer/Bounds.test.cpp
     renderer/BoxMesh.test.cpp
     renderer/CubeFaces.test.cpp

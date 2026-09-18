@@ -58,6 +58,7 @@ namespace renderer {
         desc.wrapS = efecom::TextureWrap::Repeat;
         desc.wrapT = efecom::TextureWrap::Repeat;
         desc.generateMipmaps = true;
+        desc.maxAnisotropy   = 16.0f;
 
         const u32 id = efecom::CreateTexture2D(desc, pixels);
         EF_ASSERT(id != 0, "Texture::Create: No hay contexto GL");
