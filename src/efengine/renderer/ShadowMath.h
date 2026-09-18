@@ -58,5 +58,33 @@ namespace renderer {
     void ComputeCascadeSplits(f32 nearPlane, f32 shadowDistance, u32 count,
                               f32 lambda, f32* outFar);
 
+    // Encuadre de UNA cascada. A diferencia de DirectionalLightFit, guarda el
+    // centro y el radio porque el culling y el panel los necesitan despues.
+    struct CascadeFit {
+        glm::mat4 matrix         { 1.0f };
+        glm::vec3 center         { 0.0f };  // centro de la esfera, en mundo (ya cuantizado)
+        f32       radius         { 1.0f };  // radio de la esfera de la rebanada
+        f32       texelWorldSize { 1.0f };  // cuanto mide un texel de ESTA cascada, en metros
+        f32       depthRange     { 1.0f };  // far - near de la caja, en metros
+        f32       splitFar       { 1.0f };  // el corte lejano, en distancia de vista
+    };
+
+    // Encuadra la rebanada [sliceNear, sliceFar] del frustum de la camara.
+    //
+    // Va por la esfera que contiene la rebanada y no por su AABB por dos razones.
+    // La primera ya vale para FitDirectionalLight: la esfera es invariante a la
+    // direccion de la luz. La segunda es propia de las cascadas y es la que
+    // importa: el radio de esa esfera depende solo de sliceNear/sliceFar y del
+    // fov, NO de hacia donde mira la camara. O sea que el texel mide siempre lo
+    // mismo. Con la AABB del frustum, girar la cabeza cambiaria el tamano del
+    // texel y las sombras respirarian.
+    //
+    // 'lightExtension' corre el plano cercano hacia la luz: un objeto FUERA de la
+    // rebanada pero mas arriba en la direccion del sol igual proyecta sombra
+    // adentro. Solo toca la profundidad, nunca el encuadre lateral.
+    CascadeFit FitCascade(const glm::vec3& direction, const glm::mat4& invView,
+                          f32 fovDeg, f32 aspect, f32 sliceNear, f32 sliceFar,
+                          u32 resolution, f32 lightExtension);
+
 }
 }
