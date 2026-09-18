@@ -95,6 +95,25 @@ namespace renderer {
         return r;
     }
 
+    AABB BatchBounds(const DdgiGrid& grid, UpdateRange range, f32 maxDistance) {
+        const u32 total = ProbeCount(grid);
+        if (range.count == 0u || total == 0u) return AABB::Empty();
+
+        AABB out = AABB::Empty();
+        for (u32 slot = 0u; slot < range.count; ++slot) {
+            // El % es el mismo wrap que hace el blend: el ultimo lote de un
+            // barrido agarra el final y el principio de la grilla.
+            const glm::vec3 c = ProbeWorldPosition(grid, (range.first + slot) % total);
+            out.min = glm::min(out.min, c);
+            out.max = glm::max(out.max, c);
+        }
+
+        const glm::vec3 margen(std::max(maxDistance, 0.0f));
+        out.min -= margen;
+        out.max += margen;
+        return out;
+    }
+
     glm::vec4 CaptureTileRect(u32 face, u32 slot) {
         // El atlas entero, en texels. Las mismas dos constantes con las que
         // DdgiPass aloca el target.

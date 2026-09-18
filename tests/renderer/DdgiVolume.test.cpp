@@ -293,3 +293,89 @@ TEST_CASE("CaptureTileCount: una vista por cara de cada probe") {
     CHECK(renderer::CaptureTileCount(renderer::kMaxProbesPerFrame)
           <= renderer::CaptureTileCount(renderer::kMaxProbesPerFrame));
 }
+
+TEST_CASE("BatchBounds: un solo probe da el cubo de semilado maxDistance") {
+    // Seis frustums de 90 grados con far = d cubren exactamente el cubo de
+    // semilado d. De ahi sale que el volumen de vision de un probe sea una AABB
+    // y no una esfera: no se pierde nada por conservadurismo.
+    DdgiGrid g;
+    g.origin  = glm::vec3(0.0f);
+    g.spacing = glm::vec3(1.0f);
+    g.counts  = glm::ivec3(4, 4, 4);
+
+    UpdateRange r;
+    r.first = 0u;
+    r.count = 1u;
+
+    const AABB b = BatchBounds(g, r, 7.0f);
+    CHECK(b.min.x == doctest::Approx(-7.0f));
+    CHECK(b.min.y == doctest::Approx(-7.0f));
+    CHECK(b.min.z == doctest::Approx(-7.0f));
+    CHECK(b.max.x == doctest::Approx( 7.0f));
+    CHECK(b.max.y == doctest::Approx( 7.0f));
+    CHECK(b.max.z == doctest::Approx( 7.0f));
+}
+
+TEST_CASE("BatchBounds: indices contiguos son una fila a lo largo de x") {
+    // index = x + cx*(y + cy*z), asi que un rango contiguo se estira en x. Es
+    // la razon por la que bajar probesPerFrame achica la caja: el largo de la
+    // fila es probesPerFrame * spacing.x.
+    DdgiGrid g;
+    g.origin  = glm::vec3(0.0f);
+    g.spacing = glm::vec3(3.0f, 3.0f, 3.0f);
+    g.counts  = glm::ivec3(10, 10, 10);
+
+    UpdateRange r;
+    r.first = 0u;
+    r.count = 5u;   // x = 0..4 -> 0 a 12 m
+
+    const AABB b = BatchBounds(g, r, 10.0f);
+    CHECK(b.min.x == doctest::Approx(-10.0f));
+    CHECK(b.max.x == doctest::Approx( 22.0f));   // 12 + 10
+    CHECK(b.min.y == doctest::Approx(-10.0f));
+    CHECK(b.max.y == doctest::Approx( 10.0f));
+}
+
+TEST_CASE("BatchBounds: un rango que envuelve el final cubre los dos extremos") {
+    // NextRange envuelve con %, asi que el ultimo lote de un barrido agarra el
+    // final y el principio de la grilla. La caja tiene que cubrir los dos, o la
+    // captura de esos probes dibuja contra geometria que se culleo.
+    DdgiGrid g;
+    g.origin  = glm::vec3(0.0f);
+    g.spacing = glm::vec3(1.0f);
+    g.counts  = glm::ivec3(4, 1, 1);   // 4 probes, x = 0..3
+
+    UpdateRange r;
+    r.first = 3u;
+    r.count = 2u;   // probes 3 y 0
+
+    const AABB b = BatchBounds(g, r, 1.0f);
+    CHECK(b.min.x == doctest::Approx(-1.0f));   // probe 0 menos 1
+    CHECK(b.max.x == doctest::Approx( 4.0f));   // probe 3 mas 1
+}
+
+TEST_CASE("BatchBounds: count cero devuelve una AABB invalida") {
+    // Con freeze el rango viene en cero. Una AABB invalida no solapa con nada,
+    // asi que CullAabb devuelve lista vacia y no se dibuja nada: exactamente lo
+    // que corresponde cuando no hay probes que actualizar.
+    DdgiGrid g;
+    UpdateRange r;
+    r.count = 0u;
+
+    CHECK_FALSE(BatchBounds(g, r, 7.0f).Valid());
+}
+
+TEST_CASE("BatchBounds: maxDistance cero deja la caja de los centros") {
+    DdgiGrid g;
+    g.origin  = glm::vec3(2.0f, 3.0f, 4.0f);
+    g.spacing = glm::vec3(1.0f);
+    g.counts  = glm::ivec3(4, 4, 4);
+
+    UpdateRange r;
+    r.first = 0u;
+    r.count = 1u;
+
+    const AABB b = BatchBounds(g, r, 0.0f);
+    CHECK(b.min.x == doctest::Approx(2.0f));
+    CHECK(b.max.x == doctest::Approx(2.0f));
+}
