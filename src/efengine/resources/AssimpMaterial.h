@@ -49,5 +49,14 @@ namespace resources {
     //     -> assets/bistro/Textures/X_Specular_Metallic.png
     std::string MetallicPathFromSpecular(const std::string& specularPngPath);
 
+    // Traduce un aiMaterial completo a un MaterialDef del motor.
+    //
+    // Toma const void* y no const aiMaterial* para que este header no obligue a
+    // incluir assimp: el unico caller es ModelLoader.cpp, que ya lo incluye.
+    // Shader fijo 'pbr'. Los slots que el archivo no trae quedan en el default
+    // del MaterialDef, editables desde el panel.
+    renderer::MaterialDef MaterialDefFromAssimp(const void* aiMaterialPtr,
+                                                const std::string& modelPath);
+
 }
 }

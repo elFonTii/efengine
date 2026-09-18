@@ -37,20 +37,33 @@ namespace {
 
 namespace efengine {
 namespace resources {
-    renderer::Model* ResourceManager::GetModel(const char* path){
-        EF_ASSERT(path != null, "ResourceManager::GetModel: Intentando acceder a un directorio nulo");
-        
+    ResourceManager::ModelSlot* ResourceManager::LoadSlot(const char* path){
         if (auto it = m_models.find(path); it != m_models.end()) {
             return &it->second;
-        } else {
-            auto result = resources::ModelLoader::Load(path);
-            if(!result) return null;
-
-            auto [inserted, ok] = m_models.emplace(path, std::move(*result));
-            EF_ASSERT(ok, "ResourceManager::GetModel: emplace no insertó tras un miss");
-
-            return &inserted->second;
         }
+
+        auto result = resources::ModelLoader::Load(path);
+        if(!result) return null;
+
+        auto [inserted, ok] = m_models.emplace(
+            path, ModelSlot{ std::move(result->model), std::move(result->materials) });
+        EF_ASSERT(ok, "ResourceManager::LoadSlot: emplace no insertó tras un miss");
+
+        return &inserted->second;
+    }
+
+    renderer::Model* ResourceManager::GetModel(const char* path){
+        EF_ASSERT(path != null, "ResourceManager::GetModel: Intentando acceder a un directorio nulo");
+
+        ModelSlot* slot = LoadSlot(path);
+        return slot == null ? null : &slot->model;
+    }
+
+    const std::vector<renderer::MaterialDef>* ResourceManager::GetModelMaterials(const char* path){
+        EF_ASSERT(path != null, "ResourceManager::GetModelMaterials: Intentando acceder a un directorio nulo");
+
+        ModelSlot* slot = LoadSlot(path);
+        return slot == null ? null : &slot->materials;
     }
 
     renderer::Texture* ResourceManager::GetTexture(const char* path, renderer::ColorSpace space){
@@ -120,7 +133,7 @@ namespace resources {
         if (model == null) return null;
 
         for (const auto& entry : m_models) {
-            if (&entry.second == model) return &entry.first; // compara direcciones de memoria, no contenido. 
+            if (&entry.second.model == model) return &entry.first; // compara direcciones de memoria, no contenido. 
         }
         return null;
     }
