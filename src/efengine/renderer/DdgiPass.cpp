@@ -272,6 +272,14 @@ namespace renderer {
                           const IblContext& ibl, const Cubemap* env) {
         const ScopedMs medicion { &m_lastMs };
 
+        // Antes de los retornos tempranos (sin probes, congelado): sin esto el
+        // panel se queda mostrando los draws del ultimo frame que si capturo,
+        // como si la captura detenida siguiera dibujando.
+        m_totalSpans          = static_cast<u32>(scene.MeshSpans().size());
+        m_visibleSpans        = 0u;
+        m_lastDraws           = 0u;
+        m_lastMaterialUploads = 0u;
+
         EnsureAtlasSize();
 
         const u32 total = ProbeCount(m_atlasGrid);
