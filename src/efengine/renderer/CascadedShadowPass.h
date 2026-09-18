@@ -6,6 +6,8 @@
 #include <efengine/renderer/ShaderBlocks.h>
 #include <efengine/renderer/UniformBuffer.h>
 
+#include <vector>
+
 namespace efengine {
 namespace renderer {
 
@@ -57,6 +59,10 @@ namespace renderer {
             // PassParams (binding 4) propio: este pase corre antes de BeginScene,
             // igual que ShadowPass.
             UniformBuffer     m_passUbo { sizeof(ShadowPassBlock) };
+
+            // Un buffer por cascada, reusado entre frames: CullAabb limpia sin
+            // liberar la capacidad, que es justo para esto.
+            std::vector<u32> m_visibles[kMaxCascades];
     };
 
 }

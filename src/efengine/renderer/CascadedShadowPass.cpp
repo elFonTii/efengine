@@ -9,6 +9,7 @@
 #include <efengine/renderer/PipelineStates.h>
 #include <efengine/renderer/Model.h>
 #include <efengine/renderer/Mesh.h>
+#include <efengine/renderer/Cull.h>
 #include <efengine/scene/SceneGraph.h>
 #include <efengine/scene/Camera.h>
 #include <efengine/core/Assert.h>
@@ -64,12 +65,17 @@ namespace renderer {
             m_passUbo.Update(&pass, sizeof(pass));
             m_passUbo.BindTo(kPassBinding);
 
-            for (const scene::RenderItem& item : scene.Renderables()) {
+            const AABB volumen = CascadeCullVolume(m_context.fits[i], sun.direction);
+            CullAabb(scene.MeshSpans(), volumen, m_visibles[i]);
+
+            // La unidad del culling es la SUBMALLA: un .fbx importado es un solo
+            // item con miles de submallas, asi que cullear por item descarta cero.
+            for (u32 indice : m_visibles[i]) {
+                const MeshSpan&          span = scene.MeshSpans()[indice];
+                const scene::RenderItem& item = scene.Renderables()[span.item];
                 if (!item.model) continue;
                 m_renderer.SetObjectMatrix(item.world);
-                for (const Mesh& mesh : item.model->meshes()) {
-                    m_renderer.Draw(mesh.vertexArray(), *m_shader);
-                }
+                m_renderer.Draw(item.model->meshes()[span.mesh].vertexArray(), *m_shader);
             }
         }
 
