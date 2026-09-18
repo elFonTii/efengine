@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include <efengine/resources/AssimpMaterial.h>
+#include <efengine/renderer/MaterialDef.h>
 
 using efengine::resources::MetallicPathFromSpecular;
 using efengine::resources::RemapTexturePath;
@@ -69,4 +70,62 @@ TEST_CASE("MetallicPathFromSpecular: lo que no termina en .png devuelve vacio") 
     // Si no salio del conversor no hay companion que buscar.
     CHECK(MetallicPathFromSpecular("Textures/X.dds").empty());
     CHECK(MetallicPathFromSpecular("").empty());
+}
+
+using efengine::renderer::ColorSpace;
+using efengine::renderer::TextureSlot;
+using efengine::resources::MapAssimpTextureType;
+
+/*
+    Los valores son los de aiTextureType: 1 DIFFUSE, 2 SPECULAR, 4 EMISSIVE,
+    5 HEIGHT, 6 NORMALS. Se pasan como int para que este header no arrastre
+    assimp a todo el que lo incluya.
+
+    El volcado del Bistro (132 materiales) reporto exactamente 1, 2, 4 y 6.
+*/
+
+TEST_CASE("MapAssimpTextureType: DIFFUSE va a Albedo en sRGB") {
+    const auto m = MapAssimpTextureType(1);
+    REQUIRE(m.size() == 1u);
+    CHECK(m[0].slot  == TextureSlot::Albedo);
+    CHECK(m[0].space == ColorSpace::sRGB);
+}
+
+TEST_CASE("MapAssimpTextureType: NORMALS y HEIGHT van los dos a Normal en lineal") {
+    // Muchos exportadores de FBX meten el normal map en el canal HEIGHT.
+    for (const int tipo : {5, 6}) {
+        const auto m = MapAssimpTextureType(tipo);
+        REQUIRE(m.size() == 1u);
+        CHECK(m[0].slot  == TextureSlot::Normal);
+        CHECK(m[0].space == ColorSpace::Linear);
+    }
+}
+
+TEST_CASE("MapAssimpTextureType: SPECULAR da DOS slots, roughness y metallic") {
+    // El _Specular del Bistro es ORM empaquetado: G=roughness, B=metallic. El
+    // conversor lo parte en dos PNG y una sola referencia del FBX llena los dos
+    // slots. El segundo usa la ruta de MetallicPathFromSpecular.
+    const auto m = MapAssimpTextureType(2);
+    REQUIRE(m.size() == 2u);
+
+    CHECK(m[0].slot      == TextureSlot::Roughness);
+    CHECK(m[0].space     == ColorSpace::Linear);
+    CHECK_FALSE(m[0].companionMetallic);
+
+    CHECK(m[1].slot      == TextureSlot::Metallic);
+    CHECK(m[1].space     == ColorSpace::Linear);
+    CHECK(m[1].companionMetallic);
+}
+
+TEST_CASE("MapAssimpTextureType: EMISSIVE va a Emissive en sRGB") {
+    const auto m = MapAssimpTextureType(4);
+    REQUIRE(m.size() == 1u);
+    CHECK(m[0].slot  == TextureSlot::Emissive);
+    CHECK(m[0].space == ColorSpace::sRGB);
+}
+
+TEST_CASE("MapAssimpTextureType: un tipo no contemplado no devuelve nada") {
+    CHECK(MapAssimpTextureType(0).empty());    // NONE
+    CHECK(MapAssimpTextureType(3).empty());    // AMBIENT
+    CHECK(MapAssimpTextureType(18).empty());   // UNKNOWN
 }

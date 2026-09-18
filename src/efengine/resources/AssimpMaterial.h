@@ -1,9 +1,29 @@
 #pragma once
 
+#include <efengine/renderer/MaterialDef.h>
+
 #include <string>
+#include <vector>
 
 namespace efengine {
 namespace resources {
+
+    struct SlotMapping {
+        renderer::TextureSlot slot;
+        renderer::ColorSpace  space;
+        // true = la ruta no es la que nombra el FBX sino la del companion que
+        // devuelve MetallicPathFromSpecular.
+        bool                  companionMetallic = false;
+    };
+
+    // Los slots que llena un aiTextureType. Vacio si no se mapea.
+    //
+    // Toma int y no aiTextureType para que este header no arrastre assimp a todo
+    // el que lo incluya; el caller castea.
+    //
+    // SPECULAR devuelve DOS: el _Specular del Bistro es ORM empaquetado y el
+    // conversor lo parte en roughness y metallic.
+    std::vector<SlotMapping> MapAssimpTextureType(int assimpType);
 
     // Traduce la ruta de textura que declara el archivo de modelo a una ruta
     // usable por el motor.

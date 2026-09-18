@@ -38,6 +38,22 @@ namespace resources {
 
     }
 
+    std::vector<SlotMapping> MapAssimpTextureType(int assimpType) {
+        using renderer::ColorSpace;
+        using renderer::TextureSlot;
+
+        switch (assimpType) {
+            case 1: return { { TextureSlot::Albedo, ColorSpace::sRGB, false } };
+            case 2: return { { TextureSlot::Roughness, ColorSpace::Linear, false },
+                             { TextureSlot::Metallic,  ColorSpace::Linear, true  } };
+            case 4: return { { TextureSlot::Emissive, ColorSpace::sRGB, false } };
+            // Muchos exportadores de FBX mandan el normal map por HEIGHT.
+            case 5:
+            case 6: return { { TextureSlot::Normal, ColorSpace::Linear, false } };
+            default: return {};
+        }
+    }
+
     std::string RemapTexturePath(const std::string& assimpPath,
                                  const std::string& modelPath) {
         if (assimpPath.empty()) return std::string();
