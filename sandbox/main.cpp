@@ -1,4 +1,5 @@
 #include "EditorUI.h"
+#include "ProbeScene.h"
 #include "TestScene.h"
 
 #include <efengine/application/Application.h>
@@ -178,10 +179,22 @@ int main() {
     // El estado de la UI vive aca (el loop es el dueno); el editor solo lo usa.
     sandbox::EditorState editorState;
     sandbox::EditorContext editor { app, scene, cam, controller, assets, rm, registry, editorState, game.get() };
-    // El .efe que se abre solo. El menu "Escena" carga cualquier otro de
-    // assets/scenes, y la sala de Cornell sigue estando ahi.
+    // SONDA. Con una ruta aca, el sandbox arranca montando ese .fbx crudo en vez
+    // del .efe: es el experimento de "se lo puede tragar el motor?". Vaciar la
+    // constante devuelve el arranque normal por .efe.
+    // Ruta ABSOLUTA al arbol de fuentes, no al espejo de assets/ que queda junto
+    // al .exe: bistro/ esta excluido de ese espejo (son 1,5 GB, ver
+    // cmake/CopyAssets.cmake).
+    constexpr const char* kProbeModel =
+        "D:/@ffontana/CONSOLIDADAS/efengine/assets/bistro/BistroExterior.fbx";
+
+    // El .efe que se abre solo cuando no hay sonda. El menu "Escena" carga
+    // cualquier otro de assets/scenes, y la sala de Cornell sigue estando ahi.
     constexpr const char* kBootScene = "assets/scenes/sandbox.efe";
-    if (serialization::SceneSerializer::Load(kBootScene, scene, assets, rm, registry)) {
+
+    if (kProbeModel[0] != '\0') {
+        sandbox::BuildProbeScene(editor, kProbeModel);
+    } else if (serialization::SceneSerializer::Load(kBootScene, scene, assets, rm, registry)) {
         editorState.currentScenePath = kBootScene;
     } else {
         // No se cierra el sandbox: sin escena el editor igual sirve para cargar
