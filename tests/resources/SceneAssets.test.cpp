@@ -54,3 +54,33 @@ TEST_CASE("SceneAssets::UpdateMaterial con indice invalido -> false y no toca na
     CHECK(assets.DefAt(i)->name == "unico");
     CHECK(assets.MaterialAt(i)->roughness == doctest::Approx(1.0f));
 }
+
+TEST_CASE("SceneAssets::IndexOfMaterialNamed encuentra por nombre") {
+    resources::SceneAssets assets;
+    assets.AddMaterial(defDePrueba("piso", 1.0f), materialDePrueba(1.0f));
+    const u32 i = assets.AddMaterial(defDePrueba("pared", 0.5f), materialDePrueba(0.5f));
+
+    CHECK(assets.IndexOfMaterialNamed("pared") == i);
+}
+
+TEST_CASE("SceneAssets::IndexOfMaterialNamed nombre ausente -> kInvalidIndex") {
+    resources::SceneAssets assets;
+    assets.AddMaterial(defDePrueba("piso", 1.0f), materialDePrueba(1.0f));
+
+    CHECK(assets.IndexOfMaterialNamed("techo") == resources::SceneAssets::kInvalidIndex);
+}
+
+TEST_CASE("SceneAssets::IndexOfMaterialNamed en vacio -> kInvalidIndex") {
+    resources::SceneAssets assets;
+    CHECK(assets.IndexOfMaterialNamed("lo_que_sea") == resources::SceneAssets::kInvalidIndex);
+}
+
+TEST_CASE("SceneAssets::IndexOfMaterialNamed devuelve el primero si hay repetidos") {
+    // AddMaterial no impide nombres repetidos; el dedup lo hace ImportMaterials
+    // consultando esto ANTES de agregar.
+    resources::SceneAssets assets;
+    const u32 primero = assets.AddMaterial(defDePrueba("gris", 1.0f), materialDePrueba(1.0f));
+    assets.AddMaterial(defDePrueba("gris", 0.2f), materialDePrueba(0.2f));
+
+    CHECK(assets.IndexOfMaterialNamed("gris") == primero);
+}

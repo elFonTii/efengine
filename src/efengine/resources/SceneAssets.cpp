@@ -90,5 +90,13 @@ namespace resources {
         m_generated.clear();
     }
 
+
+    u32 SceneAssets::IndexOfMaterialNamed(const std::string& name) const {
+        for (u32 i = 0u; i < m_materials.size(); ++i) {
+            if (m_materials[i].def.name == name) return i;
+        }
+        return kInvalidIndex;
+    }
+
 }
 }
