@@ -494,6 +494,26 @@ namespace efecom {
         return id;
     }
 
+    u32 CreateDepthTexture2DArray(u32 resolution, u32 layers) {
+        EFCOM_ASSERT(resolution > 0u && layers > 0u,
+                     "CreateDepthTexture2DArray: resolucion y capas tienen que ser > 0");
+
+        u32 id = 0;
+        glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &id);
+        EFCOM_ASSERT(id != 0, "CreateDepthTexture2DArray: glCreateTextures devuelve 0 (sin contexto GL)");
+
+        glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+        const f32 blanco[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        glTextureParameterfv(id, GL_TEXTURE_BORDER_COLOR, blanco);
+
+        glTextureStorage3D(id, 1, to_gl(TextureFormat::Depth32F).internalFormat,
+                           (GLsizei)resolution, (GLsizei)resolution, (GLsizei)layers);
+        return id;
+    }
+
     // ── Cubemaps ───────────────────────────────────────────────────────────
     u32 CreateCubemap(u32 size, TextureFormat format, u32 mipCount) {
         u32 id = 0;
@@ -572,6 +592,11 @@ namespace efecom {
 
     void FramebufferDepthTexture(u32 framebuffer, u32 texture) {
         glNamedFramebufferTexture(framebuffer, GL_DEPTH_ATTACHMENT, texture, 0);
+    }
+
+    void FramebufferDepthTextureLayer(u32 framebuffer, u32 texture, u32 layer) {
+        glNamedFramebufferTextureLayer(framebuffer, GL_DEPTH_ATTACHMENT,
+                                       texture, 0, (GLint)layer);
     }
 
     void FramebufferDisableColor(u32 framebuffer) {

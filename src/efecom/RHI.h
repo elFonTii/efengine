@@ -247,6 +247,14 @@ namespace efecom {
     };
     u32 CreateTexture2DStorage(const Texture2DStorageDesc& desc);
 
+    // Array de 'layers' capas cuadradas de profundidad, storage inmutable, sin
+    // mips. Para shadow maps en cascada: una capa por cascada, un solo sampler.
+    //
+    // Filtro NEAREST y borde blanco, igual que Texture::CreateDepthAttachment: el
+    // PCF lo hace el fragment shader, y fuera del frustum la profundidad de borde
+    // 1.0 significa "iluminado".
+    u32 CreateDepthTexture2DArray(u32 resolution, u32 layers);
+
     // Cubemaps
     // Storage inmutable de 6 caras cuadradas con mipCount niveles.
     u32  CreateCubemap(u32 size, TextureFormat format, u32 mipCount);
@@ -278,6 +286,10 @@ namespace efecom {
     void BindRenderTarget(u32 target, u32 width, u32 height);
     void FramebufferColorTexture(u32 framebuffer, u32 texture);
     void FramebufferDepthTexture(u32 framebuffer, u32 texture);
+
+    // Adjunta UNA capa de un array como el depth del FBO. Se vuelve a llamar
+    // antes de cada cascada: un solo FBO, una capa por vez.
+    void FramebufferDepthTextureLayer(u32 framebuffer, u32 texture, u32 layer);
     void FramebufferDisableColor(u32 framebuffer); // FBO solo-profundidad (shadow maps)
     bool FramebufferComplete(u32 framebuffer);
     u32  CreateDepthRenderbuffer(u32 width, u32 height);
