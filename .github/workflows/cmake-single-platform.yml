@@ -231,6 +231,11 @@ jobs:
           BRANCH="docs/readme-pr-${PR_NUM}"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # claude-code-action corre entre el checkout y este paso, y deja el
+          # remote sin las credenciales que persistió actions/checkout ("Invalid
+          # username or token"). Las reponemos con el token del job.
+          git remote set-url origin \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git checkout -b "$BRANCH"
           git add README.md
           git commit -m "README - actualizacion propuesta para el PR #${PR_NUM}"
