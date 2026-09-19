@@ -177,8 +177,11 @@ jobs:
             src sandbox tests cmake CMakeLists.txt > pr-diff.txt
           echo "Diff de $(wc -l < pr-diff.txt) líneas."
 
+      # Pineada al SHA y no al tag 'v1': es una action de terceros y este paso
+      # ve ANTHROPIC_API_KEY con permiso de escritura sobre el repo. Un tag es
+      # móvil; el SHA no. Para actualizarla, mover el SHA a mano y leer el diff.
       - name: Pedirle a Claude el README actualizado
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@a21f96aeaac393a19ee8b8dff2dce4b840f5d311 # v1 al 2026-09-18
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: '--model claude-opus-5 --allowedTools "Read,Edit,Glob,Grep"'
