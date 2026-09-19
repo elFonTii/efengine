@@ -14,6 +14,15 @@ Es un motor gráfico forward renderer en **C++17 / OpenGL 4.5 Core**,  construid
 - **Tests:** doctest + CTest
 
 ---
+### 2026-18-9
+Sombras por cascadas, en  total 4
+<img width="1905" height="980" alt="image" src="https://github.com/user-attachments/assets/d6a89d1d-eb37-4196-a197-84e012636bfe" />
+
+### 2026-18-9
+Stress test con Amazon Lumberyard Bistro Scene, carga de materiales automática desde Assimp FBX y culling de DDGI
+Mantiene un promedio por frame de 6ms con una RTX 3070, el mayor salto hasta el momento
+<img width="1919" height="988" alt="image" src="https://github.com/user-attachments/assets/c44c9541-a497-4b5f-b12d-26873aba09a4" />
+
 ### 2026-16-08
 DDGI Probes optimization + Chebyshev
 <img width="1917" height="1030" alt="image" src="https://github.com/user-attachments/assets/9e8f7c81-a2cd-4df3-a34d-abf739c1656d" />
