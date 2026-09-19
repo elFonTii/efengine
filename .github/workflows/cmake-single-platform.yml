@@ -193,7 +193,7 @@ jobs:
         uses: anthropics/claude-code-action@a21f96aeaac393a19ee8b8dff2dce4b840f5d311 # v1 al 2026-09-18
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_args: '--model claude-opus-5 --allowedTools "Read,Edit,Glob,Grep"'
+          claude_args: '--model claude-sonnet-5 --allowedTools "Read,Edit,Glob,Grep"'
           prompt: |
             Leé pr-diff.txt: es el diff de este PR contra master en un motor
             gráfico C++17/OpenGL. Leé README.md y actualizá SOLO las partes que
@@ -231,9 +231,12 @@ jobs:
           BRANCH="docs/readme-pr-${PR_NUM}"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # claude-code-action corre entre el checkout y este paso, y deja el
-          # remote sin las credenciales que persistió actions/checkout ("Invalid
-          # username or token"). Las reponemos con el token del job.
+          # actions/checkout deja un header de autorización en la config de git,
+          # y ese header GANA sobre las credenciales de la URL. Reponer la URL
+          # sola no alcanzaba: git seguía mandando el header viejo, que
+          # claude-code-action deja inservible, y el push moría con "Invalid
+          # username or token". Hay que borrarlo primero.
+          git config --unset-all http."https://github.com/".extraheader || true
           git remote set-url origin \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git checkout -b "$BRANCH"
