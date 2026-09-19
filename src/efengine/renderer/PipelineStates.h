@@ -20,6 +20,7 @@ namespace renderer {
     efecom::PipelineState ShadowDepthState();
     efecom::PipelineState FullscreenState();
     efecom::PipelineState DdgiCaptureState();
+    efecom::PipelineState VoxelizeState();
 
 }
 }

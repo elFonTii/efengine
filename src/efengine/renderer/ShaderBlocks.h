@@ -191,6 +191,15 @@ namespace renderer {
         glm::vec4 params;           // x=count (0 = apagado), y=blendRatio, z=debugView
     };
 
+    // PassParams (binding 4) de voxel/voxelize.*. El motor no tiene uniforms
+    // sueltos (ver Shader.h), asi que la ortografica del eje y el encuadre del
+    // grid viajan por el bloque de pase como cualquier otro dato.
+    struct alignas(16) VoxelizePassBlock {
+        glm::mat4 viewProj;
+        glm::vec4 gridOrigin;   // .xyz = esquina minima
+        glm::vec4 gridParams;   // x = voxelSize (m), y = resolucion por eje
+    };
+
     CascadeBlock MakeCascadeBlock(const CascadeContext& ctx);
 
     // ── Funciones puras que arman los bloques ──────────────────────────────

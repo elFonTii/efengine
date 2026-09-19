@@ -29,6 +29,11 @@ namespace renderer {
     static_assert(offsetof(FrameBlock, shadowParams)     == 272u, "FrameBlock.shadowParams");
     static_assert(offsetof(FrameBlock, iblParams)        == 288u, "FrameBlock.iblParams");
 
+    static_assert(sizeof(VoxelizePassBlock) == 96u, "VoxelizePassBlock: tamano std140 roto");
+    static_assert(offsetof(VoxelizePassBlock, viewProj)   ==  0u, "VoxelizePassBlock.viewProj");
+    static_assert(offsetof(VoxelizePassBlock, gridOrigin) == 64u, "VoxelizePassBlock.gridOrigin");
+    static_assert(offsetof(VoxelizePassBlock, gridParams) == 80u, "VoxelizePassBlock.gridParams");
+
     static_assert(sizeof(LightsBlock) == 176u, "LightsBlock: tamano std140 roto");
     static_assert(offsetof(LightsBlock, positions)    ==   0u, "LightsBlock.positions");
     static_assert(offsetof(LightsBlock, colors)       ==  64u, "LightsBlock.colors");
