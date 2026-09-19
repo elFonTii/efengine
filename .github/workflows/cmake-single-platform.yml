@@ -6,6 +6,10 @@
 #              lleguen a master (justo lo que antes se colaba post-merge).
 #   - release: publica un tag + artefacto en GitHub, solo cuando un PR se
 #              mergea a master (necesita los datos del PR para el tag y notas).
+#   - readme:  al ABRIR un PR a master, le pide a Claude que actualice el README
+#              y propone el cambio en un PR aparte contra la rama del PR.
+#   - docs-check / pages: Doxygen. En el PR se verifica que genera; al mergear
+#              se publica el sitio en GitHub Pages.
 name: CMake on a single platform
 
 on:
@@ -13,10 +17,12 @@ on:
   push:
     branches:
       - '**'
-  # Release: se dispara al cerrar un PR hacia master; abajo filtramos para
-  # actuar solo si realmente se mergeó (no un PR cerrado sin mergear).
+  # Eventos de PR hacia master. Cada job filtra el que le toca:
+  #   opened      -> readme (una sola vez por PR, para no quemar tokens)
+  #   opened/sync -> docs-check (Doxygen tiene que seguir generando)
+  #   closed      -> release y pages, y solo si realmente se mergeó.
   pull_request:
-    types: [closed]
+    types: [opened, synchronize, closed]
     branches:
       - master
   # Permite lanzar el build a mano desde la pestaña Actions.
@@ -144,3 +150,190 @@ jobs:
             --target "${{ github.sha }}" \
             --title "efengine ${{ steps.version.outputs.tag }}" \
             --notes "Release generada automáticamente al mergear el PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+
+  readme:
+    name: Proponer README actualizado
+    # Solo al ABRIR el PR. En cada push a la rama no se vuelve a llamar al
+    # modelo: sería una factura de tokens por cada commit.
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout de la rama del PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      # El diff contra master es el único contexto de "qué cambió". Lo acotamos
+      # al código y al build: los assets binarios no dicen nada del README.
+      - name: Extraer el diff del PR
+        run: |
+          git fetch origin master --depth=0
+          git diff origin/master...HEAD -- \
+            src sandbox tests cmake CMakeLists.txt > pr-diff.txt
+          echo "Diff de $(wc -l < pr-diff.txt) líneas."
+
+      - name: Pedirle a Claude el README actualizado
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: '--model claude-opus-5 --allowedTools "Read,Edit,Glob,Grep"'
+          prompt: |
+            Leé pr-diff.txt: es el diff de este PR contra master en un motor
+            gráfico C++17/OpenGL. Leé README.md y actualizá SOLO las partes que
+            el diff dejó desfasadas: el árbol de "Estructura del proyecto", la
+            lista de subsistemas y las dependencias.
+
+            Reglas:
+            - Editá README.md en el working tree. No corras git ni gh.
+            - No reescribas secciones que el diff no toca. No cambies el tono
+              ni la bitácora de capturas con fechas.
+            - El README está en español; escribí en español, con acentos.
+            - Si el diff no justifica ningún cambio, no edites nada.
+
+      # Si el modelo no tocó el README, el job termina acá sin abrir ruido.
+      - name: ¿Hubo cambios?
+        id: diff
+        run: |
+          rm -f pr-diff.txt
+          if git diff --quiet -- README.md; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Claude no propuso cambios en el README."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # El PR va contra la rama del PR original, no contra master: el cambio de
+      # doc queda aislado y no pisa lo que estés escribiendo en tu rama.
+      - name: Abrir PR con la propuesta
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE: ${{ github.event.pull_request.head.ref }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+        run: |
+          BRANCH="docs/readme-pr-${PR_NUM}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add README.md
+          git commit -m "README - actualizacion propuesta para el PR #${PR_NUM}"
+          git push --force origin "$BRANCH"
+          gh pr create \
+            --base "$BASE" \
+            --head "$BRANCH" \
+            --title "README actualizado para el PR #${PR_NUM}" \
+            --body "Propuesta automática. Mergealo si te sirve, cerralo si no." \
+            || echo "Ya existía un PR abierto para $BRANCH; se actualizó la rama."
+
+  docs-check:
+    name: Verificar que Doxygen genera
+    # En el PR abierto no publicamos nada, pero queremos enterarnos acá si la
+    # doc dejó de generar, no después del merge.
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Instalar Doxygen y dependencias de configure
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            doxygen graphviz \
+            xorg-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            wayland-protocols \
+            libgl1-mesa-dev \
+            ninja-build
+
+      # Solo configure: el target 'docs' no compila el motor.
+      - name: Configurar CMake
+        run: >
+          cmake -B ${{ github.workspace }}/build
+          -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          -DEFENGINE_BUILD_TESTS=OFF
+
+      - name: Generar documentación
+        run: cmake --build ${{ github.workspace }}/build --target docs
+
+  pages:
+    name: Publicar documentación en GitHub Pages
+    # Misma condición que 'release': solo cuando un PR se mergeó a master.
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    # Pages no tolera despliegues concurrentes, y a diferencia del build NO
+    # queremos cancelar uno a mitad de camino: quedaría el sitio a medio subir.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Instalar Doxygen y dependencias de configure
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            doxygen graphviz \
+            xorg-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            wayland-protocols \
+            libgl1-mesa-dev \
+            ninja-build
+
+      - name: Configurar CMake
+        run: >
+          cmake -B ${{ github.workspace }}/build
+          -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          -DEFENGINE_BUILD_TESTS=OFF
+
+      # Sale en docs/html/ (ver CMakeLists.txt, target 'docs').
+      - name: Generar documentación
+        run: cmake --build ${{ github.workspace }}/build --target docs
+
+      # El sitio tiene dos piezas: la landing del repo en la raíz y la API de
+      # Doxygen bajo /docs/.
+      - name: Armar el sitio
+        run: |
+          mkdir -p _site/docs
+          cp -r docs/html/. _site/docs/
+          if [ -f docs/index.html ]; then
+            cp docs/index.html _site/index.html
+          else
+            # Todavía no se mergeó la landing: la raíz redirige a la API para
+            # que el sitio no quede en 404.
+            echo '<!DOCTYPE html><meta http-equiv="refresh" content="0; url=docs/">' \
+              > _site/index.html
+          fi
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+
+      - name: Subir el artefacto del sitio
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Desplegar
+        id: deploy
+        uses: actions/deploy-pages@v4
