@@ -191,9 +191,16 @@ jobs:
       # móvil; el SHA no. Para actualizarla, mover el SHA a mano y leer el diff.
       - name: Pedirle a Claude el README actualizado
         uses: anthropics/claude-code-action@a21f96aeaac393a19ee8b8dff2dce4b840f5d311 # v1 al 2026-09-18
+        env:
+          ANTHROPIC_MODEL: claude-sonnet-5
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_args: '--model claude-sonnet-5 --allowedTools "Read,Edit,Glob,Grep"'
+          # Una flag por línea: es el formato que documenta la action. En una
+          # sola línea con comillas anidadas el --model no se aplicaba y caía
+          # al modelo por defecto (Opus). ANTHROPIC_MODEL va de refuerzo.
+          claude_args: |
+            --model claude-sonnet-5
+            --allowedTools Read,Edit,Glob,Grep
           prompt: |
             Leé pr-diff.txt: es el diff de este PR contra master en un motor
             gráfico C++17/OpenGL. Leé README.md y actualizá SOLO las partes que
