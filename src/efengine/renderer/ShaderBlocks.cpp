@@ -34,6 +34,10 @@ namespace renderer {
     static_assert(offsetof(VoxelizePassBlock, gridOrigin) == 64u, "VoxelizePassBlock.gridOrigin");
     static_assert(offsetof(VoxelizePassBlock, gridParams) == 80u, "VoxelizePassBlock.gridParams");
 
+    static_assert(sizeof(TraceVoxelPassBlock) == 32u, "TraceVoxelPassBlock: tamano std140 roto");
+    static_assert(offsetof(TraceVoxelPassBlock, gridOrigin) ==  0u, "TraceVoxelPassBlock.gridOrigin");
+    static_assert(offsetof(TraceVoxelPassBlock, gridParams) == 16u, "TraceVoxelPassBlock.gridParams");
+
     static_assert(sizeof(LightsBlock) == 176u, "LightsBlock: tamano std140 roto");
     static_assert(offsetof(LightsBlock, positions)    ==   0u, "LightsBlock.positions");
     static_assert(offsetof(LightsBlock, colors)       ==  64u, "LightsBlock.colors");
