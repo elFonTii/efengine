@@ -6,10 +6,10 @@
 #              lleguen a master (justo lo que antes se colaba post-merge).
 #   - release: publica un tag + artefacto en GitHub, solo cuando un PR se
 #              mergea a master (necesita los datos del PR para el tag y notas).
-#   - readme:  al ABRIR un PR a master, le pide a Claude que actualice el README
-#              y propone el cambio en un PR aparte contra la rama del PR.
-#   - docs-check / pages: Doxygen. En el PR se verifica que genera; al mergear
-#              se publica el sitio en GitHub Pages.
+#   - readme:  al abrir o reabrir un PR a master, le pide a Claude que actualice
+#              el README y propone el cambio en un PR aparte contra esa rama.
+#   - docs-check: en el PR verifica que Doxygen sigue generando.
+#   - pages:   en cada push a master publica el sitio (landing + Doxygen).
 name: CMake on a single platform
 
 on:
@@ -18,11 +18,12 @@ on:
     branches:
       - '**'
   # Eventos de PR hacia master. Cada job filtra el que le toca:
-  #   opened      -> readme (una sola vez por PR, para no quemar tokens)
-  #   opened/sync -> docs-check (Doxygen tiene que seguir generando)
-  #   closed      -> release y pages, y solo si realmente se mergeó.
+  #   opened/reopened -> readme (no en cada push: no quemamos tokens)
+  #   + synchronize    -> docs-check (Doxygen tiene que seguir generando)
+  #   closed           -> release, y solo si realmente se mergeó.
+  # 'pages' NO cuelga de acá: ver el job.
   pull_request:
-    types: [opened, synchronize, closed]
+    types: [opened, reopened, synchronize, closed]
     branches:
       - master
   # Permite lanzar el build a mano desde la pestaña Actions.
@@ -35,9 +36,11 @@ env:
 # Si llega un push más nuevo de la misma rama, cancela el build en curso para
 # no gastar minutos de runner en commits ya superados. El release corre sobre
 # otra ref (refs/pull/...), así que nunca queda en el mismo grupo: no se cancela.
+# En master NO cancelamos: ahí vive el deploy de Pages y cortarlo a la mitad
+# dejaría el sitio a medio subir.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
   build:
@@ -153,9 +156,12 @@ jobs:
 
   readme:
     name: Proponer README actualizado
-    # Solo al ABRIR el PR. En cada push a la rama no se vuelve a llamar al
-    # modelo: sería una factura de tokens por cada commit.
-    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    # Al ABRIR o REABRIR el PR. En cada push a la rama no se vuelve a llamar al
+    # modelo: sería una factura de tokens por cada commit. Reabrir el PR es,
+    # además, la forma de pedir la propuesta de nuevo a mano.
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.action == 'opened' || github.event.action == 'reopened')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -274,8 +280,13 @@ jobs:
 
   pages:
     name: Publicar documentación en GitHub Pages
-    # Misma condición que 'release': solo cuando un PR se mergeó a master.
-    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    # Cuelga del PUSH a master, no del PR mergeado. En el evento de PR el ref es
+    # refs/pull/N/merge, y el environment 'github-pages' solo deja desplegar
+    # desde la rama default: rechazaba el deploy con "not allowed to deploy to
+    # github-pages due to environment protection rules". El merge de un PR
+    # produce un push a master, así que esto cubre el mismo caso con el ref
+    # correcto (y también un push directo a master).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: read
