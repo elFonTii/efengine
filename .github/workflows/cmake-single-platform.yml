@@ -156,12 +156,13 @@ jobs:
 
   readme:
     name: Proponer README actualizado
-    # Al ABRIR o REABRIR el PR. En cada push a la rama no se vuelve a llamar al
-    # modelo: sería una factura de tokens por cada commit. Reabrir el PR es,
-    # además, la forma de pedir la propuesta de nuevo a mano.
+    # Al abrir o reabrir el PR. En cada push no se vuelve a llamar al modelo.
+    # workflow_dispatch corre el mismo camino SIN llamar a Claude: sirve para
+    # probar la plomería de git/gh sin gastar un solo token.
     if: >-
-      github.event_name == 'pull_request' &&
-      (github.event.action == 'opened' || github.event.action == 'reopened')
+      (github.event_name == 'pull_request' &&
+       (github.event.action == 'opened' || github.event.action == 'reopened')) ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -171,15 +172,16 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout de la rama del PR
+      - name: Checkout de la rama
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
           fetch-depth: 0
 
       # El diff contra master es el único contexto de "qué cambió". Lo acotamos
       # al código y al build: los assets binarios no dicen nada del README.
       - name: Extraer el diff del PR
+        if: github.event_name == 'pull_request'
         run: |
           git fetch origin master
           git diff origin/master...HEAD -- \
@@ -187,9 +189,9 @@ jobs:
           echo "Diff de $(wc -l < pr-diff.txt) líneas."
 
       # Pineada al SHA y no al tag 'v1': es una action de terceros y este paso
-      # ve ANTHROPIC_API_KEY con permiso de escritura sobre el repo. Un tag es
-      # móvil; el SHA no. Para actualizarla, mover el SHA a mano y leer el diff.
+      # ve ANTHROPIC_API_KEY con permiso de escritura sobre el repo.
       - name: Pedirle a Claude el README actualizado
+        if: github.event_name == 'pull_request'
         uses: anthropics/claude-code-action@a21f96aeaac393a19ee8b8dff2dce4b840f5d311 # v1 al 2026-09-18
         env:
           ANTHROPIC_MODEL: claude-sonnet-5
@@ -214,6 +216,14 @@ jobs:
             - El README está en español; escribí en español, con acentos.
             - Si el diff no justifica ningún cambio, no edites nada.
 
+      # Prueba de humo: marca el README para ejercitar el resto del job sin
+      # pagarle a nadie. Solo en disparos manuales.
+      - name: Simular un cambio (solo workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "" >> README.md
+          echo "<!-- prueba de plomeria del job readme -->" >> README.md
+
       # Si el modelo no tocó el README, el job termina acá sin abrir ruido.
       - name: ¿Hubo cambios?
         id: diff
@@ -221,35 +231,43 @@ jobs:
           rm -f pr-diff.txt
           if git diff --quiet -- README.md; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Claude no propuso cambios en el README."
+            echo "No hay cambios en el README."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # El PR va contra la rama del PR original, no contra master: el cambio de
-      # doc queda aislado y no pisa lo que estés escribiendo en tu rama.
+      # Todo por la API REST, que se autentica con GH_TOKEN. Antes esto era un
+      # 'git push' y moría con "Invalid username or token": claude-code-action
+      # deja la config de credenciales de git inservible, y pelear contra eso
+      # falló tres veces. La API no usa esa config para nada.
       - name: Abrir PR con la propuesta
         if: steps.diff.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BASE: ${{ github.event.pull_request.head.ref }}
-          PR_NUM: ${{ github.event.pull_request.number }}
+          BASE: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          PR_NUM: ${{ github.event.pull_request.number || 'manual' }}
         run: |
+          set -euo pipefail
           BRANCH="docs/readme-pr-${PR_NUM}"
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # actions/checkout deja un header de autorización en la config de git,
-          # y ese header GANA sobre las credenciales de la URL. Reponer la URL
-          # sola no alcanzaba: git seguía mandando el header viejo, que
-          # claude-code-action deja inservible, y el push moría con "Invalid
-          # username or token". Hay que borrarlo primero.
-          git config --unset-all http."https://github.com/".extraheader || true
-          git remote set-url origin \
-            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git checkout -b "$BRANCH"
-          git add README.md
-          git commit -m "README - actualizacion propuesta para el PR #${PR_NUM}"
-          git push --force origin "$BRANCH"
+          REPO="${GITHUB_REPOSITORY}"
+          HEAD_SHA="$(git rev-parse HEAD)"
+
+          # La rama de propuesta arranca donde está la rama base. Si quedó de un
+          # intento anterior, la movemos ahí a la fuerza.
+          gh api "repos/${REPO}/git/refs" \
+            -f ref="refs/heads/${BRANCH}" -f sha="${HEAD_SHA}" >/dev/null 2>&1 \
+            || gh api -X PATCH "repos/${REPO}/git/refs/heads/${BRANCH}" \
+                 -f sha="${HEAD_SHA}" -F force=true >/dev/null
+
+          # Para pisar un archivo por API hay que mandar el sha del blob actual.
+          FILE_SHA="$(gh api "repos/${REPO}/contents/README.md?ref=${BRANCH}" --jq .sha)"
+          gh api -X PUT "repos/${REPO}/contents/README.md" \
+            -f message="README - actualizacion propuesta para el PR #${PR_NUM}" \
+            -f content="$(base64 -w0 README.md)" \
+            -f branch="${BRANCH}" \
+            -f sha="${FILE_SHA}" >/dev/null
+          echo "README subido a ${BRANCH}."
+
           gh pr create \
             --base "$BASE" \
             --head "$BRANCH" \
