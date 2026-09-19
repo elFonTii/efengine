@@ -1,5 +1,5 @@
 // assets/shaders/ddgi/common.glsl
-// LA matematica de DDGI del repo. La incluyen pbr.frag, ddgi/capture.frag,
+// LA matematica de DDGI del repo. La incluyen pbr.frag, ddgi/trace_voxel.comp,
 // los dos blends y la debug viz: cinco consumidores, una fuente. Duplicar
 // Chebyshev o el octaedral era el bug que se arregla en una copia y no en la
 // otra, sobre la parte mas dificil del sistema.

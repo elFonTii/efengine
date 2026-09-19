@@ -71,7 +71,8 @@ vec3 OctDecodeNormal(vec2 e) {
     return normalize(n);
 }
 
-// Cuerpo calcado del ShadowFactor de capture.frag: los dos bias y el offset por
+// Cuerpo calcado del ShadowFactor de la captura rasterizada que este pase
+// reemplazo (ddgi/capture.frag, borrado): los dos bias y el offset por
 // normal ya estan tuneados y una variante propia reintroduce acne en la GI sin
 // que se note hasta mucho despues. Las dos diferencias: el punto y la normal
 // llegan por parametro porque aca no hay varyings, y no hace el PCF 3x3 -- un
@@ -200,14 +201,14 @@ void main() {
         vec3 albedo = texelFetch(uVoxelAlbedo, v, 0).rgb;
         vec3 N      = OctDecodeNormal(texelFetch(uVoxelNormal, v, 0).rg);
 
-        // -- Luz directa, Lambert puro, calcada de capture.frag:114-125 --
+        // -- Luz directa, Lambert puro --
         //
         // El /kDdgiPI no es opcional y no es cosmetico: la captura es un
         // contrato de RADIANCIA y el blend integra asumiendo eso. Sin el, la
         // directa entra al atlas ~PI veces de mas, el rebote la relee y el lazo
         // la amplifica hasta una GI sobre-brillante ESTABLE -- plausible, o sea
         // el modo de falla caro. El rebote de mas abajo sigue yendo sin /PI por
-        // la razon que documenta capture.frag:130-136 (el atlas guarda radiancia
+        // la razon de siempre (el atlas guarda radiancia
         // media, asi que E = PI*L y el /PI del BRDF se cancela).
         vec3 directa = vec3(0.0);
         for (int i = 0; i < uLightCounts.x; ++i) {
@@ -221,7 +222,7 @@ void main() {
         directa += (1.0 - SombraDelSol(mundo, N)) * albedo / kDdgiPI
                  * max(dot(N, L), 0.0) * uDirLightColor.rgb;
 
-        // El rebote, calcado de capture.frag:143-155. NO aplicar aqui la
+        // El rebote. NO aplicar aqui la
         // intensidad de DDGI -- se aplica una sola vez, cuando pbr.frag
         // samplea; aplicarla dos veces hace que la energia diverja frame a
         // frame hasta saturar.

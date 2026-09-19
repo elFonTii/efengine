@@ -252,7 +252,7 @@ namespace renderer {
 
         // Los dos atlas a sus unidades, por la MISMA razon que el shadow map de
         // arriba: este pase corre antes de BeginScene, que es quien normalmente
-        // los bindea. Sin esto, el rebote de capture.frag samplea unidades sin
+        // los bindea. Sin esto, el rebote de trace_voxel.comp samplea unidades sin
         // contenido y da negro sin que nada falle ruidosamente.
         m_irradiance.Bind(kIrradianceAtlasUnit);
         m_distance.Bind(kDistanceAtlasUnit);

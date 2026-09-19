@@ -41,8 +41,13 @@ namespace renderer {
                 Shader* blendDistance   = null;
             };
 
-            // fullscreenQuad se conserva aunque la captura ya no dibuje nada:
-            // Renderer lo necesita para los blits internos del pase.
+            // fullscreenQuad ya no lo usa NADA adentro del pase: desde que la
+            // captura traza contra voxeles en vez de rasterizar, este pase no
+            // emite un solo draw. Se conserva igual para no tocar la firma que
+            // comparten todos los setups de pase (DdgiPassSetup lo pasa desde
+            // PassDeps como el resto), y porque el proximo consumidor probable
+            // -- una debug viz del grid -- lo va a necesitar. Si eso no llega,
+            // sacarlo es un cambio de una linea aca y otra en DdgiPassSetup.
             static std::unique_ptr<DdgiPass> Create(Renderer& renderer, VertexArray& fullscreenQuad,
                                                     const Shaders& shaders);
 
@@ -115,7 +120,7 @@ namespace renderer {
             static void ClearAtlas(const Texture& atlas);
 
             Renderer&    m_renderer;
-            VertexArray& m_quad;
+            VertexArray& m_quad;   // sin uso en el pase; ver el comentario de Create
             Shaders      m_shaders;
 
             Texture m_capture;      // 96x512 RGBA16F: rgb = radiancia, a = distancia
