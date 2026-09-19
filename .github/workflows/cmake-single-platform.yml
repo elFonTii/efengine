@@ -160,6 +160,9 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # La action pide un token OIDC a GitHub para autenticarse. Sin esto falla
+      # con "Unable to get ACTIONS_ID_TOKEN_REQUEST_URL env variable".
+      id-token: write
 
     steps:
       - name: Checkout de la rama del PR
