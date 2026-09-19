@@ -633,6 +633,17 @@ namespace efecom {
         glNamedFramebufferReadBuffer(framebuffer, GL_NONE);
     }
 
+    void FramebufferDefaultSize(u32 framebuffer, u32 width, u32 height) {
+        glNamedFramebufferParameteri(framebuffer, GL_FRAMEBUFFER_DEFAULT_WIDTH,  (GLint)width);
+        glNamedFramebufferParameteri(framebuffer, GL_FRAMEBUFFER_DEFAULT_HEIGHT, (GLint)height);
+        // Capas y muestras en su minimo valido: el FBO sin attachments solo
+        // define el area de barrido, no almacena nada.
+        glNamedFramebufferParameteri(framebuffer, GL_FRAMEBUFFER_DEFAULT_LAYERS,  0);
+        glNamedFramebufferParameteri(framebuffer, GL_FRAMEBUFFER_DEFAULT_SAMPLES, 0);
+        glNamedFramebufferDrawBuffer(framebuffer, GL_NONE);
+        glNamedFramebufferReadBuffer(framebuffer, GL_NONE);
+    }
+
     bool FramebufferComplete(u32 framebuffer) {
         return glCheckNamedFramebufferStatus(framebuffer, GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
     }

@@ -21,6 +21,10 @@ namespace renderer {
         public:
             static std::unique_ptr<VoxelizePass> Create(Renderer& renderer, Shader* voxelize);
 
+            ~VoxelizePass();
+            VoxelizePass(const VoxelizePass&)            = delete;
+            VoxelizePass& operator=(const VoxelizePass&) = delete;
+
             // Limpia el grid y lo rellena con tres pasadas ortograficas.
             void Execute(const scene::SceneGraph& scene, VoxelGrid& grid);
 
@@ -34,6 +38,13 @@ namespace renderer {
             Shader*   m_voxelize = null;
 
             UniformBuffer m_passUbo { sizeof(VoxelizePassBlock) };
+
+            // FBO SIN attachments: la voxelizacion no produce pixeles, solo
+            // necesita un area de barrido del tamano del grid. Usar el target de
+            // presentacion haria que una ventana mas chica que la resolucion
+            // recortara el grid en silencio.
+            u32 m_fbo    = 0u;
+            u32 m_fboRes = 0u;   // resolucion con la que se configuro
 
             std::vector<BatchDraw> m_draws;
             f32 m_lastMs    = 0.0f;

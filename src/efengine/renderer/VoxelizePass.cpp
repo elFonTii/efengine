@@ -39,6 +39,10 @@ namespace renderer {
                     EF_ASSERT(voxelize != null, "VoxelizePass: Se intenta inyectar shader nulo");
                 }
 
+    VoxelizePass::~VoxelizePass() {
+        if (m_fbo != 0u) efecom::DestroyFramebuffer(m_fbo);
+    }
+
     std::unique_ptr<VoxelizePass> VoxelizePass::Create(Renderer& renderer, Shader* voxelize) {
         if (voxelize == null) return nullptr;
         return std::unique_ptr<VoxelizePass>(new VoxelizePass(renderer, voxelize));
@@ -59,10 +63,17 @@ namespace renderer {
         const f32   h = 0.5f * GridExtent(desc);
 
         // El rasterizador necesita un area de barrido del tamano del grid: cada
-        // pixel de esa grilla es una columna de voxeles. No hay attachments ni
-        // color (VoxelizeState apaga la mascara entera); el unico efecto son los
-        // imageStore.
-        efecom::BindRenderTarget(efecom::GetPresentTarget(), desc.resolution, desc.resolution);
+        // pixel de esa grilla es una columna de voxeles. Sale del FBO propio sin
+        // attachments y NO del target de presentacion, que ataria la cobertura
+        // del grid al tamano de la ventana.
+        if (m_fbo == 0u) m_fbo = efecom::CreateFramebuffer();
+        if (m_fboRes != desc.resolution) {
+            efecom::FramebufferDefaultSize(m_fbo, desc.resolution, desc.resolution);
+            m_fboRes = desc.resolution;
+            EF_ASSERT(efecom::FramebufferComplete(m_fbo),
+                      "VoxelizePass: el FBO sin attachments quedo incompleto");
+        }
+        efecom::BindRenderTarget(m_fbo, desc.resolution, desc.resolution);
 
         const glm::mat4 orto = glm::ortho(-h, h, -h, h, 0.0f, 2.0f * h);
         const glm::mat4 vistas[3] = {

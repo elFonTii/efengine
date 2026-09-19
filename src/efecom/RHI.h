@@ -308,6 +308,12 @@ namespace efecom {
     // antes de cada cascada: un solo FBO, una capa por vez.
     void FramebufferDepthTextureLayer(u32 framebuffer, u32 texture, u32 layer);
     void FramebufferDisableColor(u32 framebuffer); // FBO solo-profundidad (shadow maps)
+
+    // Tamano por defecto de un FBO SIN NINGUN attachment. Sin esto ese FBO es
+    // incompleto y no se puede dibujar en el; con esto el rasterizador tiene un
+    // area de barrido propia, independiente de la ventana. Lo usa la
+    // voxelizacion, que no produce pixeles: su unico efecto son los imageStore.
+    void FramebufferDefaultSize(u32 framebuffer, u32 width, u32 height);
     bool FramebufferComplete(u32 framebuffer);
     u32  CreateDepthRenderbuffer(u32 width, u32 height);
     void DestroyRenderbuffer(u32 renderbuffer);
