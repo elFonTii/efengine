@@ -16,10 +16,18 @@ namespace renderer {
 
             // AABB en espacio local, calculada una vez en el constructor.
             const AABB& bounds() const { return m_bounds; }
+
+            // Copia CPU de la geometria. El VBO no se puede leer de vuelta sin
+            // contexto GL, y los colliders de malla la necesitan.
+            const std::vector<glm::vec3>& positions() const { return m_positions; }
+            const std::vector<u32>&       indices()   const { return m_indices; }
         private:
             VertexArray m_va;
             std::string m_materialName;
             AABB        m_bounds;
+
+            std::vector<glm::vec3> m_positions;
+            std::vector<u32>       m_indices;
     };
 }
 }

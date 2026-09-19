@@ -163,6 +163,11 @@ namespace scene {
         m_slots[handle.index].node.collider = collider;
     }
 
+    void SceneGraph::DetachCollider(NodeHandle handle) {
+        if (!IsValid(handle)) return;
+        m_slots[handle.index].node.collider.reset();
+    }
+
     Behavior* SceneGraph::AttachBehavior(NodeHandle handle, std::unique_ptr<Behavior> behavior) {
         EF_ASSERT(IsValid(handle), "SceneGraph::AttachBehavior: handle invalido");
         Node& node = m_slots[handle.index].node;
