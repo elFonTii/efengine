@@ -205,12 +205,16 @@ namespace renderer {
     // escalares del trazado viajan por el bloque de pase.
     //
     // resolucion y umbral comparten el vec4 de gridParams en vez de tener uno
-    // propio: std140 le da 16 bytes a cualquier escalar suelto, asi que cuatro
-    // floats sueltos costarian 64 bytes y un layout que hay que recordar.
+    // propio: std140 le da 16 bytes a cualquier escalar suelto, asi que tres
+    // floats sueltos costarian 48 bytes y un layout que hay que recordar.
+    //
+    // La intensidad de IBL NO esta aca aunque el shader la use: vive en
+    // FrameBlock::iblParams.y, que es de donde la lee tambien pbr.frag. Una
+    // copia en este bloque seria una segunda fuente de verdad.
     struct alignas(16) TraceVoxelPassBlock {
         glm::vec4 gridOrigin;   // .xyz = esquina minima del grid, .w sin uso
         glm::vec4 gridParams;   // x = voxelSize (m), y = resolucion por eje,
-                                // z = umbral de opacidad, w = intensidad de IBL
+                                // z = umbral de opacidad, w = libre
     };
 
     CascadeBlock MakeCascadeBlock(const CascadeContext& ctx);

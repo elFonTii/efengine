@@ -30,7 +30,12 @@ layout(binding = 8) uniform sampler2D uShadowMap;
 layout(std140, binding = 4) uniform TraceVoxelParams {
     vec4 uGridOrigin;    // .xyz = esquina minima del grid
     vec4 uGridParams;    // x=voxelSize (m), y=resolucion por eje,
-                         // z=umbral de opacidad, w=intensidad de IBL
+                         // z=umbral de opacidad, w=LIBRE
+                         //
+                         // .w quedo libre a proposito: la intensidad de IBL vive
+                         // en uIblParams.y del bloque Frame y se lee de ahi. Una
+                         // copia en este UBO seria una segunda fuente de verdad
+                         // que se desincroniza en cuanto alguien toque una sola.
 };
 
 #define MAX_LIGHTS 4
@@ -95,8 +100,8 @@ float SombraDelSol(vec3 mundo, vec3 N) {
 // un voxel inexistente y abortaria en la primera iteracion, asi que el probe
 // veria cielo en las seis caras. Es el modo de falla que la simulacion en Node
 // reprodujo (68 de 18753 rayos con origen afuera) y el que este slab test
-// cierra: con el, 120.000 rayos -- adentro y afuera -- coinciden con la fuerza
-// bruta.
+// cierra: con el, ~155.000 rayos -- adentro y afuera -- coinciden con la
+// fuerza bruta.
 float EntradaAlGrid(vec3 o, vec3 d, float extension, float maxDist) {
     float t0 = 0.0;
     float t1 = maxDist;
@@ -150,7 +155,14 @@ void main() {
         vec3  arranca = origen + dir * tIni;
 
         // -- DDA de Amanatides-Woo, el mismo que valido dda_sim.mjs --
-        v            = ivec3(floor((arranca - uGridOrigin.xyz) / voxelSize));
+        //
+        // El clamp no es defensivo de mas: el slab test YA establecio que el
+        // rayo entra a la AABB, asi que el unico modo de que este floor caiga
+        // afuera es el error de fp32 sobre la cara. El epsilon de arriba da ~4x
+        // de margen hoy, pero ese margen se come si el grid queda lejos del
+        // origen del mundo, y el fallo es silencioso: el rayo se pierde entero.
+        v            = clamp(ivec3(floor((arranca - uGridOrigin.xyz) / voxelSize)),
+                             ivec3(0), ivec3(resolucion - 1));
         ivec3 paso   = ivec3(sign(dir));
         vec3  tDelta = abs(vec3(voxelSize) / max(abs(dir), vec3(1e-8)));
         vec3  tMax;
@@ -188,9 +200,26 @@ void main() {
         vec3 albedo = texelFetch(uVoxelAlbedo, v, 0).rgb;
         vec3 N      = OctDecodeNormal(texelFetch(uVoxelNormal, v, 0).rg);
 
-        vec3 L       = normalize(-uLightDir.xyz);
-        vec3 directa = albedo * uDirLightColor.rgb * max(dot(N, L), 0.0)
-                     * (1.0 - SombraDelSol(mundo, N));
+        // -- Luz directa, Lambert puro, calcada de capture.frag:114-125 --
+        //
+        // El /kDdgiPI no es opcional y no es cosmetico: la captura es un
+        // contrato de RADIANCIA y el blend integra asumiendo eso. Sin el, la
+        // directa entra al atlas ~PI veces de mas, el rebote la relee y el lazo
+        // la amplifica hasta una GI sobre-brillante ESTABLE -- plausible, o sea
+        // el modo de falla caro. El rebote de mas abajo sigue yendo sin /PI por
+        // la razon que documenta capture.frag:130-136 (el atlas guarda radiancia
+        // media, asi que E = PI*L y el /PI del BRDF se cancela).
+        vec3 directa = vec3(0.0);
+        for (int i = 0; i < uLightCounts.x; ++i) {
+            vec3  d  = uLightPositions[i].xyz - mundo;
+            float dd = max(dot(d, d), 0.0001);
+            vec3  Lp = d / sqrt(dd);
+            directa += albedo / kDdgiPI * max(dot(N, Lp), 0.0) * uLightColors[i].rgb / dd;
+        }
+
+        vec3 L = normalize(-uLightDir.xyz);
+        directa += (1.0 - SombraDelSol(mundo, N)) * albedo / kDdgiPI
+                 * max(dot(N, L), 0.0) * uDirLightColor.rgb;
 
         // El rebote, calcado de capture.frag:143-155. NO aplicar aqui la
         // intensidad de DDGI -- se aplica una sola vez, cuando pbr.frag
@@ -213,7 +242,12 @@ void main() {
         radiancia = directa + rebote;
         distancia = t;
     } else {
-        radiancia = texture(uEnvironment, dir).rgb * uGridParams.w;
+        // El rayo se escapo: ve cielo. La intensidad sale de uIblParams.y, la
+        // MISMA que usa pbr.frag, y sin IBL cargado (uIblParams.x) no se
+        // samplea el cubemap: su contenido no esta definido.
+        radiancia = (uIblParams.x > 0.5)
+                  ? texture(uEnvironment, dir).rgb * uIblParams.y
+                  : vec3(0.0);
         distancia = kFarDistance;
     }
 
