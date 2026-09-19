@@ -494,6 +494,34 @@ namespace efecom {
         return id;
     }
 
+    u32 CreateTexture3DStorage(const Texture3DStorageDesc& desc) {
+        EFCOM_ASSERT(desc.width > 0u && desc.height > 0u && desc.depth > 0u,
+                     "CreateTexture3DStorage: las tres dimensiones tienen que ser > 0");
+
+        u32 id = 0;
+        glCreateTextures(GL_TEXTURE_3D, 1, &id);
+        EFCOM_ASSERT(id != 0, "CreateTexture3DStorage: glCreateTextures devuelve 0 (sin contexto GL)");
+
+        glTextureStorage3D(id, 1, to_gl(desc.format).internalFormat,
+                           (GLsizei)desc.width, (GLsizei)desc.height, (GLsizei)desc.depth);
+
+        glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+        return id;
+    }
+
+    void ClearTexture(u32 texture) {
+        EFCOM_ASSERT(texture != 0u, "ClearTexture: textura invalida");
+        // glClearTexImage es core desde 4.4 y con nullptr llena de ceros SIN
+        // subir un buffer desde CPU. Hacerlo con UpdateTexture obligaria a un
+        // std::vector de 100 MB de ceros por cada revoxelizacion.
+        glClearTexImage(texture, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    }
+
     u32 CreateDepthTexture2DArray(u32 resolution, u32 layers) {
         EFCOM_ASSERT(resolution > 0u && layers > 0u,
                      "CreateDepthTexture2DArray: resolucion y capas tienen que ser > 0");

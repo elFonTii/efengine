@@ -247,6 +247,23 @@ namespace efecom {
     };
     u32 CreateTexture2DStorage(const Texture2DStorageDesc& desc);
 
+    // Volumen de storage inmutable, sin mips. Para el grid de voxeles de DDGI.
+    //
+    // Filtro NEAREST: el trazado quiere el contenido del voxel que piso, no una
+    // mezcla con sus vecinos. Un filtro lineal sobre la opacidad convertiria
+    // cada superficie en una rampa de medio voxel y el DDA pegaria antes de
+    // llegar a la geometria.
+    struct Texture3DStorageDesc {
+        u32           width  = 0;
+        u32           height = 0;
+        u32           depth  = 0;
+        TextureFormat format = TextureFormat::RGBA8;
+    };
+    u32 CreateTexture3DStorage(const Texture3DStorageDesc& desc);
+
+    // Deja el contenido de la textura en cero, sin subir un buffer desde CPU.
+    void ClearTexture(u32 texture);
+
     // Array de 'layers' capas cuadradas de profundidad, storage inmutable, sin
     // mips. Para shadow maps en cascada: una capa por cascada, un solo sampler.
     //
