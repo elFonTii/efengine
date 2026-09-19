@@ -7,6 +7,7 @@
 #include <efengine/renderer/IblContext.h>
 #include <efengine/renderer/DdgiSettings.h>
 #include <efengine/renderer/CascadeContext.h>
+#include <efengine/renderer/VoxelMath.h>
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -127,23 +128,6 @@ namespace renderer {
 
     // Binding 0 de SSBO: una vista de la captura de probes.
     //
-    // El array entero se sube una vez por frame y el vertex shader elige la suya
-    // por gl_InstanceID. Es lo que convierte probes*6 draws por objeto en UNO.
-    // Ver el comentario largo de assets/shaders/ddgi/capture_tiles.glsl.
-    //
-    // std430 y no std140: en std140 un array de structs paddea CADA elemento a
-    // 16 bytes de alineacion externa, y ademas obliga a declarar el array con
-    // tamano fijo. Con std430 el layout es el natural de C++ -- de ahi que los
-    // static_assert de ShaderBlocks.cpp alcancen para verificarlo.
-    struct alignas(16) DdgiCaptureTile {
-        glm::mat4 viewProj;         // vista de esta (probe, cara)
-        glm::mat4 invViewProjRot;   // su inversa sin traslacion, para el cielo
-        glm::vec4 rect;             // xy = escala en NDC, zw = offset en NDC
-        glm::vec4 probeCenter;      // .xyz
-    };
-
-    inline constexpr u32 kDdgiTileBinding = 0u;   // binding de SSBO
-
     // PassParams (binding 4) de ddgi/indirect.frag: el pase que resuelve la
     // indirecta difusa a media resolucion.
     //
@@ -241,6 +225,12 @@ namespace renderer {
     // puro en vez de samplear una unidad de textura sin contenido.
     DdgiBlock MakeDdgiBlock(const DdgiGrid& grid, const DdgiSettings& settings,
                             UpdateRange range, bool atlasValid);
+
+    // opacityThreshold viaja por parametro y no sale de VoxelGridDesc porque es
+    // del trazado, no del encuadre: el mismo grid se puede trazar con otro
+    // umbral sin revoxelizar.
+    TraceVoxelPassBlock MakeTraceVoxelPassBlock(const VoxelGridDesc& desc,
+                                                f32 opacityThreshold);
 
 }
 }

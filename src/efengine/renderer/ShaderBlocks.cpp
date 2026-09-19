@@ -79,11 +79,6 @@ namespace renderer {
     static_assert(offsetof(AoPassBlock, params1)     ==  96u, "AoPassBlock.params1");
     static_assert(offsetof(AoPassBlock, counts)      == 112u, "AoPassBlock.counts");
 
-    static_assert(sizeof(DdgiCaptureTile) == 160u, "DdgiCaptureTile: tamano std430 roto");
-    static_assert(offsetof(DdgiCaptureTile, viewProj)       ==   0u, "DdgiCaptureTile.viewProj");
-    static_assert(offsetof(DdgiCaptureTile, invViewProjRot) ==  64u, "DdgiCaptureTile.invViewProjRot");
-    static_assert(offsetof(DdgiCaptureTile, rect)           == 128u, "DdgiCaptureTile.rect");
-    static_assert(offsetof(DdgiCaptureTile, probeCenter)    == 144u, "DdgiCaptureTile.probeCenter");
 
     static_assert(sizeof(IndirectPassBlock) == 96u, "IndirectPassBlock: tamano std140 roto");
     static_assert(offsetof(IndirectPassBlock, viewToWorld) ==  0u, "IndirectPassBlock.viewToWorld");
@@ -209,6 +204,18 @@ namespace renderer {
 
         b.params = glm::vec4(static_cast<f32>(count), ctx.blendRatio,
                              ctx.debugView ? 1.0f : 0.0f, 0.0f);
+        return b;
+    }
+
+    TraceVoxelPassBlock MakeTraceVoxelPassBlock(const VoxelGridDesc& desc,
+                                                f32 opacityThreshold) {
+        TraceVoxelPassBlock b {};
+        b.gridOrigin = glm::vec4(desc.origin, 0.0f);
+        // Con umbral 0 el DDA pega contra el primer voxel del grid siempre
+        // (alpha >= 0 es cierto hasta en el aire) y la GI queda arruinada sin
+        // que nada falle ruidosamente. El clamp bajo es la unica defensa.
+        b.gridParams = glm::vec4(desc.voxelSize, static_cast<f32>(desc.resolution),
+                                 std::max(opacityThreshold, 1.0e-3f), 0.0f);
         return b;
     }
 

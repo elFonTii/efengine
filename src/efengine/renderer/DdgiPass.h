@@ -7,8 +7,9 @@
 #include <efengine/renderer/Texture.h>
 #include <efengine/renderer/ShadowContext.h>
 #include <efengine/renderer/IblContext.h>
-#include <efengine/renderer/Cull.h>
-#include <efengine/renderer/BatchDraw.h>
+#include <efengine/renderer/UniformBuffer.h>
+#include <efengine/renderer/VoxelGrid.h>
+#include <efengine/renderer/VoxelizePass.h>
 
 #include <efengine/renderer/ShaderBlocks.h>
 
@@ -34,15 +35,14 @@ namespace renderer {
     class DdgiPass : public IScenePass {
         public:
             struct Shaders {
-                Shader* capture         = null;
-                Shader* captureSky      = null;
+                Shader* trace           = null;   // ddgi/trace_voxel.comp
+                Shader* voxelize        = null;   // voxel/voxelize.vert+frag
                 Shader* blendIrradiance = null;
                 Shader* blendDistance   = null;
             };
 
-            // fullscreenQuad es el mismo VertexArray que usa SkyboxPass: el cielo
-            // de la captura se dibuja con skybox.vert, que reconstruye la
-            // direccion desde las esquinas del quad, no con un cubo.
+            // fullscreenQuad se conserva aunque la captura ya no dibuje nada:
+            // Renderer lo necesita para los blits internos del pase.
             static std::unique_ptr<DdgiPass> Create(Renderer& renderer, VertexArray& fullscreenQuad,
                                                     const Shaders& shaders);
 
@@ -54,7 +54,7 @@ namespace renderer {
 
             // Captura los probes del frame y los integra al atlas. Corre DESPUES
             // del ShadowPass (necesita su depth y su matriz) y ANTES del
-            // FrameUploadPass (sube su propio FrameBlock por cara).
+            // FrameUploadPass (sube su propio FrameBlock para el trazado).
             void Execute(FrameContext& ctx) override;
 
             const char* Name() const override { return "DDGI"; }
@@ -72,10 +72,18 @@ namespace renderer {
             u32  cursor()     const { return m_cursor; }
             f32  lastMs()     const { return m_lastMs; }
 
-            u32 visibleSpans()        const { return m_visibleSpans; }
-            u32 totalSpans()          const { return m_totalSpans; }
-            u32 lastDraws()           const { return m_lastDraws; }
-            u32 lastMaterialUploads() const { return m_lastMaterialUploads; }
+            // Rehornea el grid con la escena. Lo llama la primera carga y el
+            // boton del panel.
+            void Voxelize(const scene::SceneGraph& scene);
+
+            const VoxelGrid& voxelGrid()  const { return m_grid; }
+            bool             gridValido() const { return m_gridValido; }
+
+            // Timing de la ULTIMA voxelizacion, no del frame: la voxelizacion no
+            // corre por frame. Se expone desde aca y no con un
+            // const VoxelizePass& porque m_voxelize puede ser null.
+            f32 voxelizeMs()    const { return m_voxelize != null ? m_voxelize->lastMs()    : 0.0f; }
+            u32 voxelizeDraws() const { return m_voxelize != null ? m_voxelize->lastDraws() : 0u; }
 
             // Si esto es false, Context() no entrega los atlas y pbr.frag esta
             // cayendo a IBL puro: DDGI aporta exactamente cero. Es el primer
@@ -90,7 +98,7 @@ namespace renderer {
         private:
             DdgiPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
                      Texture capture, Texture irradiance, Texture distance,
-                     u32 captureFbo, u32 captureDepthRbo, u32 tileSsbo);
+                     std::unique_ptr<VoxelizePass> voxelize);
 
             // El trabajo real. Lo llama Execute, que publica el contexto
             // despues -- afuera, porque esto tiene retornos tempranos.
@@ -106,11 +114,6 @@ namespace renderer {
             // siempre. Se hace con un FBO temporal y Clear: cero RHI nuevo.
             static void ClearAtlas(const Texture& atlas);
 
-            // Llena el SSBO con las probes*6 vistas del frame y lo sube. Una
-            // vez por frame, no una por vista: es lo que permite el draw
-            // instanciado. Devuelve cuantas vistas quedaron (= instancias).
-            u32 BuildTiles(const glm::mat4& proj);
-
             Renderer&    m_renderer;
             VertexArray& m_quad;
             Shaders      m_shaders;
@@ -119,14 +122,13 @@ namespace renderer {
             Texture m_irradiance;   // atlas octaedrico RGBA16F
             Texture m_distance;     // atlas de momentos RG16F
 
-            u32 m_captureFbo      = 0u;
-            u32 m_captureDepthRbo = 0u;
+            // El proxy contra el que traza la captura. Lo llena m_voxelize, que
+            // NO corre por frame.
+            VoxelGrid                     m_grid;
+            std::unique_ptr<VoxelizePass> m_voxelize;
+            bool                          m_gridValido = false;
 
-            // Las vistas del frame, indexadas por gl_InstanceID. Se aloca al
-            // maximo una sola vez (kMaxProbesPerFrame * 6): mover el slider de
-            // probes por frame nunca realoca, igual que el target de captura.
-            u32 m_tileSsbo = 0u;
-            std::vector<DdgiCaptureTile> m_tiles;
+            UniformBuffer m_traceUbo { sizeof(TraceVoxelPassBlock) };
 
             DdgiSettings m_settings;
             DdgiGrid     m_atlasGrid;      // la grilla con la que se alocaron los atlas
@@ -135,16 +137,6 @@ namespace renderer {
             u32          m_sweepsDone     = 0u;
             bool         m_blendedOnce    = false;   // gate de atlasValid
             f32          m_lastMs         = 0.0f;
-
-            // Los dos buffers son miembros para no alocar por frame: el de
-            // indices que devuelve el culling, y el de draws ya resueltos.
-            std::vector<u32>       m_visible;
-            std::vector<BatchDraw> m_draws;
-
-            u32 m_visibleSpans        = 0u;
-            u32 m_totalSpans          = 0u;
-            u32 m_lastDraws           = 0u;
-            u32 m_lastMaterialUploads = 0u;
     };
 
 }
