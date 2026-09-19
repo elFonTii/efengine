@@ -24,6 +24,7 @@ add_executable(efengine_tests
     renderer/BoxMesh.test.cpp
     renderer/CubeFaces.test.cpp
     renderer/Cull.test.cpp
+    renderer/VoxelMath.test.cpp
     renderer/DdgiVolume.test.cpp
     renderer/MaterialMap.test.cpp
     renderer/RenderTarget.test.cpp
