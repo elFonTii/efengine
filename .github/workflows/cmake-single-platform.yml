@@ -172,7 +172,7 @@ jobs:
       # al código y al build: los assets binarios no dicen nada del README.
       - name: Extraer el diff del PR
         run: |
-          git fetch origin master --depth=0
+          git fetch origin master
           git diff origin/master...HEAD -- \
             src sandbox tests cmake CMakeLists.txt > pr-diff.txt
           echo "Diff de $(wc -l < pr-diff.txt) líneas."
