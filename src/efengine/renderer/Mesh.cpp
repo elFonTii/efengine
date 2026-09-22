@@ -14,6 +14,10 @@ namespace renderer {
         EF_ASSERT(!vertices.empty(), "Mesh::Mesh: Los vértices al construir el mesh están vacíos");
         EF_ASSERT(!indices.empty(), "Mesh::Mesh: Los índices de vértices al construir el mesh están vacíos");
 
+        m_positions.reserve(vertices.size());
+        for (const Vertex& v : vertices) m_positions.push_back(v.position);
+        m_indices = indices;
+
         Buffer vbo(vertices.data(), vertices.size() * sizeof(Vertex));
         IndexBuffer ebo(indices.data(), static_cast<u32>(indices.size()));
 

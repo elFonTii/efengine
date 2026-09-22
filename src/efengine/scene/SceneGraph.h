@@ -92,6 +92,10 @@ namespace scene {
 
             void AttachCollider(NodeHandle handle, ColliderAttachment collider);
 
+            // Saca el collider del nodo. Handle invalido o nodo sin collider:
+            // no-op silencioso, igual que DetachMesh y DetachCamera.
+            void DetachCollider(NodeHandle handle);
+
             // Behaviors
             Behavior* AttachBehavior(NodeHandle handle, std::unique_ptr<Behavior> behavior);
             void      Update(f32 dt);
