@@ -197,12 +197,15 @@ void main() {
     float distancia;
 
     if (hit) {
-        vec3 mundo  = uGridOrigin.xyz + (vec3(v) + 0.5) * voxelSize;
         vec3 albedo = texelFetch(uVoxelAlbedo, v, 0).rgb;
         vec3 N      = OctDecodeNormal(texelFetch(uVoxelNormal, v, 0).rg);
         // Un voxel de una sola cara visto de atras: la normal mira al rayo,
         // como hacia capture.frag con gl_FrontFacing.
         if (dot(N, dir) > 0.0) N = -N;
+
+        // Se evalua donde el rayo entro al voxel, medio voxel afuera por N. El
+        // centro queda hasta vs/2 debajo de la superficie y se autosombrea.
+        vec3 mundo  = origen + dir * t + N * (0.5 * voxelSize);
 
         // -- Luz directa, Lambert puro --
         //
