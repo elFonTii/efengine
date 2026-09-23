@@ -69,6 +69,7 @@ namespace {
     // escena ya quedo a medio reemplazar y los handles cacheados (rat, sun,
     // orbitLight, selected) apuntan a nodos que ya no existen.
     void cargarEscena(EditorContext& ctx, const std::string& ruta) {
+        EndSimulationBeforeClear(ctx);
         if (serialization::SceneSerializer::Load(ruta.c_str(), ctx.scene, ctx.assets,
                                                  ctx.rm, ctx.registry)) {
             ctx.state.currentScenePath = ruta;
@@ -852,6 +853,10 @@ namespace {
     }
 
 } // namespace
+
+void EndSimulationBeforeClear(EditorContext& ctx) {
+    if (ctx.game != null && ctx.game->Simulating()) ctx.game->EndSimulation();
+}
 
 void RefreshHandles(EditorContext& ctx) {
     EditorState& st = ctx.state;

@@ -124,6 +124,10 @@ namespace sandbox {
     // Se llama al arrancar y despues de cada carga de escena.
     void RefreshHandles(EditorContext& ctx);
 
+    // Corta la simulacion antes de reemplazar la escena: Clear() invalida los
+    // handles de los cuerpos y la escena nueva nunca recibiria Build().
+    void EndSimulationBeforeClear(EditorContext& ctx);
+
     // Encuadra el nodo seleccionado. Vive aca y no en el motor porque la
     // seleccion es un concepto de la UI: la camara no tiene que aprender que
     // es un nodo seleccionado. Sin seleccion valida, no hace nada.

@@ -77,6 +77,7 @@ namespace {
 } // namespace
 
 void BuildProbeScene(EditorContext& ctx, const char* fbxPath) {
+    EndSimulationBeforeClear(ctx);
     ctx.scene.Clear();
     ctx.assets.Clear();
 
