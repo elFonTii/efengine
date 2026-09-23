@@ -15,8 +15,12 @@ namespace renderer {
         // Extents() devuelve el semi-tamano de la caja: se duplica para
         // obtener el lado completo.
         const glm::vec3 extents = 2.0f * worldBounds.Extents();
-        const f32 lado = std::max({ extents.x, extents.y, extents.z });
+        f32 lado = std::max({ extents.x, extents.y, extents.z });
         if (lado <= 0.0f) return g;
+
+        // Un voxel de margen por lado: sin el, la cara max cae en el indice
+        // `resolution`, fuera del grid.
+        lado *= 1.0f + 2.0f / static_cast<f32>(g.resolution);
 
         g.voxelSize = lado / static_cast<f32>(g.resolution);
         g.origin    = worldBounds.Center() - glm::vec3(0.5f * lado);
