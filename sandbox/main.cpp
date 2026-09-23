@@ -24,6 +24,7 @@
 #include <glm/glm.hpp>
 
 #include <cmath>
+#include <filesystem>
 #include <memory>
 #include <vector>
 
@@ -181,7 +182,8 @@ int main() {
     sandbox::EditorContext editor { app, scene, cam, controller, assets, rm, registry, editorState, game.get() };
     // SONDA. Con una ruta aca, el sandbox arranca montando ese .fbx crudo en vez
     // del .efe: es el experimento de "se lo puede tragar el motor?". Vaciar la
-    // constante devuelve el arranque normal por .efe.
+    // constante, o que el archivo no exista (otro clon, el CI), devuelve el
+    // arranque normal por .efe.
     // Ruta ABSOLUTA al arbol de fuentes, no al espejo de assets/ que queda junto
     // al .exe: bistro/ esta excluido de ese espejo (son 1,5 GB, ver
     // cmake/CopyAssets.cmake).
@@ -192,7 +194,7 @@ int main() {
     // cualquier otro de assets/scenes, y la sala de Cornell sigue estando ahi.
     constexpr const char* kBootScene = "assets/scenes/sandbox.efe";
 
-    if (kProbeModel[0] != '\0') {
+    if (kProbeModel[0] != '\0' && std::filesystem::exists(kProbeModel)) {
         sandbox::BuildProbeScene(editor, kProbeModel);
     } else if (serialization::SceneSerializer::Load(kBootScene, scene, assets, rm, registry)) {
         editorState.currentScenePath = kBootScene;
