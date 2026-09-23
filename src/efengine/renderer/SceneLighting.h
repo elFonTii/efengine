@@ -4,6 +4,7 @@
 #include <efengine/renderer/DdgiContext.h>
 #include <efengine/renderer/AoContext.h>
 #include <efengine/renderer/IndirectContext.h>
+#include <efengine/renderer/CascadeContext.h>
 
 namespace efengine {
 namespace renderer {
@@ -21,6 +22,9 @@ namespace renderer {
         // La indirecta difusa ya resuelta a resolucion reducida. Vacio =
         // pbr.frag samplea el volumen inline, que es el comportamiento previo.
         IndirectContext indirect;
+        // Las cascadas del sol, que son las que usa el forward. El mapa unico de
+        // ShadowContext queda para la captura de DDGI.
+        CascadeContext  cascades;
     };
 
 }

@@ -1,5 +1,6 @@
 #pragma once
 #include <efengine/core/Types.h>
+#include <efengine/renderer/Bounds.h>
 
 #include <glm/glm.hpp>
 
@@ -74,6 +75,15 @@ namespace renderer {
 
     // Round-robin contiguo con wrap. El shader hace (first + slot) % total.
     UpdateRange NextRange(u32 cursor, u32 perFrame, u32 total);
+
+    // La AABB de mundo de los centros de probe de 'range', expandida por
+    // maxDistance en los tres ejes. Es EXACTAMENTE lo que el lote puede ver:
+    // seis frustums de 90 grados con far = d cubren el cubo de semilado d, asi
+    // que la union sobre el lote es esta caja y no una aproximacion.
+    //
+    // Invalida (AABB::Empty()) si count es cero -- con freeze no hay nada que
+    // dibujar, y una caja invalida no solapa con nada.
+    AABB BatchBounds(const DdgiGrid& grid, UpdateRange range, f32 maxDistance);
 
     // -- Tiles del target de captura ----------------------------------------
     // El target de captura es un atlas 2D: 6 caras en fila por kMaxProbesPerFrame

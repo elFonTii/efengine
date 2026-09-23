@@ -36,7 +36,13 @@ endforeach()
 
 # La barra final hace que se copie el CONTENIDO de assets/ y no la carpeta
 # dentro del destino (que daría .../assets/assets).
-file(COPY "${ASSETS_SRC}/" DESTINATION "${ASSETS_DST}")
+#
+# bistro/ queda AFUERA del espejo: es 1,5 GB, o sea diez veces todo el resto de
+# assets/, y se duplicaria una vez por configuracion. La sonda lo carga por ruta
+# absoluta desde el arbol de fuentes; no necesita el espejo porque todavia no
+# lee sus texturas.
+file(COPY "${ASSETS_SRC}/" DESTINATION "${ASSETS_DST}"
+     PATTERN "bistro" EXCLUDE)
 
 if(_removed GREATER 0)
     message(STATUS "assets: ${_removed} archivo(s) obsoleto(s) eliminado(s)")

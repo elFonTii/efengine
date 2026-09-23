@@ -32,6 +32,11 @@ namespace resources {
             const renderer::Material* MaterialAt(u32 index) const;
             u32 IndexOfMaterial(const renderer::Material* mat) const;
 
+            // Indice del primer material con ese nombre, o kInvalidIndex.
+            // Es lo que usa ImportMaterials para no duplicar slots cuando dos
+            // modelos comparten un material.
+            u32 IndexOfMaterialNamed(const std::string& name) const;
+
              u32 AddGenerated(std::string generatorName, std::vector<u8> payload,
                              std::unique_ptr<renderer::Model> model);
             u32 GeneratedCount() const { return static_cast<u32>(m_generated.size()); }

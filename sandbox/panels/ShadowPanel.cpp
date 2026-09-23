@@ -6,6 +6,7 @@
 #include <efengine/application/Application.h>
 #include <efengine/renderer/ScenePipeline.h>
 #include <efengine/renderer/ShadowPass.h>
+#include <efengine/renderer/CascadedShadowPass.h>
 
 #include <imgui.h>
 
@@ -63,6 +64,49 @@ using namespace efengine;
                 ImGui::TextDisabled("Normal offset = %.1f mm | Bias Max = %.1f mm",
                                     sh.normalOffsetTexels * texel * 1000.0f,
                                     sh.biasMax * fit.depthRange * 1000.0f);
+            }
+
+            if (ImGui::CollapsingHeader("Cascadas", ImGuiTreeNodeFlags_DefaultOpen)) {
+                renderer::CascadedShadowPass* csPtr =
+                    ctx.app.GetPipeline().Find<renderer::CascadedShadowPass>();
+                if (csPtr == null) return;
+                renderer::CascadedShadowPass& cascadas = *csPtr;
+                renderer::CascadeSettings&    cs       = cascadas.settings();
+
+                ImGui::Checkbox("Activas", &cascadas.enabled);
+
+                int count = (int)cs.count;
+                if (ImGui::SliderInt("Cantidad", &count, 1, (int)renderer::kMaxCascades)) {
+                    cs.count = (u32)count;
+                }
+                ImGui::SliderFloat("Distancia", &cs.shadowDistance, 20.0f, 1000.0f, "%.0f m");
+                // 0 = uniforme, 1 = logaritmico. Lo unico que decide cuanta
+                // resolucion se lleva la cascada de cerca.
+                ImGui::SliderFloat("Lambda", &cs.lambda, 0.0f, 1.0f, "%.2f");
+                // Si una sombra aparece de golpe al acercarse a un edificio alto,
+                // es esto lo que hay que subir.
+                ImGui::SliderFloat("Extension hacia la luz", &cs.lightExtension, 0.0f, 300.0f, "%.0f m");
+                ImGui::SliderFloat("Normal offset##csm", &cs.normalOffsetTexels, 0.0f, 8.0f, "%.1f texels");
+                ImGui::SliderFloat("Banda de transicion", &cs.blendRatio, 0.0f, 0.5f, "%.2f");
+                ImGui::Checkbox("Vista de debug", &cs.debugView);
+
+                // La tabla es lo que convierte el tuneo en lectura: con el texel en
+                // metros a la vista se sabe si el problema es el reparto o el bias,
+                // en vez de mover sliders hasta que algo mejore.
+                const renderer::CascadeContext& cc = cascadas.context();
+                if (ImGui::BeginTable("cascadas", 3, ImGuiTableFlags_Borders)) {
+                    ImGui::TableSetupColumn("#");
+                    ImGui::TableSetupColumn("Hasta (m)");
+                    ImGui::TableSetupColumn("Texel (mm)");
+                    ImGui::TableHeadersRow();
+                    for (u32 i = 0; i < cc.count; ++i) {
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn(); ImGui::Text("%u", i);
+                        ImGui::TableNextColumn(); ImGui::Text("%.1f", cc.fits[i].splitFar);
+                        ImGui::TableNextColumn(); ImGui::Text("%.1f", cc.fits[i].texelWorldSize * 1000.0f);
+                    }
+                    ImGui::EndTable();
+                }
             }
     }
 

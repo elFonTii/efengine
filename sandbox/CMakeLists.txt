@@ -8,7 +8,9 @@ add_executable(sandbox
     AssetCatalog.cpp
     AuthoringUI.cpp
     TestScene.cpp
+    ProbeScene.cpp
     SunGizmo.cpp
+    ColliderGizmo.cpp
     panels/Panels.cpp
     panels/ShadowPanel.cpp
     panels/DdgiPanel.cpp

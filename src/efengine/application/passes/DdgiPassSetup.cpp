@@ -13,15 +13,11 @@ namespace application {
 
     void RegisterDdgiPass(renderer::ScenePipeline& pipeline, const PassDeps& d) {
         renderer::DdgiPass::Shaders shaders;
-        // Los dos vertex shaders son propios del pase y ya no los de pbr/skybox:
-        // la captura dibuja TODAS las vistas del frame con un draw instanciado,
-        // y cada instancia saca su vista de un SSBO en vez del bloque Frame.
-        shaders.capture = d.resources.GetShader("ddgi_capture",
-                              "assets/shaders/ddgi/capture.vert",
-                              "assets/shaders/ddgi/capture.frag");
-        shaders.captureSky = d.resources.GetShader("ddgi_capture_sky",
-                              "assets/shaders/ddgi/capture_sky.vert",
-                              "assets/shaders/ddgi/capture_sky.frag");
+        shaders.trace = d.resources.GetComputeShader("ddgi_trace_voxel",
+                              "assets/shaders/ddgi/trace_voxel.comp");
+        shaders.voxelize = d.resources.GetShader("voxelize",
+                              "assets/shaders/voxel/voxelize.vert",
+                              "assets/shaders/voxel/voxelize.frag");
         shaders.blendIrradiance = d.resources.GetComputeShader("ddgi_blend_irradiance",
                               "assets/shaders/ddgi/blend_irradiance.comp");
         shaders.blendDistance = d.resources.GetComputeShader("ddgi_blend_distance",

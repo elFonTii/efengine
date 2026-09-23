@@ -16,6 +16,8 @@
 
 #include <imgui.h>
 
+#include <algorithm>
+
 namespace sandbox {
 
 // Igual que EditorUI.cpp: los paneles nombran los tipos del motor como
@@ -104,6 +106,38 @@ using namespace efengine;
         // para detectar que el round-robin se fue de escala, no como profiler.
         ImGui::TextDisabled("pase (CPU): %.3f ms", pass.lastMs());
 
+        // Rayos y no draws: la captura ya no rasteriza la escena, traza contra
+        // el grid. Espeja el conteo que hace el pase: freeze corta el barrido, y
+        // el rango nunca pasa del total de probes.
+        const u32 porFrame = s.freeze
+                           ? 0u
+                           : std::min(s.probesPerFrame, renderer::kMaxProbesPerFrame);
+        const u32 probesDelFrame = std::min(porFrame, total);
+        const u32 rayosPorFrame  = 6u * renderer::kProbeFaceSize * renderer::kProbeFaceSize
+                                 * probesDelFrame;
+        ImGui::TextDisabled("rayos por frame: %u (%u probes x 6 caras x %ux%u)",
+                            rayosPorFrame, probesDelFrame,
+                            renderer::kProbeFaceSize, renderer::kProbeFaceSize);
+
+        // -- Voxeles -----------------------------------------------------------
+        ImGui::SeparatorText("Voxeles");
+        // La voxelizacion NO corre por frame: se hornea una vez y sus numeros
+        // son los de esa unica corrida.
+        if (ImGui::Button("Revoxelizar", ImVec2(-kAnchoEtiqueta, 0.0f))) {
+            pass.Voxelize(ctx.scene);
+        }
+        if (pass.gridValido()) {
+            const renderer::VoxelGridDesc& vd = pass.voxelGrid().desc();
+            ImGui::TextDisabled("resolucion: %u^3   voxel: %.3f m", vd.resolution, vd.voxelSize);
+            ImGui::TextDisabled("extension: %.1f m por lado", renderer::GridExtent(vd));
+            ImGui::TextDisabled("memoria: %.1f MB",
+                                f64(pass.voxelGrid().memoryBytes()) / (1024.0 * 1024.0));
+            ImGui::TextDisabled("ultima voxelizacion: %.1f ms, %u draws",
+                                pass.voxelizeMs(), pass.voxelizeDraws());
+        } else {
+            ImGui::TextColored(kColorAviso, "grid sin hornear: la captura no traza nada.");
+        }
+
         // -- Sampleo -----------------------------------------------------------
         ImGui::SeparatorText("Sampleo");
         ImGui::SliderFloat("Intensidad", &s.intensity, 0.0f, 4.0f);
@@ -121,6 +155,10 @@ using namespace efengine;
         // Es el far plane de la captura de probes: muy alto tira la precision
         // del depth, muy bajo deja la captura vacia.
         ImGui::SliderFloat("Distancia max", &s.maxDistance, 1.0f, topeDist, "%.1f m");
+
+        // Alfa minimo para que el DDA cuente un voxel como solido. En 0 la
+        // condicion se cumple en el aire y el rayo muere en el primer voxel.
+        ImGui::SliderFloat("Umbral de opacidad", &s.opacityThreshold, 0.0f, 1.0f, "%.2f");
 
         // -- Debug -------------------------------------------------------------
         ImGui::SeparatorText("Debug");

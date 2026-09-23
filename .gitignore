@@ -37,3 +37,6 @@ imgui.ini
 # Blender files
 blender/
 evidencias/
+# Bistro: 1.4 GB de DDS + los PNG que genera sh/convert_bistro.ps1.
+# El .fbx y las texturas se bajan aparte, no viven en el repo.
+assets/bistro/

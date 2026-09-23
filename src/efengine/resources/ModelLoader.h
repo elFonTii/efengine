@@ -1,6 +1,8 @@
 #pragma once
 #include <efengine/renderer/Model.h>
+#include <efengine/renderer/MaterialDef.h>
 #include <optional>
+#include <vector>
 
 namespace efengine {
 namespace resources {
@@ -13,9 +15,15 @@ namespace resources {
     // asi que cae en 1.0 (o sea, no escalar).
     f32 MetersPerUnit(f64 unitScaleFactor);
 
+    // El modelo y los materiales que declaraba el archivo, de un solo parseo.
+    struct LoadedModel {
+        renderer::Model                    model;
+        std::vector<renderer::MaterialDef> materials;
+    };
+
     class ModelLoader {
         public:
-            static std::optional<renderer::Model> Load(const char* path);
+            static std::optional<LoadedModel> Load(const char* path);
     };
 }
 }

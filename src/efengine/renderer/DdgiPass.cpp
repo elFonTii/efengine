@@ -9,12 +9,11 @@
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/Cubemap.h>
 #include <efengine/renderer/CubeFaces.h>
-#include <efengine/renderer/PipelineStates.h>
 #include <efengine/renderer/ShaderBlocks.h>
 #include <efengine/renderer/VertexArray.h>
+#include <efengine/renderer/VoxelMath.h>
 #include <efengine/scene/SceneGraph.h>
 
-#include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <efengine/renderer/GpuProfiler.h>
 
@@ -31,10 +30,6 @@ namespace renderer {
         constexpr u32 kCaptureWidth  = 6u * kProbeFaceSize;                 // 96
         constexpr u32 kCaptureHeight = kMaxProbesPerFrame * kProbeFaceSize; // 512
 
-        // "Muy lejos": el cielo y lo que no pega nada. Chebyshev nunca lo cuenta
-        // como oclusion.
-        constexpr f32 kFarDistance = 1.0e4f;
-
         // Los dos blends recorren la captura cara por cara con un cache de
         // shared memory dimensionado a kDdgiFaceTexels (una constante de
         // ddgi/common.glsl). Si kProbeFaceSize crece por encima de eso, el
@@ -47,11 +42,21 @@ namespace renderer {
                       "kProbeFaceSize crecio: subir kDdgiFaceTexels en "
                       "assets/shaders/ddgi/common.glsl y revisar que el cache de "
                       "los blends siga entrando en 32 KB de shared memory");
+
+        // trace_voxel.comp declara local_size 16x16 y usa gl_LocalInvocationID
+        // como el texel de la cara. Si kProbeFaceSize crece, el workgroup deja
+        // de cubrir la cara y se pierden los texels de mas EN SILENCIO (el
+        // shader ni siquiera los descarta: nunca se despachan). GLSL no puede
+        // leer esta constante, asi que el assert es la unica atadura.
+        constexpr u32 kTraceLocalSize = 16u;
+        static_assert(kProbeFaceSize == kTraceLocalSize,
+                      "kProbeFaceSize cambio: sincronizar el local_size de "
+                      "assets/shaders/ddgi/trace_voxel.comp");
     }
 
     std::unique_ptr<DdgiPass> DdgiPass::Create(Renderer& renderer, VertexArray& fullscreenQuad,
                                                const Shaders& shaders) {
-        if (shaders.capture == null || shaders.captureSky == null
+        if (shaders.trace == null || shaders.voxelize == null
             || shaders.blendIrradiance == null || shaders.blendDistance == null) {
             EF_LOG_ERROR("DdgiPass::Create: falta algun shader de DDGI");
             return null;
@@ -61,7 +66,10 @@ namespace renderer {
         const glm::ivec2 irrSize  = IrradianceAtlasSize(grid);
         const glm::ivec2 distSize = DistanceAtlasSize(grid);
 
-        Texture capture = Texture::CreateColorAttachment(kCaptureWidth, kCaptureHeight);
+        // Storage y no color attachment: la captura ya no se rasteriza, la
+        // escribe trace_voxel.comp por imageStore.
+        Texture capture = Texture::CreateStorage2D(kCaptureWidth, kCaptureHeight,
+                                                   efecom::TextureFormat::RGBA16F);
         Texture irradiance = Texture::CreateStorage2D(static_cast<u32>(irrSize.x),
                                                       static_cast<u32>(irrSize.y),
                                                       efecom::TextureFormat::RGBA16F);
@@ -72,58 +80,39 @@ namespace renderer {
         ClearAtlas(irradiance);
         ClearAtlas(distance);
 
-        const u32 fbo = efecom::CreateFramebuffer();
-        if (fbo == 0u) {
-            EF_LOG_ERROR("DdgiPass::Create: no hay contexto GL");
-            return null;
-        }
-        efecom::FramebufferColorTexture(fbo, capture.id());
-
-        const u32 rbo = efecom::CreateDepthRenderbuffer(kCaptureWidth, kCaptureHeight);
-        efecom::FramebufferDepthRenderbuffer(fbo, rbo);
-
-        EF_GPU_CHECK(efecom::FramebufferComplete(fbo), "DdgiPass: FBO de captura incompleto");
-
         EF_LOG_INFO("DdgiPass: %u probes, atlas irradiancia %dx%d, distancia %dx%d, captura %ux%u",
                     ProbeCount(grid), irrSize.x, irrSize.y, distSize.x, distSize.y,
                     kCaptureWidth, kCaptureHeight);
 
-        // El SSBO de vistas se aloca al maximo una sola vez, igual que el target
-        // de captura: mover el slider de probes por frame nunca realoca.
-        const u32 ssbo = efecom::CreateStorageBuffer(
-            sizeof(DdgiCaptureTile) * CaptureTileCount(kMaxProbesPerFrame));
+        std::unique_ptr<VoxelizePass> voxelize = VoxelizePass::Create(renderer, shaders.voxelize);
+        if (voxelize == null) {
+            EF_LOG_ERROR("DdgiPass::Create: no se pudo crear el VoxelizePass");
+            return null;
+        }
 
         // El ctor es privado: make_unique no lo alcanza.
         return std::unique_ptr<DdgiPass>(
             new DdgiPass(renderer, fullscreenQuad, shaders, std::move(capture),
-                         std::move(irradiance), std::move(distance), fbo, rbo, ssbo));
+                         std::move(irradiance), std::move(distance), std::move(voxelize)));
     }
 
     DdgiPass::DdgiPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
                        Texture capture, Texture irradiance, Texture distance,
-                       u32 captureFbo, u32 captureDepthRbo, u32 tileSsbo)
+                       std::unique_ptr<VoxelizePass> voxelize)
         : m_renderer(renderer), m_quad(fullscreenQuad), m_shaders(shaders)
         , m_capture(std::move(capture)), m_irradiance(std::move(irradiance))
-        , m_distance(std::move(distance))
-        , m_captureFbo(captureFbo), m_captureDepthRbo(captureDepthRbo)
-        , m_tileSsbo(tileSsbo)
-        , m_atlasGrid(SanitizeGrid(DdgiGrid{})) {
-        m_tiles.reserve(CaptureTileCount(kMaxProbesPerFrame));
-    }
+        , m_distance(std::move(distance)), m_voxelize(std::move(voxelize))
+        , m_atlasGrid(SanitizeGrid(DdgiGrid{})) {}
 
-    DdgiPass::~DdgiPass() {
-        if (m_captureDepthRbo != 0u) efecom::DestroyRenderbuffer(m_captureDepthRbo);
-        if (m_captureFbo      != 0u) efecom::DestroyFramebuffer(m_captureFbo);
-        if (m_tileSsbo        != 0u) efecom::DestroyBuffer(m_tileSsbo);
-    }
+    DdgiPass::~DdgiPass() = default;
 
     DdgiPass::DdgiPass(DdgiPass&& o) noexcept
         : m_renderer(o.m_renderer), m_quad(o.m_quad), m_shaders(o.m_shaders)
         , m_capture(std::move(o.m_capture)), m_irradiance(std::move(o.m_irradiance))
-        , m_distance(std::move(o.m_distance))
-        , m_captureFbo(std::exchange(o.m_captureFbo, 0u))
-        , m_captureDepthRbo(std::exchange(o.m_captureDepthRbo, 0u))
-        , m_tileSsbo(std::exchange(o.m_tileSsbo, 0u)), m_tiles(std::move(o.m_tiles))
+        , m_distance(std::move(o.m_distance)), m_grid(std::move(o.m_grid))
+        , m_voxelize(std::move(o.m_voxelize))
+        , m_gridValido(std::exchange(o.m_gridValido, false))
+        , m_traceUbo(std::move(o.m_traceUbo))
         , m_settings(o.m_settings), m_atlasGrid(o.m_atlasGrid), m_range(o.m_range)
         , m_cursor(o.m_cursor), m_sweepsDone(o.m_sweepsDone)
         , m_blendedOnce(o.m_blendedOnce), m_lastMs(o.m_lastMs) {}
@@ -132,25 +121,21 @@ namespace renderer {
     // todo el proceso, y una referencia no se puede rebindear igual.
     DdgiPass& DdgiPass::operator=(DdgiPass&& o) noexcept {
         if (this != &o) {
-            if (m_captureDepthRbo != 0u) efecom::DestroyRenderbuffer(m_captureDepthRbo);
-            if (m_captureFbo      != 0u) efecom::DestroyFramebuffer(m_captureFbo);
-            if (m_tileSsbo        != 0u) efecom::DestroyBuffer(m_tileSsbo);
-
-            m_shaders         = o.m_shaders;
-            m_capture         = std::move(o.m_capture);
-            m_irradiance      = std::move(o.m_irradiance);
-            m_distance        = std::move(o.m_distance);
-            m_captureFbo      = std::exchange(o.m_captureFbo, 0u);
-            m_captureDepthRbo = std::exchange(o.m_captureDepthRbo, 0u);
-            m_tileSsbo        = std::exchange(o.m_tileSsbo, 0u);
-            m_tiles           = std::move(o.m_tiles);
-            m_settings        = o.m_settings;
-            m_atlasGrid       = o.m_atlasGrid;
-            m_range           = o.m_range;
-            m_cursor          = o.m_cursor;
-            m_sweepsDone      = o.m_sweepsDone;
-            m_blendedOnce     = o.m_blendedOnce;
-            m_lastMs          = o.m_lastMs;
+            m_shaders     = o.m_shaders;
+            m_capture     = std::move(o.m_capture);
+            m_irradiance  = std::move(o.m_irradiance);
+            m_distance    = std::move(o.m_distance);
+            m_grid        = std::move(o.m_grid);
+            m_voxelize    = std::move(o.m_voxelize);
+            m_gridValido  = std::exchange(o.m_gridValido, false);
+            m_traceUbo    = std::move(o.m_traceUbo);
+            m_settings    = o.m_settings;
+            m_atlasGrid   = o.m_atlasGrid;
+            m_range       = o.m_range;
+            m_cursor      = o.m_cursor;
+            m_sweepsDone  = o.m_sweepsDone;
+            m_blendedOnce = o.m_blendedOnce;
+            m_lastMs      = o.m_lastMs;
         }
         return *this;
     }
@@ -209,39 +194,6 @@ namespace renderer {
                     want.counts.x, want.counts.y, want.counts.z);
     }
 
-    u32 DdgiPass::BuildTiles(const glm::mat4& proj) {
-        const u32 total = ProbeCount(m_atlasGrid);
-
-        m_tiles.clear();
-        for (u32 slot = 0u; slot < m_range.count; ++slot) {
-            const u32 probe = (m_range.first + slot) % total;
-            const glm::vec3 center = ProbeWorldPosition(m_atlasGrid, probe);
-
-            for (u32 face = 0u; face < kCubeFaceCount; ++face) {
-                const CubeFaceBasis& b = CubeFace(face);
-                const glm::mat4 view = glm::lookAt(center, center + b.forward, b.up);
-
-                DdgiCaptureTile t {};
-                t.viewProj = proj * view;
-                // La misma inversa sin traslacion que MakeFrameBlock arma para el
-                // skybox: es lo unico que el cielo necesita para reconstruir la
-                // direccion de vista por vertice.
-                t.invViewProjRot = glm::inverse(proj * glm::mat4(glm::mat3(view)));
-                t.rect           = CaptureTileRect(face, slot);
-                t.probeCenter    = glm::vec4(center, 0.0f);
-                m_tiles.push_back(t);
-            }
-        }
-
-        if (!m_tiles.empty()) {
-            efecom::UpdateBuffer(m_tileSsbo, m_tiles.data(),
-                                 sizeof(DdgiCaptureTile) * m_tiles.size(), 0u);
-        }
-        efecom::BindStorageBuffer(m_tileSsbo, kDdgiTileBinding);
-
-        return static_cast<u32>(m_tiles.size());
-    }
-
     namespace {
         // Mide hasta el fin del scope. Con dos returns tempranos en Update, un
         // par de time_point sueltos dejaria m_lastMs con el valor del ultimo
@@ -271,6 +223,11 @@ namespace renderer {
                           const IblContext& ibl, const Cubemap* env) {
         const ScopedMs medicion { &m_lastMs };
 
+        // El grid es el insumo de la captura: sin el no hay nada que trazar.
+        // Se hornea una vez, cuando la escena ya tiene geometria; despues lo
+        // rehornea el boton del panel.
+        if (!m_gridValido && scene.WorldBounds().Valid()) Voxelize(scene);
+
         EnsureAtlasSize();
 
         const u32 total = ProbeCount(m_atlasGrid);
@@ -295,7 +252,7 @@ namespace renderer {
 
         // Los dos atlas a sus unidades, por la MISMA razon que el shadow map de
         // arriba: este pase corre antes de BeginScene, que es quien normalmente
-        // los bindea. Sin esto, el rebote de capture.frag samplea unidades sin
+        // los bindea. Sin esto, el rebote de trace_voxel.comp samplea unidades sin
         // contenido y da negro sin que nada falle ruidosamente.
         m_irradiance.Bind(kIrradianceAtlasUnit);
         m_distance.Bind(kDistanceAtlasUnit);
@@ -307,73 +264,46 @@ namespace renderer {
         // rebote vale cero en vez de realimentar basura.
         m_renderer.SetDdgiBlock(MakeDdgiBlock(m_atlasGrid, m_settings, m_range, m_blendedOnce));
 
-        efecom::BindRenderTarget(m_captureFbo, kCaptureWidth, kCaptureHeight);
-        efecom::SetClearColor(0.0f, 0.0f, 0.0f, kFarDistance);
-        efecom::Clear(efecom::ClearMask::ColorDepth);
-
         {
             EF_PROFILE_SCOPE("DDGI captura");
 
-            // 90 grados y aspect 1: las 6 caras cubren la esfera exacta y sin
-            // solape. La proyeccion es la misma para todas las vistas del frame;
-            // lo que cambia por vista es el lookAt y el tile del atlas.
-            const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f,
-                                                    0.05f, m_settings.maxDistance);
-            const u32 instancias = BuildTiles(proj);
+            // Sin grid no hay nada que trazar. m_blendedOnce sigue en false, asi
+            // que Context() no entrega los atlas y pbr.frag cae a IBL puro.
+            if (!m_gridValido) return;
 
-            // El FrameBlock ya no se re-sube por cara: la vista de cada instancia
-            // sale del SSBO. Se sube UNO solo, con la sombra y el IBL del frame,
-            // que es lo unico que capture.frag sigue leyendo de ahi. La camara que
-            // lleva no la mira nadie -- el centro del probe viaja por varying.
-            m_renderer.SetFrameBlock(MakeFrameBlock(glm::mat4(1.0f), proj,
+            // El trazado lee uLightSpaceMatrix, uShadowParams y uIblParams de
+            // este bloque para sombrear el impacto y para el cielo. Ya no hay
+            // proyeccion de captura: las direcciones salen de dirForFace.
+            //
+            // El ibl que llega aca es el del frame, y tiene que serlo: el rayo
+            // que se escapa lee la intensidad de uIblParams.y, y con un bloque
+            // vacio el cielo de la captura sale negro.
+            m_renderer.SetFrameBlock(MakeFrameBlock(glm::mat4(1.0f), glm::mat4(1.0f),
                                                     glm::vec3(0.0f), shadow, ibl));
 
-            // El cielo primero: llena el fondo con radiancia real y distancia
-            // "lejos", asi los probes de exterior reciben luz de cielo sin que
-            // nadie la sume aparte.
-            //
-            // SIN planos de recorte: el quad cubre exactamente [-1,1], asi que
-            // despues de la escala cubre exactamente su tile y no hay nada que
-            // recortar. Habilitarlos pondria los cuatro planos JUSTO sobre sus
-            // bordes, y una distancia de exactamente cero es la peor entrada
-            // posible para un test de recorte.
-            if (env != null) {
-                efecom::SetClipDistanceCount(0u);
-                efecom::ApplyPipelineState(SkyboxState());
-                m_shaders.captureSky->Bind();
-                env->Bind(0);
-                m_renderer.Draw(m_quad, *m_shaders.captureSky, instancias);
-            }
+            const TraceVoxelPassBlock bloque =
+                MakeTraceVoxelPassBlock(m_grid.desc(), m_settings.opacityThreshold);
+            m_traceUbo.Update(&bloque, sizeof(bloque));
+            m_traceUbo.BindTo(kPassBinding);
 
-            // La escena. Los cuatro planos recortan cada instancia a SU tile: sin
-            // ellos, un triangulo que se sale de su vista aterriza dentro del
-            // atlas igual y pinta sobre el tile vecino. Ver capture_tiles.glsl.
-            //
-            // Submit sigue subiendo el MaterialBlock y bindeando texturas por
-            // malla: la captura necesita el albedo de cada material, pero un solo
-            // programa. El estado se fuerza porque la captura NECESITA los
-            // backfaces (ver DdgiCaptureState).
-            efecom::SetClipDistanceCount(4u);
-            const efecom::PipelineState estadoCaptura = DdgiCaptureState();
-            DrawOptions opciones;
-            opciones.shader    = m_shaders.capture;
-            opciones.state     = &estadoCaptura;
-            opciones.instances = instancias;
-            for (const scene::RenderItem& item : scene.Renderables()) {
-                if (item.model == null || item.materials == null) continue;
-                m_renderer.Submit(*item.model, *item.materials, item.world, opciones);
-            }
+            m_capture.BindImage(0, 0, efecom::ImageAccess::WriteOnly,
+                                efecom::TextureFormat::RGBA16F);
+            m_grid.BindForSample(2u, 3u);
+            if (env != null) env->Bind(4u);
 
-            // Los planos son estado GLOBAL: dejarlos habilitados haria que el
-            // resto del frame -- que no escribe gl_ClipDistance -- recorte contra
-            // basura. Se apagan aca y no en el proximo pase para que la
-            // responsabilidad quede donde se encendieron.
-            efecom::SetClipDistanceCount(0u);
+            m_shaders.trace->Bind();
+            // Seis caras por los probes del frame; el workgroup ES la cara.
+            efecom::DispatchCompute(kCubeFaceCount, m_range.count, 1u);
+
+            // La captura ahora se escribe por imageStore y los blends la leen
+            // por sampler: sin este barrier leen una captura a medio escribir y
+            // dan ruido o negro SIN que nada falle ruidosamente.
+            efecom::IssueMemoryBarrier(efecom::Barrier::ShaderImageAccess
+                                     | efecom::Barrier::TextureFetch);
         }
 
-        // El blend. La captura escribio por rasterizacion y el compute la lee por
-        // sampler: GL sincroniza eso solo, sin IssueMemoryBarrier. El barrier SI
-        // hace falta despues de los imageStore, antes de que pbr.frag samplee.
+        // El blend. El barrier de arriba es el que ordena captura -> blend; el
+        // de mas abajo ordena blend -> sampleo de pbr.frag.
         const bool primerBarrido = (m_sweepsDone == 0u);
 
         // Hasta completar el primer barrido se fuerza hysteresis 0: la primera
@@ -423,6 +353,30 @@ namespace renderer {
         }
         ctx.range = m_range;
         return ctx;
+    }
+
+    void DdgiPass::Voxelize(const scene::SceneGraph& scene) {
+        if (m_voxelize == null) return;
+
+        const VoxelGridDesc desc = FitVoxelGrid(scene.WorldBounds(), kVoxelResolution);
+        if (!m_grid.valid() || m_grid.desc().origin != desc.origin
+            || m_grid.desc().voxelSize != desc.voxelSize
+            || m_grid.desc().resolution != desc.resolution) {
+            m_grid = VoxelGrid::Create(desc);
+        }
+        if (!m_grid.valid()) return;
+
+        m_voxelize->Execute(scene, m_grid);
+        m_gridValido = true;
+
+        EF_LOG_INFO("DdgiPass: grid de %u^3 voxeles de %.3f m, %.1f MB, %u draws en %.1f ms",
+                    desc.resolution, desc.voxelSize,
+                    static_cast<f64>(m_grid.memoryBytes()) / (1024.0 * 1024.0),
+                    m_voxelize->lastDraws(), m_voxelize->lastMs());
+
+        // El atlas viejo se integro contra otro proxy: hay que reconstruirlo
+        // desde cero, con hysteresis 0.
+        Reset();
     }
 
 }
