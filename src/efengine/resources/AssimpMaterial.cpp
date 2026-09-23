@@ -87,6 +87,15 @@ namespace resources {
         return specularPngPath.substr(0, punto) + "_Metallic.png";
     }
 
+    std::string MaterialNameFromAssimp(const void* aiMaterialPtr) {
+        const aiMaterial* mat = static_cast<const aiMaterial*>(aiMaterialPtr);
+        aiString nombre;
+        if (mat->Get(AI_MATKEY_NAME, nombre) == AI_SUCCESS && nombre.length > 0) {
+            return nombre.C_Str();
+        }
+        return "material_sin_nombre";
+    }
+
     renderer::MaterialDef MaterialDefFromAssimp(const void* aiMaterialPtr,
                                                 const std::string& modelPath) {
         const aiMaterial* mat = static_cast<const aiMaterial*>(aiMaterialPtr);
@@ -96,9 +105,7 @@ namespace resources {
         def.vertPath   = "assets/shaders/pbr.vert";
         def.fragPath   = "assets/shaders/pbr.frag";
 
-        aiString nombre;
-        if (mat->Get(AI_MATKEY_NAME, nombre) == AI_SUCCESS) def.name = nombre.C_Str();
-        if (def.name.empty()) def.name = "material_sin_nombre";
+        def.name = MaterialNameFromAssimp(mat);
 
         for (int tipo = 1; tipo <= AI_TEXTURE_TYPE_MAX; ++tipo) {
             const std::vector<SlotMapping> mapeos = MapAssimpTextureType(tipo);

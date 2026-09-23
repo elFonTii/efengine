@@ -95,11 +95,11 @@ namespace resources {
                 }
             }
 
-            aiString matName;
+            std::string matName;
             if (scene->mNumMaterials > 0) {
-                scene->mMaterials[m->mMaterialIndex]->Get(AI_MATKEY_NAME, matName);
+                matName = MaterialNameFromAssimp(scene->mMaterials[m->mMaterialIndex]);
             }
-            meshes.emplace_back(vertices, indices, std::string(matName.C_Str()));
+            meshes.emplace_back(vertices, indices, matName);
         }
 
         std::vector<renderer::MaterialDef> materiales;

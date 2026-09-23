@@ -2,6 +2,8 @@
 #include <efengine/resources/AssimpMaterial.h>
 #include <efengine/renderer/MaterialDef.h>
 
+#include <assimp/material.h>
+
 using efengine::resources::MetallicPathFromSpecular;
 using efengine::resources::RemapTexturePath;
 
@@ -128,4 +130,23 @@ TEST_CASE("MapAssimpTextureType: un tipo no contemplado no devuelve nada") {
     CHECK(MapAssimpTextureType(0).empty());    // NONE
     CHECK(MapAssimpTextureType(3).empty());    // AMBIENT
     CHECK(MapAssimpTextureType(18).empty());   // UNKNOWN
+}
+
+using efengine::resources::MaterialDefFromAssimp;
+using efengine::resources::MaterialNameFromAssimp;
+
+TEST_CASE("MaterialNameFromAssimp: un aiMaterial sin nombre da el mismo fallback que el MaterialDef") {
+    // La malla buscaba "" y el mapa tenia "material_sin_nombre": no se dibujaba.
+    const aiMaterial mat;
+
+    CHECK(MaterialNameFromAssimp(&mat) == "material_sin_nombre");
+    CHECK(MaterialNameFromAssimp(&mat) == MaterialDefFromAssimp(&mat, "modelo.fbx").name);
+}
+
+TEST_CASE("MaterialNameFromAssimp: un nombre presente se devuelve tal cual") {
+    aiMaterial mat;
+    const aiString nombre("Ladrillo");
+    mat.AddProperty(&nombre, AI_MATKEY_NAME);
+
+    CHECK(MaterialNameFromAssimp(&mat) == "Ladrillo");
 }

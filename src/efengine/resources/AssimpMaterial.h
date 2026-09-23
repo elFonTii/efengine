@@ -49,6 +49,10 @@ namespace resources {
     //     -> assets/bistro/Textures/X_Specular_Metallic.png
     std::string MetallicPathFromSpecular(const std::string& specularPngPath);
 
+    // Nombre de un aiMaterial, con "material_sin_nombre" si no trae
+    // AI_MATKEY_NAME. La malla y el MaterialDef lo toman de aca para coincidir.
+    std::string MaterialNameFromAssimp(const void* aiMaterialPtr);
+
     // Traduce un aiMaterial completo a un MaterialDef del motor.
     //
     // Toma const void* y no const aiMaterial* para que este header no obligue a
