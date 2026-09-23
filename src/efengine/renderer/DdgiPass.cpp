@@ -112,6 +112,7 @@ namespace renderer {
         , m_distance(std::move(o.m_distance)), m_grid(std::move(o.m_grid))
         , m_voxelize(std::move(o.m_voxelize))
         , m_gridValido(std::exchange(o.m_gridValido, false))
+        , m_gridGeneracion(o.m_gridGeneracion)
         , m_traceUbo(std::move(o.m_traceUbo))
         , m_settings(o.m_settings), m_atlasGrid(o.m_atlasGrid), m_range(o.m_range)
         , m_cursor(o.m_cursor), m_sweepsDone(o.m_sweepsDone)
@@ -128,6 +129,7 @@ namespace renderer {
             m_grid        = std::move(o.m_grid);
             m_voxelize    = std::move(o.m_voxelize);
             m_gridValido  = std::exchange(o.m_gridValido, false);
+            m_gridGeneracion = o.m_gridGeneracion;
             m_traceUbo    = std::move(o.m_traceUbo);
             m_settings    = o.m_settings;
             m_atlasGrid   = o.m_atlasGrid;
@@ -224,9 +226,10 @@ namespace renderer {
         const ScopedMs medicion { &m_lastMs };
 
         // El grid es el insumo de la captura: sin el no hay nada que trazar.
-        // Se hornea una vez, cuando la escena ya tiene geometria; despues lo
-        // rehornea el boton del panel.
-        if (!m_gridValido && scene.WorldBounds().Valid()) Voxelize(scene);
+        // Se hornea cuando la escena ya tiene geometria y de nuevo al cargar
+        // otra (Clear sube la generacion); fuera de eso, el boton del panel.
+        const bool otraEscena = m_gridGeneracion != scene.Generation();
+        if ((!m_gridValido || otraEscena) && scene.WorldBounds().Valid()) Voxelize(scene);
 
         EnsureAtlasSize();
 
@@ -367,7 +370,8 @@ namespace renderer {
         if (!m_grid.valid()) return;
 
         m_voxelize->Execute(scene, m_grid);
-        m_gridValido = true;
+        m_gridValido     = true;
+        m_gridGeneracion = scene.Generation();
 
         EF_LOG_INFO("DdgiPass: grid de %u^3 voxeles de %.3f m, %.1f MB, %u draws en %.1f ms",
                     desc.resolution, desc.voxelSize,

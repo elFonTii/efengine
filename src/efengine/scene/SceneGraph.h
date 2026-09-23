@@ -131,6 +131,10 @@ namespace scene {
             // submallas, y cullear por item no descarta nada.
             const std::vector<renderer::MeshSpan>& MeshSpans() const { return m_meshSpans; }
 
+            // Sube con cada Clear(): quien cachea algo de la escena (el grid
+            // de DDGI) la compara para saber que se cargo otra.
+            u64 Generation() const { return m_generation; }
+
         private:
             struct Slot {
                 Node node;
@@ -160,6 +164,7 @@ namespace scene {
             renderer::DirectionalLight        m_sun { glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };
             renderer::AABB                    m_worldBounds = renderer::AABB::Empty();
             std::vector<renderer::MeshSpan>   m_meshSpans;
+            u64                               m_generation = 0;
     };
 }
 }

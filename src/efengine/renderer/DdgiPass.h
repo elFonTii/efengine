@@ -132,6 +132,7 @@ namespace renderer {
             VoxelGrid                     m_grid;
             std::unique_ptr<VoxelizePass> m_voxelize;
             bool                          m_gridValido = false;
+            u64                           m_gridGeneracion = 0;   // SceneGraph::Generation() del horneado
 
             UniformBuffer m_traceUbo { sizeof(TraceVoxelPassBlock) };
 
