@@ -19,13 +19,11 @@ namespace application {
             d.resources.GetShader("shadow_depth",
                 "assets/shaders/shadow_depth.vert",
                 "assets/shaders/shadow_depth.frag"));
-        // Su unico consumidor es la captura de DDGI, que arranca apagada: sin
-        // esto el pase dibuja la escena entera para nadie.
+        // Su unico consumidor es la captura de DDGI: el pase la sigue (lo
+        // engancha RegisterDdgiPass) y sin DDGI no dibuja.
         //
         // DEUDA TECNICA: quedan dos caminos de sombra vivos, este encuadrado a la
-        // escena y las cascadas encuadradas a la camara. Se unifican cuando DDGI
-        // se prenda en serio.
-        pase->enabled = false;
+        // escena y las cascadas encuadradas a la camara.
         pipeline.Add(std::move(pase));
     }
 

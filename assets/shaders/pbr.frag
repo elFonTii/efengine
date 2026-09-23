@@ -380,7 +380,7 @@ void main() {
         vec3  Ld     = normalize(-uLightDir.xyz);
         // El encendido lo decide uCascadeParams.x adentro de ShadowFactor, NO
         // uShadowParams.x: ese flag es del ShadowPass encuadrado a la escena,
-        // que quedo apagado porque su unico consumidor es la captura de DDGI.
+        // que solo corre con DDGI prendido porque es su unico consumidor.
         shadow = ShadowFactor(Ng, Ld);
         Lo += (1.0 - shadow) * CookTorranceBRDF(N, V, Ld, F0, albedo, metallic, roughness) * uDirLightColor.rgb;
     }

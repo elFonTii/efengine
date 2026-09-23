@@ -23,9 +23,8 @@ using namespace efengine;
                 renderer::ShadowPass&     pase = *pasePtr;
                 renderer::ShadowSettings& sh   = pase.settings();
 
-                // El flag de encendido es del pase (IScenePass::enabled), no de sus
-                // settings: es lo que el ScenePipeline consulta para saltearlo.
-                ImGui::Checkbox   ("Habilitadas", &pase.enabled);
+                // Sin checkbox: el pase sigue a "Habilitado" del panel de DDGI.
+                ImGui::TextDisabled("Sigue a DDGI: %s", pase.Runs() ? "dibuja" : "apagado");
                 // Margen: aire alrededor de la escena. El encuadre de la luz sale de
                 // sus bounds y esto es lo unico a mano. Mas margen = texel mas
                 // grande = mas acne.

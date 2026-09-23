@@ -14,6 +14,11 @@ namespace renderer {
 
     class Renderer;
     class Shader;
+    struct DdgiSettings;
+
+    // El mapa de escena solo lo lee la captura de DDGI: corre si DDGI esta
+    // registrado (ddgi != null) y prendido.
+    bool SceneShadowNeeded(const DdgiSettings* ddgi);
 
     // Parámetros ajustables del bias (editables por ImGui). El encuadre de la
     // caja ortográfica NO esta acá: lo calcula FitDirectionalLight a partir de
@@ -79,6 +84,10 @@ namespace renderer {
             const Texture&   DepthTexture()     const { return m_shadowMap.DepthTexture(); }
             ShadowSettings&  settings()               { return m_settings; }
 
+            // Lo engancha RegisterDdgiPass. Sin llamarlo, el pase no dibuja.
+            void FollowDdgi(const DdgiSettings* ddgi) { m_ddgi = ddgi; }
+            bool Runs() const { return SceneShadowNeeded(m_ddgi); }
+
             // Encuadre calculado en el ultimo Render. El panel lo muestra para
             // poder leer el bias en metros sin adivinar.
             const DirectionalLightFit& fit() const { return m_fit; }
@@ -90,6 +99,7 @@ namespace renderer {
             ShadowMap           m_shadowMap;
             ShadowSettings      m_settings;
             DirectionalLightFit m_fit;
+            const DdgiSettings* m_ddgi = null;
             // PassParams (binding 4) propio: este pase corre antes de BeginScene.
             UniformBuffer  m_passUbo { sizeof(ShadowPassBlock) };
     };

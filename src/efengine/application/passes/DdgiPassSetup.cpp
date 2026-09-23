@@ -5,6 +5,7 @@
 #include <efengine/renderer/ScenePipeline.h>
 #include <efengine/resources/ResourceManager.h>
 #include <efengine/renderer/DdgiPass.h>
+#include <efengine/renderer/ShadowPass.h>
 
 #include <memory>
 
@@ -25,9 +26,18 @@ namespace application {
 
         // Si falta cualquier shader, el pase no se registra y el frame sigue
         // con IBL puro: un fallo de carga no rompe el render.
-        if (!pipeline.Add(renderer::DdgiPass::Create(d.renderer, d.fullscreenQuad, shaders))) {
+        std::unique_ptr<renderer::DdgiPass> pase =
+            renderer::DdgiPass::Create(d.renderer, d.fullscreenQuad, shaders);
+        if (!pase) {
             EF_LOG_ERROR("DdgiPass: no se pudo crear");
+            return;
         }
+
+        // El mapa de escena del ShadowPass (registrado antes) sigue a DDGI.
+        if (renderer::ShadowPass* sombra = pipeline.Find<renderer::ShadowPass>()) {
+            sombra->FollowDdgi(&pase->settings());
+        }
+        pipeline.Add(std::move(pase));
     }
 
 }

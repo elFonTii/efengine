@@ -5,6 +5,7 @@
 #include <efengine/renderer/FrameContext.h>
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Shader.h>
+#include <efengine/renderer/DdgiSettings.h>
 #include <efengine/renderer/ShadowMath.h>
 #include <efengine/renderer/PipelineStates.h>
 #include <efengine/renderer/Model.h>
@@ -24,7 +25,14 @@ namespace renderer {
         m_settings.resolution = resolution;
     }
 
+    bool SceneShadowNeeded(const DdgiSettings* ddgi) {
+        return ddgi != null && ddgi->enabled;
+    }
+
     void ShadowPass::Execute(FrameContext& ctx) {
+        // Sin correr, ctx.lighting.shadow queda en su default: apagado.
+        if (!Runs()) return;
+
         // El scope del profiler lo abre ahora el ScenePipeline con Name().
         const scene::SceneGraph& scene = ctx.scene;
         const DirectionalLight&  sun   = ctx.scene.Sun();
