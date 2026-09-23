@@ -200,6 +200,9 @@ void main() {
         vec3 mundo  = uGridOrigin.xyz + (vec3(v) + 0.5) * voxelSize;
         vec3 albedo = texelFetch(uVoxelAlbedo, v, 0).rgb;
         vec3 N      = OctDecodeNormal(texelFetch(uVoxelNormal, v, 0).rg);
+        // Un voxel de una sola cara visto de atras: la normal mira al rayo,
+        // como hacia capture.frag con gl_FrontFacing.
+        if (dot(N, dir) > 0.0) N = -N;
 
         // -- Luz directa, Lambert puro --
         //
