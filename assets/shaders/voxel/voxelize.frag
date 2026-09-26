@@ -1,6 +1,6 @@
 #version 450 core
 // Estampa el fragmento en el voxel que le toca. No escribe color ni
-// profundidad: el unico efecto son los dos imageStore.
+// profundidad: el unico efecto son los tres imageStore.
 
 in vec3 vWorldPos;
 in vec3 vNormal;
@@ -8,8 +8,10 @@ in vec2 vUV;
 
 layout(rgba8, binding = 0) uniform image3D uVoxelAlbedo;
 layout(rg8,   binding = 1) uniform image3D uVoxelNormal;
+layout(rgba8, binding = 2) uniform image3D uVoxelEmission;   // RGBM
 
 layout(binding = 0) uniform sampler2D uAlbedoMap;
+layout(binding = 7) uniform sampler2D uEmissiveMap;
 
 layout(std140, binding = 3) uniform MaterialParams {
     vec4  uAlbedoTint;
@@ -26,7 +28,10 @@ layout(std140, binding = 4) uniform PassParams {
     vec4 uGridParams;   // x = voxelSize (m), y = resolucion por eje
 };
 
-const uint SLOT_ALBEDO = 0u;
+const uint SLOT_ALBEDO   = 0u;
+const uint SLOT_EMISSIVE = 7u;
+
+#include "voxel/emission.glsl"
 
 bool hasMap(uint slot) { return (uMapMask.x & (1u << slot)) != 0u; }
 
@@ -52,9 +57,14 @@ void main() {
                 ? texture(uAlbedoMap, uv).rgb * uAlbedoTint.rgb
                 : uAlbedoTint.rgb;
 
+    // La misma expresion que pbr.frag.
+    vec3 emision = (hasMap(SLOT_EMISSIVE) ? texture(uEmissiveMap, uv).rgb : vec3(1.0))
+                 * uEmissiveTint.rgb * uScalars1.y;
+
     // Alfa en 1: este voxel esta ocupado. Las colisiones las gana el ultimo que
     // escribe, y esta bien: dos superficies distintas en el mismo voxel ya
-    // perdieron la distincion.
+    // perdieron la distincion. La emision sigue la misma regla.
     imageStore(uVoxelAlbedo, voxel, vec4(albedo, 1.0));
     imageStore(uVoxelNormal, voxel, vec4(OctEncodeNormal(normalize(vNormal)), 0.0, 0.0));
+    imageStore(uVoxelEmission, voxel, EncodeVoxelEmission(emision));
 }

@@ -17,6 +17,7 @@ layout(rgba16f, binding = 0) uniform image2D uCapture;
 layout(binding = 2) uniform sampler3D uVoxelAlbedo;
 layout(binding = 3) uniform sampler3D uVoxelNormal;
 layout(binding = 4) uniform samplerCube uEnvironment;
+layout(binding = 5) uniform sampler3D uVoxelEmission;   // RGBM, ver voxel/emission.glsl
 
 // El mapa de sombra UNICO de DDGI, no las cascadas. pbr.frag selecciona cascada
 // por viewDepth -- distancia a la CAMARA -- y una sonda lejos de la camara cae
@@ -60,6 +61,7 @@ layout(std140, binding = 1) uniform Lights {
 
 // Trae tambien common/cubeface.glsl, de donde sale dirForFace.
 #include "ddgi/common.glsl"
+#include "voxel/emission.glsl"
 
 const float kFarDistance = 1.0e4;
 
@@ -246,7 +248,11 @@ void main() {
                    * DdgiVolumeFade(mundo);
         }
 
-        radiancia = directa + rebote;
+        // La emision propia va sin /PI y sin sombra, como en la captura
+        // rasterizada: ya es radiancia saliente.
+        vec3 emision = DecodeVoxelEmission(texelFetch(uVoxelEmission, v, 0));
+
+        radiancia = directa + rebote + emision;
         distancia = t;
     } else {
         // El rayo se escapo: ve cielo. La intensidad sale de uIblParams.y, la

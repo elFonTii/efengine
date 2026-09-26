@@ -291,7 +291,8 @@ namespace renderer {
 
             m_capture.BindImage(0, 0, efecom::ImageAccess::WriteOnly,
                                 efecom::TextureFormat::RGBA16F);
-            m_grid.BindForSample(2u, 3u);
+            // Las unidades de los sampler de trace_voxel.comp: 2/3/5 voxeles, 4 cielo.
+            m_grid.BindForSample(2u, 3u, 5u);
             if (env != null) env->Bind(4u);
 
             m_shaders.trace->Bind();
