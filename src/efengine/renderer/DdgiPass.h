@@ -8,6 +8,7 @@
 #include <efengine/renderer/ShadowContext.h>
 #include <efengine/renderer/IblContext.h>
 #include <efengine/renderer/UniformBuffer.h>
+#include <efengine/renderer/StorageBuffer.h>
 #include <efengine/renderer/VoxelGrid.h>
 #include <efengine/renderer/VoxelizePass.h>
 
@@ -39,6 +40,7 @@ namespace renderer {
                 Shader* voxelize        = null;   // voxel/voxelize.vert+frag
                 Shader* blendIrradiance = null;
                 Shader* blendDistance   = null;
+                Shader* probeUpdate     = null;   // ddgi/probe_update.comp
             };
 
             // fullscreenQuad ya no lo usa NADA adentro del pase: desde que la
@@ -72,6 +74,7 @@ namespace renderer {
             const Texture& captureTarget()   const { return m_capture; }
             const Texture& irradianceAtlas() const { return m_irradiance; }
             const Texture& distanceAtlas()   const { return m_distance; }
+            const StorageBuffer& probeData() const { return m_probeData; }
 
             u32  sweepsDone() const { return m_sweepsDone; }
             u32  cursor()     const { return m_cursor; }
@@ -102,7 +105,7 @@ namespace renderer {
 
         private:
             DdgiPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
-                     Texture capture, Texture irradiance, Texture distance,
+                     Texture capture, Texture irradiance, Texture distance, StorageBuffer probeData,
                      std::unique_ptr<VoxelizePass> voxelize);
 
             // El trabajo real. Lo llama Execute, que publica el contexto
@@ -119,6 +122,9 @@ namespace renderer {
             // siempre. Se hace con un FBO temporal y Clear: cero RHI nuevo.
             static void ClearAtlas(const Texture& atlas);
 
+            // Cero = sin offset y activo. El contenido inicial de un buffer no esta definido.
+            static void ClearProbeData(const StorageBuffer& buffer, u32 probes);
+
             Renderer&    m_renderer;
             VertexArray& m_quad;   // sin uso en el pase; ver el comentario de Create
             Shaders      m_shaders;
@@ -126,6 +132,7 @@ namespace renderer {
             Texture m_capture;      // 96x512 RGBA16F: rgb = radiancia, a = distancia
             Texture m_irradiance;   // atlas octaedrico RGBA16F
             Texture m_distance;     // atlas de momentos RG16F
+            StorageBuffer m_probeData;   // un vec4 por probe: offset.xyz, fraccion de backfaces
 
             // El proxy contra el que traza la captura. Lo llena m_voxelize, que
             // NO corre por frame.
@@ -135,6 +142,7 @@ namespace renderer {
             u64                           m_gridGeneracion = 0;   // SceneGraph::Generation() del horneado
 
             UniformBuffer m_traceUbo { sizeof(TraceVoxelPassBlock) };
+            UniformBuffer m_probeUpdateUbo { sizeof(ProbeUpdatePassBlock) };
 
             DdgiSettings m_settings;
             DdgiGrid     m_atlasGrid;      // la grilla con la que se alocaron los atlas

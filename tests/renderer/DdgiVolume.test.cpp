@@ -396,3 +396,12 @@ TEST_CASE("BatchBounds: maxDistance cero deja la caja de los centros") {
     CHECK(b.min.x == doctest::Approx(2.0f));
     CHECK(b.max.x == doctest::Approx(2.0f));
 }
+
+TEST_CASE("DdgiVolume: ProbeDataBytes es un vec4 por probe") {
+    DdgiGrid g;
+    g.counts = glm::ivec3(10, 16, 18);
+    CHECK(ProbeDataBytes(g) == 46080u);
+
+    g.counts = glm::ivec3(0, 4, 8);
+    CHECK(ProbeDataBytes(g) == 0u);
+}

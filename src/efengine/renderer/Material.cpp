@@ -51,7 +51,9 @@ namespace renderer {
         b.albedoTint   = glm::vec4(albedoTint, 0.0f);
         b.emissiveTint = glm::vec4(emissiveTint, 0.0f);
         b.scalars0     = glm::vec4(metallic, roughness, aoStrength, heightScale);
-        b.scalars1     = glm::vec4(alphaCutoff, emissiveIntensity, normalStrength, 0.0f);
+        // .w: doble cara, para que voxelize.frag no cuente su dorso como backface.
+        b.scalars1     = glm::vec4(alphaCutoff, emissiveIntensity, normalStrength,
+                                   doubleSided ? 1.0f : 0.0f);
         b.uvTransform  = glm::vec4(uvTiling, uvOffset);
 
         const u32 mask = bitSiEsta(m_albedo,    TextureSlot::Albedo)

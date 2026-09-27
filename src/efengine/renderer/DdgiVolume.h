@@ -57,6 +57,9 @@ namespace renderer {
 
     u32 ProbeCount(const DdgiGrid& grid);
 
+    // Bytes del SSBO de datos por probe: un vec4 (offset.xyz, fraccion de backfaces).
+    usize ProbeDataBytes(const DdgiGrid& grid);
+
     // index = x + countX * (y + countY * z), y su inversa.
     glm::ivec3 ProbeCoords(const DdgiGrid& grid, u32 index);
     u32        ProbeIndex(const DdgiGrid& grid, glm::ivec3 coords);

@@ -61,10 +61,11 @@ void main() {
     vec3 emision = (hasMap(SLOT_EMISSIVE) ? texture(uEmissiveMap, uv).rgb : vec3(1.0))
                  * uEmissiveTint.rgb * uScalars1.y;
 
-    // Alfa en 1: este voxel esta ocupado. Las colisiones las gana el ultimo que
-    // escribe, y esta bien: dos superficies distintas en el mismo voxel ya
-    // perdieron la distincion. La emision sigue la misma regla.
-    imageStore(uVoxelAlbedo, voxel, vec4(albedo, 1.0));
+    // Las colisiones las gana el ultimo que escribe: dos superficies en el mismo
+    // voxel ya perdieron la distincion. Alfa 0.75 = doble cara: su dorso no es
+    // backface para trace_voxel.comp. Los dos valores pasan el umbral de opacidad.
+    float ocupado = (uScalars1.w > 0.5) ? 0.75 : 1.0;
+    imageStore(uVoxelAlbedo, voxel, vec4(albedo, ocupado));
     imageStore(uVoxelNormal, voxel, vec4(OctEncodeNormal(normalize(vNormal)), 0.0, 0.0));
     imageStore(uVoxelEmission, voxel, EncodeVoxelEmission(emision));
 }

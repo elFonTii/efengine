@@ -158,7 +158,22 @@ using namespace efengine;
 
         // Alfa minimo para que el DDA cuente un voxel como solido. En 0 la
         // condicion se cumple en el aire y el rayo muere en el primer voxel.
-        ImGui::SliderFloat("Umbral de opacidad", &s.opacityThreshold, 0.0f, 1.0f, "%.2f");
+        // Tope 0.7: los voxeles de doble cara tienen alfa 0.75 y por encima se vuelven aire.
+        ImGui::SliderFloat("Umbral de opacidad", &s.opacityThreshold, 0.0f, 0.7f, "%.2f",
+                           ImGuiSliderFlags_AlwaysClamp);
+
+        // -- Clasificacion y reubicacion -----------------------------------------
+        ImGui::SeparatorText("Clasificacion y reubicacion");
+        ImGui::Checkbox("Clasificacion", &s.classificationEnabled);
+        ImGui::SameLine();
+        ImGui::Checkbox("Reubicacion", &s.relocationEnabled);
+        ImGui::SliderFloat("Backface: inicio", &s.backfaceFadeStart, 0.0f, 1.0f, "%.2f",
+                           ImGuiSliderFlags_AlwaysClamp);
+        ImGui::SliderFloat("Backface: fin",    &s.backfaceFadeEnd,   0.0f, 1.0f, "%.2f",
+                           ImGuiSliderFlags_AlwaysClamp);
+        ImGui::SliderFloat("Distancia minima", &s.minFrontfaceDistance, 0.0f, 5.0f, "%.2f m",
+                           ImGuiSliderFlags_AlwaysClamp);
+        ImGui::TextDisabled("Con las esferas de debug: rojas = inactivas, dibujadas donde quedaron.");
 
         // -- Debug -------------------------------------------------------------
         ImGui::SeparatorText("Debug");

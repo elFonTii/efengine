@@ -65,6 +65,11 @@ layout(std140, binding = 1) uniform Lights {
 
 const float kFarDistance = 1.0e4;
 
+// voxelize.frag: alfa 1.0 = una cara, 0.75 = doble cara.
+const float kAlfaUnaCara     = 0.875;
+// -0.0 no pasa el test a < 0: un probe dentro de un voxel solido pega a t = 0.
+const float kDistanciaMinima = 1.0e-3;
+
 vec3 OctDecodeNormal(vec2 e) {
     vec2 f = e * 2.0 - 1.0;
     vec3 n = vec3(f, 1.0 - abs(f.x) - abs(f.y));
@@ -195,14 +200,27 @@ void main() {
         t = tIni + tLocal;
     }
 
+    // 6 caras en fila de faceSize, un slot por fila. Tiene que coincidir con
+    // CaptureTileRect(face, slot) de DdgiVolume.cpp, que manda la cara al eje X
+    // del atlas (ancho = 6*kProbeFaceSize) y el slot al eje Y
+    // (alto = kMaxProbesPerFrame*kProbeFaceSize). Invertirlos integraria las
+    // direcciones de otro probe: GI plausible pero mal.
+    ivec2 texel = ivec2(face * faceSize + local.x, slot * faceSize + local.y);
+
     vec3  radiancia;
     float distancia;
 
     if (hit) {
-        vec3 albedo = texelFetch(uVoxelAlbedo, v, 0).rgb;
+        vec4 voxel  = texelFetch(uVoxelAlbedo, v, 0);
+        vec3 albedo = voxel.rgb;
         vec3 N      = OctDecodeNormal(texelFetch(uVoxelNormal, v, 0).rg);
-        // Un voxel de una sola cara visto de atras: la normal mira al rayo,
-        // como hacia capture.frag con gl_FrontFacing.
+
+        // Dorso de una cara simple: el probe esta adentro de algo. No ilumina.
+        if (voxel.a > kAlfaUnaCara && dot(N, dir) > 0.0) {
+            imageStore(uCapture, texel, vec4(0.0, 0.0, 0.0, -max(t, kDistanciaMinima)));
+            return;
+        }
+        // Doble cara vista de atras: la normal mira al rayo.
         if (dot(N, dir) > 0.0) N = -N;
 
         // Se evalua donde el rayo entro al voxel, medio voxel afuera por N. El
@@ -264,11 +282,5 @@ void main() {
         distancia = kFarDistance;
     }
 
-    // 6 caras en fila de faceSize, un slot por fila. Tiene que coincidir con
-    // CaptureTileRect(face, slot) de DdgiVolume.cpp, que manda la cara al eje X
-    // del atlas (ancho = 6*kProbeFaceSize) y el slot al eje Y
-    // (alto = kMaxProbesPerFrame*kProbeFaceSize). Invertirlos integraria las
-    // direcciones de otro probe: GI plausible pero mal.
-    ivec2 texel = ivec2(face * faceSize + local.x, slot * faceSize + local.y);
     imageStore(uCapture, texel, vec4(radiancia, distancia));
 }

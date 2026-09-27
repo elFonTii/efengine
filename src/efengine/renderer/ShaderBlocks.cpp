@@ -38,6 +38,8 @@ namespace renderer {
     static_assert(offsetof(TraceVoxelPassBlock, gridOrigin) ==  0u, "TraceVoxelPassBlock.gridOrigin");
     static_assert(offsetof(TraceVoxelPassBlock, gridParams) == 16u, "TraceVoxelPassBlock.gridParams");
 
+    static_assert(sizeof(ProbeUpdatePassBlock) == 16u, "ProbeUpdatePassBlock: tamano std140 roto");
+
     static_assert(sizeof(LightsBlock) == 176u, "LightsBlock: tamano std140 roto");
     static_assert(offsetof(LightsBlock, positions)    ==   0u, "LightsBlock.positions");
     static_assert(offsetof(LightsBlock, colors)       ==  64u, "LightsBlock.colors");
@@ -167,14 +169,16 @@ namespace renderer {
         // Frame obliga a tocar siete shaders que no lo usan.
         b.params1 = glm::vec4((settings.enabled && atlasValid) ? 1.0f : 0.0f,
                               settings.chebyshevSharpness,
-                              static_cast<f32>(settings.debugView), 0.0f);
+                              static_cast<f32>(settings.debugView),
+                              settings.classificationEnabled ? 1.0f : 0.0f);
         // params2.w codifica el ablation test en UN float: negativo = apagado,
         // >= 0 = el valor constante que pbr.frag devuelve en vez de samplear.
         // Dos campos (flag + valor) habrian obligado a crecer el bloque y a
         // tocar los cinco shaders que lo declaran para un instrumento de medida.
         b.params2 = glm::vec4(settings.maxDistance,
                               settings.backfaceFadeStart,
-                              settings.backfaceFadeEnd,
+                              // smoothstep con bordes iguales o invertidos no esta definido.
+                              std::max(settings.backfaceFadeEnd, settings.backfaceFadeStart + 1.0e-3f),
                               settings.ablateSample
                                   ? std::max(settings.ablateIrradiance, 0.0f)
                                   : -1.0f);
@@ -213,9 +217,17 @@ namespace renderer {
         b.gridOrigin = glm::vec4(desc.origin, 0.0f);
         // Con umbral 0 el DDA pega contra el primer voxel del grid siempre
         // (alpha >= 0 es cierto hasta en el aire) y la GI queda arruinada sin
-        // que nada falle ruidosamente. El clamp bajo es la unica defensa.
+        // que nada falle ruidosamente. Arriba de 0.75 los voxeles de doble cara
+        // se vuelven aire: el tope es 0.7.
         b.gridParams = glm::vec4(desc.voxelSize, static_cast<f32>(desc.resolution),
-                                 std::max(opacityThreshold, 1.0e-3f), 0.0f);
+                                 std::clamp(opacityThreshold, 1.0e-3f, 0.7f), 0.0f);
+        return b;
+    }
+
+    ProbeUpdatePassBlock MakeProbeUpdatePassBlock(const DdgiSettings& settings) {
+        ProbeUpdatePassBlock b {};
+        b.params = glm::vec4(std::max(settings.minFrontfaceDistance, 0.0f),
+                             settings.relocationEnabled ? 1.0f : 0.0f, 0.0f, 0.0f);
         return b;
     }
 

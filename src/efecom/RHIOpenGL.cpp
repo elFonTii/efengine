@@ -580,6 +580,7 @@ namespace efecom {
         GLbitfield glBits = 0;
         if ((u32)bits & (u32)Barrier::ShaderImageAccess) glBits |= GL_SHADER_IMAGE_ACCESS_BARRIER_BIT;
         if ((u32)bits & (u32)Barrier::TextureFetch)      glBits |= GL_TEXTURE_FETCH_BARRIER_BIT;
+        if ((u32)bits & (u32)Barrier::ShaderStorage)     glBits |= GL_SHADER_STORAGE_BARRIER_BIT;
         glMemoryBarrier(glBits);
     }
 

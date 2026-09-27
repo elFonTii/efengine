@@ -74,6 +74,18 @@ namespace renderer {
         f32 backfaceFadeStart = 0.15f;
         f32 backfaceFadeEnd   = 0.30f;
 
+        // Aplica la fraccion de arriba como peso en el sampleo. Apagado sirve para comparar.
+        bool classificationEnabled = true;
+
+        // -- Reubicacion de probes --
+        // probe_update.comp mueve cada probe con las reglas de RTXGI, hasta el 45%
+        // del espaciado. Apagado escribe offset 0.
+        bool relocationEnabled = true;
+
+        // Metros. Un probe mas cerca que esto de una cara delantera se aleja; uno
+        // adentro de algo queda a la mitad de esto del otro lado. Escala de Bistro.
+        f32 minFrontfaceDistance = 1.0f;
+
         // -- Diagnostico --
 
         // Ablation test del pase Forward: pbr.frag devuelve una irradiancia

@@ -27,6 +27,9 @@ namespace renderer {
     inline constexpr u32 kAoBinding       = 6u;   // 1x por frame — solo lo declara pbr.frag
     inline constexpr u32 kCascadeBinding  = 7u;   // 1x por frame — solo lo declara pbr.frag
 
+    // Binding de SSBO (espacio aparte de los de UBO): datos por probe de DDGI.
+    inline constexpr u32 kProbeDataBinding = 0u;
+
     // Unidades de sampler de los atlas de DDGI. 0-7 material, 8 sombra, 9/10/11 IBL.
     inline constexpr u32 kIrradianceAtlasUnit = 12u;
     inline constexpr u32 kDistanceAtlasUnit   = 13u;
@@ -105,7 +108,7 @@ namespace renderer {
         glm::ivec4 atlasLayout;   // x=cols, y=rows, z=irrTile(8), w=distTile(16)
         glm::ivec4 updateRange;   // x=firstProbe, y=count, z=faceSize, w=probesPerFrame
         glm::vec4  params0;       // hysteresis, intensity, normalBias, viewBias
-        glm::vec4  params1;       // enabled, chebyshevSharpness, _, _
+        glm::vec4  params1;       // enabled, chebyshevSharpness, debugView, classificationEnabled
         glm::vec4  params2;       // maxDistance, backfaceFadeStart, backfaceFadeEnd, _
     };
 
@@ -126,8 +129,6 @@ namespace renderer {
         glm::ivec4 counts;        // x=slices, y=steps, z=direccion del blur (0=H,1=V), w=debugView
     };
 
-    // Binding 0 de SSBO: una vista de la captura de probes.
-    //
     // PassParams (binding 4) de ddgi/indirect.frag: el pase que resuelve la
     // indirecta difusa a media resolucion.
     //
@@ -201,6 +202,11 @@ namespace renderer {
                                 // z = umbral de opacidad, w = libre
     };
 
+    // PassParams (binding 4) de ddgi/probe_update.comp.
+    struct alignas(16) ProbeUpdatePassBlock {
+        glm::vec4 params;   // x = minFrontfaceDistance (m), y = relocationEnabled, zw = libres
+    };
+
     CascadeBlock MakeCascadeBlock(const CascadeContext& ctx);
 
     // ── Funciones puras que arman los bloques ──────────────────────────────
@@ -231,6 +237,9 @@ namespace renderer {
     // umbral sin revoxelizar.
     TraceVoxelPassBlock MakeTraceVoxelPassBlock(const VoxelGridDesc& desc,
                                                 f32 opacityThreshold);
+
+    // minFrontfaceDistance se recorta a >= 0: negativa invertiria las reglas.
+    ProbeUpdatePassBlock MakeProbeUpdatePassBlock(const DdgiSettings& settings);
 
 }
 }

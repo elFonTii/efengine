@@ -188,7 +188,7 @@ int main() {
     // al .exe: bistro/ esta excluido de ese espejo (son 1,5 GB, ver
     // cmake/CopyAssets.cmake).
     constexpr const char* kProbeModel =
-        "D:/@ffontana/CONSOLIDADAS/efengine/assets/bistro/BistroExterior.fbx";
+        "D:/@ffontana/CONSOLIDADAS/efengine/assets/bistro/BistroInterior.fbx";
 
     // El .efe que se abre solo cuando no hay sonda. El menu "Escena" carga
     // cualquier otro de assets/scenes, y la sala de Cornell sigue estando ahi.

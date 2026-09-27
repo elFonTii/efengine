@@ -97,6 +97,14 @@ TEST_CASE("ToBlock: scalars1 = (alphaCutoff, emissiveIntensity, normalStrength, 
     CHECK(b.scalars1.z == doctest::Approx(1.75f));
 }
 
+TEST_CASE("ToBlock: scalars1.w lleva doubleSided para la voxelizacion") {
+    Material m(nullptr);
+    CHECK(m.ToBlock().scalars1.w == doctest::Approx(0.0f));
+
+    m.doubleSided = true;
+    CHECK(m.ToBlock().scalars1.w == doctest::Approx(1.0f));
+}
+
 TEST_CASE("ToBlock: los defaults de Material son los que espera el shader") {
     const MaterialBlock b = Material(nullptr).ToBlock();
     CHECK(b.albedoTint.r == doctest::Approx(1.0f));

@@ -739,23 +739,34 @@ namespace {
 
         // Los paneles de pases viven en panels/, uno por pase, y se
         // registran en PanelesDePases(). Este archivo no nombra ninguno.
-        for (const DrawPanelFn draw : PanelesDePases()) draw(ctx);
+        // CollapsingHeader no abre scope de ID: sin el PushID, los "Intensidad"
+        // y "Habilitado" de cada panel comparten ID y se mueven juntos.
+        const std::vector<DrawPanelFn>& paneles = PanelesDePases();
+        for (int i = 0; i < static_cast<int>(paneles.size()); ++i) {
+            ImGui::PushID(i);
+            paneles[i](ctx);
+            ImGui::PopID();
+        }
 
         // -- Post ---------------------------------------------------------------
         // Bloom y FXAA corren sobre la imagen ya resuelta, asi que van despues de
         // todo lo que la produce. Nombres de campo en castellano como el resto
         // del panel: eran los unicos en ingles.
         if (ImGui::CollapsingHeader("Bloom")) {
+            ImGui::PushID("Bloom");
             renderer::BloomSettings& s = ctx.app.GetBloomPass().settings();
             ImGui::SliderFloat("Umbral",      &s.threshold,  0.0f, 5.0f);
             ImGui::SliderFloat("Knee",        &s.knee,       0.0f, 1.0f);
             ImGui::SliderFloat("Intensidad",  &s.intensity,  0.0f, 0.5f);
             ImGui::SliderInt  ("Iteraciones", &s.iterations, 1,    10);
+            ImGui::PopID();
         }
 
         if (ImGui::CollapsingHeader("FXAA")) {
+            ImGui::PushID("FXAA");
             renderer::FxaaSettings& fx = ctx.app.GetFxaaPass().settings();
             ImGui::Checkbox("Habilitado", &fx.enabled);
+            ImGui::PopID();
         }
 
         // -- Camara -------------------------------------------------------------

@@ -19,6 +19,7 @@
 
 #include <chrono>
 #include <utility>
+#include <vector>
 
 namespace efengine {
 namespace renderer {
@@ -57,7 +58,8 @@ namespace renderer {
     std::unique_ptr<DdgiPass> DdgiPass::Create(Renderer& renderer, VertexArray& fullscreenQuad,
                                                const Shaders& shaders) {
         if (shaders.trace == null || shaders.voxelize == null
-            || shaders.blendIrradiance == null || shaders.blendDistance == null) {
+            || shaders.blendIrradiance == null || shaders.blendDistance == null
+            || shaders.probeUpdate == null) {
             EF_LOG_ERROR("DdgiPass::Create: falta algun shader de DDGI");
             return null;
         }
@@ -80,6 +82,9 @@ namespace renderer {
         ClearAtlas(irradiance);
         ClearAtlas(distance);
 
+        StorageBuffer probeData(ProbeDataBytes(grid));
+        ClearProbeData(probeData, ProbeCount(grid));
+
         EF_LOG_INFO("DdgiPass: %u probes, atlas irradiancia %dx%d, distancia %dx%d, captura %ux%u",
                     ProbeCount(grid), irrSize.x, irrSize.y, distSize.x, distSize.y,
                     kCaptureWidth, kCaptureHeight);
@@ -93,15 +98,17 @@ namespace renderer {
         // El ctor es privado: make_unique no lo alcanza.
         return std::unique_ptr<DdgiPass>(
             new DdgiPass(renderer, fullscreenQuad, shaders, std::move(capture),
-                         std::move(irradiance), std::move(distance), std::move(voxelize)));
+                         std::move(irradiance), std::move(distance), std::move(probeData),
+                         std::move(voxelize)));
     }
 
     DdgiPass::DdgiPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
                        Texture capture, Texture irradiance, Texture distance,
-                       std::unique_ptr<VoxelizePass> voxelize)
+                       StorageBuffer probeData, std::unique_ptr<VoxelizePass> voxelize)
         : m_renderer(renderer), m_quad(fullscreenQuad), m_shaders(shaders)
         , m_capture(std::move(capture)), m_irradiance(std::move(irradiance))
-        , m_distance(std::move(distance)), m_voxelize(std::move(voxelize))
+        , m_distance(std::move(distance)), m_probeData(std::move(probeData))
+        , m_voxelize(std::move(voxelize))
         , m_atlasGrid(SanitizeGrid(DdgiGrid{})) {}
 
     DdgiPass::~DdgiPass() = default;
@@ -109,11 +116,13 @@ namespace renderer {
     DdgiPass::DdgiPass(DdgiPass&& o) noexcept
         : m_renderer(o.m_renderer), m_quad(o.m_quad), m_shaders(o.m_shaders)
         , m_capture(std::move(o.m_capture)), m_irradiance(std::move(o.m_irradiance))
-        , m_distance(std::move(o.m_distance)), m_grid(std::move(o.m_grid))
+        , m_distance(std::move(o.m_distance)), m_probeData(std::move(o.m_probeData))
+        , m_grid(std::move(o.m_grid))
         , m_voxelize(std::move(o.m_voxelize))
         , m_gridValido(std::exchange(o.m_gridValido, false))
         , m_gridGeneracion(o.m_gridGeneracion)
         , m_traceUbo(std::move(o.m_traceUbo))
+        , m_probeUpdateUbo(std::move(o.m_probeUpdateUbo))
         , m_settings(o.m_settings), m_atlasGrid(o.m_atlasGrid), m_range(o.m_range)
         , m_cursor(o.m_cursor), m_sweepsDone(o.m_sweepsDone)
         , m_blendedOnce(o.m_blendedOnce), m_lastMs(o.m_lastMs) {}
@@ -126,11 +135,13 @@ namespace renderer {
             m_capture     = std::move(o.m_capture);
             m_irradiance  = std::move(o.m_irradiance);
             m_distance    = std::move(o.m_distance);
+            m_probeData   = std::move(o.m_probeData);
             m_grid        = std::move(o.m_grid);
             m_voxelize    = std::move(o.m_voxelize);
             m_gridValido  = std::exchange(o.m_gridValido, false);
             m_gridGeneracion = o.m_gridGeneracion;
             m_traceUbo    = std::move(o.m_traceUbo);
+            m_probeUpdateUbo = std::move(o.m_probeUpdateUbo);
             m_settings    = o.m_settings;
             m_atlasGrid   = o.m_atlasGrid;
             m_range       = o.m_range;
@@ -158,20 +169,28 @@ namespace renderer {
         efecom::DestroyFramebuffer(fbo);
     }
 
+    void DdgiPass::ClearProbeData(const StorageBuffer& buffer, u32 probes) {
+        const std::vector<glm::vec4> ceros(probes, glm::vec4(0.0f));
+        buffer.Update(ceros.data(), ceros.size() * sizeof(glm::vec4));
+    }
+
     void DdgiPass::Reset() {
         m_cursor      = 0u;
         m_sweepsDone  = 0u;
         m_blendedOnce = false;
         ClearAtlas(m_irradiance);
         ClearAtlas(m_distance);
+        ClearProbeData(m_probeData, ProbeCount(m_atlasGrid));
     }
 
     void DdgiPass::EnsureAtlasSize() {
         const DdgiGrid want = SanitizeGrid(m_settings.grid);
         if (want.counts == m_atlasGrid.counts) {
-            // El origen y el spacing no cambian el tamano del atlas, pero si la
-            // posicion de cada probe: hay que copiarlos igual.
+            // Los offsets se calcularon para la posicion vieja.
+            const bool seMovio = want.origin != m_atlasGrid.origin
+                              || want.spacing != m_atlasGrid.spacing;
             m_atlasGrid = want;
+            if (seMovio) ClearProbeData(m_probeData, ProbeCount(m_atlasGrid));
             return;
         }
 
@@ -186,6 +205,8 @@ namespace renderer {
                                                efecom::TextureFormat::RG16F);
         ClearAtlas(m_irradiance);
         ClearAtlas(m_distance);
+        m_probeData = StorageBuffer(ProbeDataBytes(want));
+        ClearProbeData(m_probeData, ProbeCount(want));
 
         m_atlasGrid   = want;
         m_cursor      = 0u;
@@ -259,6 +280,8 @@ namespace renderer {
         // contenido y da negro sin que nada falle ruidosamente.
         m_irradiance.Bind(kIrradianceAtlasUnit);
         m_distance.Bind(kDistanceAtlasUnit);
+        // trace_voxel.comp lee el offset de cada probe; BeginScene todavia no corrio.
+        m_probeData.BindTo(kProbeDataBinding);
 
         // El bloque que va a leer la CAPTURA. No alcanza con el que se sube mas
         // abajo para el blend: ese lleva atlasValid en true siempre, y aca hace
@@ -306,6 +329,19 @@ namespace renderer {
                                      | efecom::Barrier::TextureFetch);
         }
 
+        {
+            EF_PROFILE_SCOPE("DDGI probes");
+
+            // El barrier de la captura ya ordena imageStore -> sampler.
+            const ProbeUpdatePassBlock pu = MakeProbeUpdatePassBlock(m_settings);
+            m_probeUpdateUbo.Update(&pu, sizeof(pu));
+            m_probeUpdateUbo.BindTo(kPassBinding);
+
+            m_shaders.probeUpdate->Bind();
+            m_capture.Bind(0);
+            efecom::DispatchCompute(m_range.count, 1u, 1u);
+        }
+
         // El blend. El barrier de arriba es el que ordena captura -> blend; el
         // de mas abajo ordena blend -> sampleo de pbr.frag.
         const bool primerBarrido = (m_sweepsDone == 0u);
@@ -339,7 +375,8 @@ namespace renderer {
             efecom::DispatchCompute(m_range.count, 1u, 1u);
 
             efecom::IssueMemoryBarrier(efecom::Barrier::ShaderImageAccess
-                                     | efecom::Barrier::TextureFetch);
+                                     | efecom::Barrier::TextureFetch
+                                     | efecom::Barrier::ShaderStorage);
         }
 
         m_blendedOnce = true;
@@ -353,6 +390,7 @@ namespace renderer {
         if (m_blendedOnce) {
             ctx.irradianceAtlas = &m_irradiance;
             ctx.distanceAtlas   = &m_distance;
+            ctx.probeData       = &m_probeData;
             ctx.settings        = &m_settings;
         }
         ctx.range = m_range;

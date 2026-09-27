@@ -5,6 +5,7 @@
 #include <efengine/core/Assert.h>
 #include <efengine/core/Log.h>
 #include <efengine/renderer/Texture.h>
+#include <efengine/renderer/StorageBuffer.h>
 #include <efengine/renderer/Cubemap.h>
 #include <efengine/renderer/PipelineStates.h>
 #include <efengine/renderer/DdgiSettings.h>
@@ -99,10 +100,11 @@ namespace renderer {
         // bindea nada y el bloque apaga DDGI: samplear una unidad vacia da
         // resultados indefinidos, no negro.
         const bool atlasValid = (ddgi.irradianceAtlas != null && ddgi.distanceAtlas != null
-                                 && ddgi.settings != null);
+                                 && ddgi.probeData != null && ddgi.settings != null);
         if (atlasValid) {
             ddgi.irradianceAtlas->Bind(kIrradianceAtlasUnit);
             ddgi.distanceAtlas->Bind(kDistanceAtlasUnit);
+            ddgi.probeData->BindTo(kProbeDataBinding);
         }
 
         const DdgiSettings defaults {};

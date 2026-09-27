@@ -31,6 +31,10 @@ namespace renderer {
              * static_cast<u32>(grid.counts.z);
     }
 
+    usize ProbeDataBytes(const DdgiGrid& grid) {
+        return static_cast<usize>(ProbeCount(grid)) * sizeof(glm::vec4);
+    }
+
     glm::ivec3 ProbeCoords(const DdgiGrid& grid, u32 index) {
         EF_ASSERT(index < ProbeCount(grid), "ProbeCoords: indice de probe fuera de rango");
 

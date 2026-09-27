@@ -291,6 +291,7 @@ namespace efecom {
     enum class Barrier : u32 {
         ShaderImageAccess = 1u << 0, // escrituras vía imageStore
         TextureFetch      = 1u << 1, // lecturas vía sampler
+        ShaderStorage     = 1u << 2, // escrituras a SSBO desde un compute
     };
     void IssueMemoryBarrier(Barrier bits);
 
