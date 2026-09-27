@@ -77,6 +77,7 @@ namespace {
 } // namespace
 
 void BuildCornellScene(EditorContext& ctx) {
+    EndSimulationBeforeClear(ctx);
     ctx.scene.Clear();
     ctx.assets.Clear();
 

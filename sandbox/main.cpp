@@ -1,4 +1,5 @@
 #include "EditorUI.h"
+#include "ProbeScene.h"
 #include "TestScene.h"
 
 #include <efengine/application/Application.h>
@@ -16,12 +17,14 @@
 #include <efengine/scene/SceneGraph.h>
 #include <efengine/scene/Behavior.h>
 #include <efengine/math/Transform.h>
+#include <efengine/gameplay/GameWorld.h>
 #include <efengine/core/Types.h>
 #include <efengine/core/Log.h>
 
 #include <glm/glm.hpp>
 
 #include <cmath>
+#include <filesystem>
 #include <memory>
 #include <vector>
 
@@ -163,6 +166,11 @@ int main() {
     resources::SceneAssets assets; // Dueño de los materiales y de las mallas generadas de la escena.
     scene::SceneGraph scene;
 
+    // Si Jolt no arranca, el sandbox sigue andando sin fisica: lo unico que se
+    // pierde es el boton Simular.
+    std::unique_ptr<gameplay::GameWorld> game = gameplay::GameWorld::Create(scene);
+    if (game == null) EF_LOG_ERROR("El sandbox arranca sin fisica");
+
     scene::Camera cam;
     cam.SetAspect(app.GetWindow().GetAspectRatio());
     scene::CameraController controller(&cam);
@@ -171,11 +179,24 @@ int main() {
 
     // El estado de la UI vive aca (el loop es el dueno); el editor solo lo usa.
     sandbox::EditorState editorState;
-    sandbox::EditorContext editor { app, scene, cam, controller, assets, rm, registry, editorState };
-    // El .efe que se abre solo. El menu "Escena" carga cualquier otro de
-    // assets/scenes, y la sala de Cornell sigue estando ahi.
+    sandbox::EditorContext editor { app, scene, cam, controller, assets, rm, registry, editorState, game.get() };
+    // SONDA. Con una ruta aca, el sandbox arranca montando ese .fbx crudo en vez
+    // del .efe: es el experimento de "se lo puede tragar el motor?". Vaciar la
+    // constante, o que el archivo no exista (otro clon, el CI), devuelve el
+    // arranque normal por .efe.
+    // Ruta ABSOLUTA al arbol de fuentes, no al espejo de assets/ que queda junto
+    // al .exe: bistro/ esta excluido de ese espejo (son 1,5 GB, ver
+    // cmake/CopyAssets.cmake).
+    constexpr const char* kProbeModel =
+        "D:/@ffontana/CONSOLIDADAS/efengine/assets/bistro/BistroInterior.fbx";
+
+    // El .efe que se abre solo cuando no hay sonda. El menu "Escena" carga
+    // cualquier otro de assets/scenes, y la sala de Cornell sigue estando ahi.
     constexpr const char* kBootScene = "assets/scenes/sandbox.efe";
-    if (serialization::SceneSerializer::Load(kBootScene, scene, assets, rm, registry)) {
+
+    if (kProbeModel[0] != '\0' && std::filesystem::exists(kProbeModel)) {
+        sandbox::BuildProbeScene(editor, kProbeModel);
+    } else if (serialization::SceneSerializer::Load(kBootScene, scene, assets, rm, registry)) {
         editorState.currentScenePath = kBootScene;
     } else {
         // No se cierra el sandbox: sin escena el editor igual sirve para cargar
@@ -232,11 +253,12 @@ int main() {
         // orden que Unity). A partir del ciclo 3 aca adentro tambien va el step
         // de fisica y el drenado de triggers.
         core::Time& time = app.GetTime();
-        for (i32 i = 0; i < time.FixedSteps(); ++i) {
-            scene.FixedUpdate(time.FixedDelta());
+        if (game != null) {
+            game->Tick(time);
+        } else {
+            for (i32 i = 0; i < time.FixedSteps(); ++i) scene.FixedUpdate(time.FixedDelta());
+            scene.Update(app.DeltaTime());
         }
-
-        scene.Update(app.DeltaTime());
 
         app.RenderScene(scene, cam);
         app.EndFrame();

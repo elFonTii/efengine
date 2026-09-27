@@ -1,5 +1,7 @@
 #include "ModelLoader.h"
 
+#include "efengine/resources/AssimpMaterial.h"
+
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -20,7 +22,7 @@ namespace resources {
         return static_cast<f32>(1.0 / unitScaleFactor);
     }
 
-    std::optional<renderer::Model> ModelLoader::Load(const char* path) {
+    std::optional<LoadedModel> ModelLoader::Load(const char* path) {
         EF_ASSERT(path != null, "ModelLoader::Load: path no puede ser null");
 
         Assimp::Importer importer;
@@ -93,14 +95,20 @@ namespace resources {
                 }
             }
 
-            aiString matName;
+            std::string matName;
             if (scene->mNumMaterials > 0) {
-                scene->mMaterials[m->mMaterialIndex]->Get(AI_MATKEY_NAME, matName);
+                matName = MaterialNameFromAssimp(scene->mMaterials[m->mMaterialIndex]);
             }
-            meshes.emplace_back(vertices, indices, std::string(matName.C_Str()));
+            meshes.emplace_back(vertices, indices, matName);
         }
 
-        return renderer::Model(std::move(meshes));
+        std::vector<renderer::MaterialDef> materiales;
+        materiales.reserve(scene->mNumMaterials);
+        for (u32 i = 0; i < scene->mNumMaterials; ++i) {
+            materiales.push_back(MaterialDefFromAssimp(scene->mMaterials[i], path));
+        }
+
+        return LoadedModel{ renderer::Model(std::move(meshes)), std::move(materiales) };
     }
 
 }

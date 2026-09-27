@@ -16,10 +16,17 @@ add_executable(efengine_tests
     renderer/ScenePipeline.test.cpp
     renderer/Cubemap.test.cpp
     renderer/ShadowMath.test.cpp
+    renderer/ShadowPass.test.cpp
+    renderer/CascadeMath.test.cpp
+    renderer/CascadeBlock.test.cpp
     renderer/AoMath.test.cpp
+    renderer/Anisotropy.test.cpp
     renderer/Bounds.test.cpp
     renderer/BoxMesh.test.cpp
     renderer/CubeFaces.test.cpp
+    renderer/Cull.test.cpp
+    renderer/VoxelMath.test.cpp
+    renderer/VoxelGrid.test.cpp
     renderer/DdgiVolume.test.cpp
     renderer/MaterialMap.test.cpp
     renderer/RenderTarget.test.cpp
@@ -29,6 +36,7 @@ add_executable(efengine_tests
     renderer/ProfilerStats.test.cpp
     resources/FileIO.test.cpp
     resources/ModelLoader.test.cpp
+    resources/AssimpMaterial.test.cpp
     resources/ShaderPreprocessor.test.cpp
     resources/ResourceManager.test.cpp
     resources/SceneAssets.test.cpp
@@ -42,6 +50,9 @@ add_executable(efengine_tests
     scene/SceneGraphClear.test.cpp
     physics/ShapeDesc.test.cpp
     physics/PhysicsWorld.test.cpp
+    gameplay/CollisionMesh.test.cpp
+    gameplay/PhysicsBinding.test.cpp
+    gameplay/GameWorld.test.cpp
     serialization/BinaryIO.test.cpp
     serialization/StringTable.test.cpp
     serialization/EfeFile.test.cpp

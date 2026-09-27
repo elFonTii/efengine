@@ -12,6 +12,7 @@
 
 namespace efengine {
     namespace application  { class Application; }
+    namespace gameplay     { class GameWorld; }
     namespace scene        { class SceneGraph; class Camera; class CameraController; }
     namespace resources    { class SceneAssets; class ResourceManager; }
     namespace serialization { struct SceneRegistry; }
@@ -76,6 +77,10 @@ namespace sandbox {
         bool showStats     = true;
         bool showPerf      = false;
 
+        // Debug draw de colliders. Prendido por default: sirve justamente para
+        // ver que nodos NO tienen cuerpo.
+        bool showColliders = true;
+
         // Pedido de reconstruir el layout de paneles desde cero. Lo prende el menu
         // "Ventanas" y lo apaga el editor en el mismo frame en que lo atiende.
         // Sin esto no habria vuelta atras: una vez que arrastraste un panel, tu
@@ -110,11 +115,18 @@ namespace sandbox {
         efengine::resources::ResourceManager&         rm;
         const efengine::serialization::SceneRegistry& registry;
         EditorState&                                  state;
+        // Puntero y no referencia: es lo unico del contexto que puede faltar,
+        // porque Jolt puede no arrancar.
+        efengine::gameplay::GameWorld*                game;
     };
 
     // Re-resuelve los handles por nombre y recalcula los flags de animacion.
     // Se llama al arrancar y despues de cada carga de escena.
     void RefreshHandles(EditorContext& ctx);
+
+    // Corta la simulacion antes de reemplazar la escena: Clear() invalida los
+    // handles de los cuerpos y la escena nueva nunca recibiria Build().
+    void EndSimulationBeforeClear(EditorContext& ctx);
 
     // Encuadra el nodo seleccionado. Vive aca y no en el motor porque la
     // seleccion es un concepto de la UI: la camara no tiene que aprender que

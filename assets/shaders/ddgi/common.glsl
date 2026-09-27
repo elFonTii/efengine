@@ -1,5 +1,5 @@
 // assets/shaders/ddgi/common.glsl
-// LA matematica de DDGI del repo. La incluyen pbr.frag, ddgi/capture.frag,
+// LA matematica de DDGI del repo. La incluyen pbr.frag, ddgi/trace_voxel.comp,
 // los dos blends y la debug viz: cinco consumidores, una fuente. Duplicar
 // Chebyshev o el octaedral era el bug que se arregla en una copia y no en la
 // otra, sobre la parte mas dificil del sistema.
@@ -18,12 +18,22 @@ layout(std140, binding = 5) uniform Ddgi {
     ivec4 uDdgiAtlas;       // x=cols, y=rows, z=irrTile, w=distTile
     ivec4 uDdgiRange;       // x=firstProbe, y=count, z=faceSize, w=probesPerFrame
     vec4  uDdgiParams0;     // hysteresis, intensity, normalBias, viewBias
-    vec4  uDdgiParams1;     // enabled, chebyshevSharpness, _, _
+    vec4  uDdgiParams1;     // enabled, chebyshevSharpness, debugView, classificationEnabled
     vec4  uDdgiParams2;     // maxDistance, backfaceFadeStart, backfaceFadeEnd, _
 };
 
 layout(binding = 12) uniform sampler2D uDdgiIrradiance;
 layout(binding = 13) uniform sampler2D uDdgiDistance;
+
+// xyz = offset de reubicacion (m), w = fraccion de rayos en cara trasera.
+// Lo escribe probe_update.comp; el resto solo lo lee.
+#ifdef DDGI_PROBE_DATA_WRITABLE
+layout(std430, binding = 0) buffer DdgiProbeData {
+#else
+layout(std430, binding = 0) readonly buffer DdgiProbeData {
+#endif
+    vec4 uDdgiProbeData[];
+};
 
 const int   kDdgiBorder = 1;
 const float kDdgiPI     = 3.14159265359;
@@ -109,8 +119,16 @@ ivec3 DdgiProbeCoords(int index) {
     return ivec3(index % cx, (index / cx) % cy, index / (cx * cy));
 }
 
+// El peso trilineal NO sale de aca: sale de la grilla sin mover, como en RTXGI.
 vec3 DdgiProbePosition(ivec3 coords) {
-    return uDdgiOrigin.xyz + vec3(coords) * uDdgiSpacing.xyz;
+    return uDdgiOrigin.xyz + vec3(coords) * uDdgiSpacing.xyz
+         + uDdgiProbeData[DdgiProbeIndex(coords)].xyz;
+}
+
+// 1 = activo, 0 = adentro de la geometria. Suave para que no haga pop.
+float DdgiProbeWeight(int probeIndex) {
+    if (uDdgiParams1.w < 0.5) return 1.0;
+    return 1.0 - smoothstep(uDdgiParams2.y, uDdgiParams2.z, uDdgiProbeData[probeIndex].w);
 }
 
 // Esquina (texel del borde superior-izquierdo) del tile de un probe.
@@ -198,6 +216,7 @@ vec3 SampleDdgiIrradiance(vec3 worldPos, vec3 N, vec3 bentN, vec3 V) {
         // extrapolacion fuera del volumen se aplana en vez de irse al infinito.
         vec3  tri = mix(1.0 - frac, frac, vec3(offset));
         float w   = tri.x * tri.y * tri.z;
+        w *= DdgiProbeWeight(DdgiProbeIndex(coords));
 
         // Rechazo suave de backface: un probe que esta "detras" de la superficie
         // no puede iluminarla. Suave y no binario para que no aparezcan

@@ -58,6 +58,13 @@ namespace renderer {
         f32 maxDistance        = 7.0f;
         f32 chebyshevSharpness = 3.6f;
 
+        // -- Trazado contra voxeles --
+        // Alfa minimo de un voxel para que el DDA lo cuente como solido. El 0.5
+        // es EXPLICITO y no un cero por omision: con umbral 0 la condicion
+        // alpha >= umbral es cierta en el aire, el rayo muere en el primer
+        // voxel del grid y la GI se arruina sin que nada falle ruidosamente.
+        f32 opacityThreshold = 0.5f;
+
         // -- Clasificacion de probes --
         // Fraccion de texels de backface a partir de la cual un probe empieza a
         // perder peso, y a partir de la cual lo pierde del todo. Son DOS y no uno
@@ -66,6 +73,18 @@ namespace renderer {
         // partir del 25%, y este par lo deja adentro de la transicion.
         f32 backfaceFadeStart = 0.15f;
         f32 backfaceFadeEnd   = 0.30f;
+
+        // Aplica la fraccion de arriba como peso en el sampleo. Apagado sirve para comparar.
+        bool classificationEnabled = true;
+
+        // -- Reubicacion de probes --
+        // probe_update.comp mueve cada probe con las reglas de RTXGI, hasta el 45%
+        // del espaciado. Apagado escribe offset 0.
+        bool relocationEnabled = true;
+
+        // Metros. Un probe mas cerca que esto de una cara delantera se aleja; uno
+        // adentro de algo queda a la mitad de esto del otro lado. Escala de Bistro.
+        f32 minFrontfaceDistance = 1.0f;
 
         // -- Diagnostico --
 

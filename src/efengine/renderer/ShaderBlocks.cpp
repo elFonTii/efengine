@@ -11,6 +11,15 @@ namespace renderer {
     // ── Contrato std140, verificado en tiempo de compilacion ───────────────
     // Si alguno de estos falla, el shader lee basura en silencio: la GPU no avisa
     // que el mirror C++ y el bloque GLSL dejaron de coincidir.
+    static_assert(sizeof(CascadeBlock) == 304u, "CascadeBlock: tamano std140 roto");
+    static_assert(offsetof(CascadeBlock, matrices)      ==   0u, "CascadeBlock.matrices");
+    static_assert(offsetof(CascadeBlock, splitFar)      == 256u, "CascadeBlock.splitFar");
+    static_assert(offsetof(CascadeBlock, normalOffsets) == 272u, "CascadeBlock.normalOffsets");
+    static_assert(offsetof(CascadeBlock, params)        == 288u, "CascadeBlock.params");
+
+    static_assert(kMaxCascades == 4u,
+                  "CascadeBlock: los arrays son de 4; sincronizar con kMaxCascades y con el shader");
+
     static_assert(sizeof(FrameBlock) == 304u, "FrameBlock: tamano std140 roto");
     static_assert(offsetof(FrameBlock, view)             ==   0u, "FrameBlock.view");
     static_assert(offsetof(FrameBlock, projection)       ==  64u, "FrameBlock.projection");
@@ -19,6 +28,17 @@ namespace renderer {
     static_assert(offsetof(FrameBlock, viewPos)          == 256u, "FrameBlock.viewPos");
     static_assert(offsetof(FrameBlock, shadowParams)     == 272u, "FrameBlock.shadowParams");
     static_assert(offsetof(FrameBlock, iblParams)        == 288u, "FrameBlock.iblParams");
+
+    static_assert(sizeof(VoxelizePassBlock) == 96u, "VoxelizePassBlock: tamano std140 roto");
+    static_assert(offsetof(VoxelizePassBlock, viewProj)   ==  0u, "VoxelizePassBlock.viewProj");
+    static_assert(offsetof(VoxelizePassBlock, gridOrigin) == 64u, "VoxelizePassBlock.gridOrigin");
+    static_assert(offsetof(VoxelizePassBlock, gridParams) == 80u, "VoxelizePassBlock.gridParams");
+
+    static_assert(sizeof(TraceVoxelPassBlock) == 32u, "TraceVoxelPassBlock: tamano std140 roto");
+    static_assert(offsetof(TraceVoxelPassBlock, gridOrigin) ==  0u, "TraceVoxelPassBlock.gridOrigin");
+    static_assert(offsetof(TraceVoxelPassBlock, gridParams) == 16u, "TraceVoxelPassBlock.gridParams");
+
+    static_assert(sizeof(ProbeUpdatePassBlock) == 16u, "ProbeUpdatePassBlock: tamano std140 roto");
 
     static_assert(sizeof(LightsBlock) == 176u, "LightsBlock: tamano std140 roto");
     static_assert(offsetof(LightsBlock, positions)    ==   0u, "LightsBlock.positions");
@@ -61,11 +81,6 @@ namespace renderer {
     static_assert(offsetof(AoPassBlock, params1)     ==  96u, "AoPassBlock.params1");
     static_assert(offsetof(AoPassBlock, counts)      == 112u, "AoPassBlock.counts");
 
-    static_assert(sizeof(DdgiCaptureTile) == 160u, "DdgiCaptureTile: tamano std430 roto");
-    static_assert(offsetof(DdgiCaptureTile, viewProj)       ==   0u, "DdgiCaptureTile.viewProj");
-    static_assert(offsetof(DdgiCaptureTile, invViewProjRot) ==  64u, "DdgiCaptureTile.invViewProjRot");
-    static_assert(offsetof(DdgiCaptureTile, rect)           == 128u, "DdgiCaptureTile.rect");
-    static_assert(offsetof(DdgiCaptureTile, probeCenter)    == 144u, "DdgiCaptureTile.probeCenter");
 
     static_assert(sizeof(IndirectPassBlock) == 96u, "IndirectPassBlock: tamano std140 roto");
     static_assert(offsetof(IndirectPassBlock, viewToWorld) ==  0u, "IndirectPassBlock.viewToWorld");
@@ -154,17 +169,65 @@ namespace renderer {
         // Frame obliga a tocar siete shaders que no lo usan.
         b.params1 = glm::vec4((settings.enabled && atlasValid) ? 1.0f : 0.0f,
                               settings.chebyshevSharpness,
-                              static_cast<f32>(settings.debugView), 0.0f);
+                              static_cast<f32>(settings.debugView),
+                              settings.classificationEnabled ? 1.0f : 0.0f);
         // params2.w codifica el ablation test en UN float: negativo = apagado,
         // >= 0 = el valor constante que pbr.frag devuelve en vez de samplear.
         // Dos campos (flag + valor) habrian obligado a crecer el bloque y a
         // tocar los cinco shaders que lo declaran para un instrumento de medida.
         b.params2 = glm::vec4(settings.maxDistance,
                               settings.backfaceFadeStart,
-                              settings.backfaceFadeEnd,
+                              // smoothstep con bordes iguales o invertidos no esta definido.
+                              std::max(settings.backfaceFadeEnd, settings.backfaceFadeStart + 1.0e-3f),
                               settings.ablateSample
                                   ? std::max(settings.ablateIrradiance, 0.0f)
                                   : -1.0f);
+        return b;
+    }
+
+
+    CascadeBlock MakeCascadeBlock(const CascadeContext& ctx) {
+        CascadeBlock b {};
+        const u32 count = ctx.enabled ? glm::min(ctx.count, kMaxCascades) : 0u;
+
+        // Un corte inalcanzable en los slots que no se usan: si quedaran en cero,
+        // la seleccion por profundidad mandaria TODO a la primera cascada muerta.
+        f32 ultimo = 0.0f;
+        for (u32 i = 0; i < kMaxCascades; ++i) {
+            if (i < count) {
+                b.matrices[i]      = ctx.fits[i].matrix;
+                b.splitFar[i]      = ctx.fits[i].splitFar;
+                b.normalOffsets[i] = ctx.fits[i].texelWorldSize * ctx.normalOffsetTexels;
+                ultimo = ctx.fits[i].splitFar;
+            } else {
+                b.matrices[i]      = glm::mat4(1.0f);
+                b.splitFar[i]      = ultimo;
+                b.normalOffsets[i] = 0.0f;
+            }
+        }
+
+        b.params = glm::vec4(static_cast<f32>(count), ctx.blendRatio,
+                             ctx.debugView ? 1.0f : 0.0f, 0.0f);
+        return b;
+    }
+
+    TraceVoxelPassBlock MakeTraceVoxelPassBlock(const VoxelGridDesc& desc,
+                                                f32 opacityThreshold) {
+        TraceVoxelPassBlock b {};
+        b.gridOrigin = glm::vec4(desc.origin, 0.0f);
+        // Con umbral 0 el DDA pega contra el primer voxel del grid siempre
+        // (alpha >= 0 es cierto hasta en el aire) y la GI queda arruinada sin
+        // que nada falle ruidosamente. Arriba de 0.75 los voxeles de doble cara
+        // se vuelven aire: el tope es 0.7.
+        b.gridParams = glm::vec4(desc.voxelSize, static_cast<f32>(desc.resolution),
+                                 std::clamp(opacityThreshold, 1.0e-3f, 0.7f), 0.0f);
+        return b;
+    }
+
+    ProbeUpdatePassBlock MakeProbeUpdatePassBlock(const DdgiSettings& settings) {
+        ProbeUpdatePassBlock b {};
+        b.params = glm::vec4(std::max(settings.minFrontfaceDistance, 0.0f),
+                             settings.relocationEnabled ? 1.0f : 0.0f, 0.0f, 0.0f);
         return b;
     }
 

@@ -130,3 +130,17 @@ TEST_CASE("SceneGraphClear: Get const devuelve el mismo nodo que la version no-c
     scene::NodeHandle invalido;
     CHECK(cg.TryGet(invalido) == nullptr);
 }
+
+TEST_CASE("SceneGraphClear: Clear sube la generacion y crear nodos no") {
+    scene::SceneGraph g;
+    const u64 antes = g.Generation();
+
+    g.CreateNode("a");
+    CHECK(g.Generation() == antes);
+
+    g.Clear();
+    CHECK(g.Generation() == antes + 1u);
+
+    g.Clear();
+    CHECK(g.Generation() == antes + 2u);
+}

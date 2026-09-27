@@ -104,9 +104,23 @@ namespace efecom {
     void SetMessageSink(MessageSink sink) { g_messageSink = sink; }
 
     // ── Inicialización / contexto ───────────────────────────────────────────
+    static f32 g_maxAnisotropy = 1.0f;
+
+    f32 GetMaxAnisotropy() { return g_maxAnisotropy; }
+
+    f32 ClampAnisotropy(f32 requested, f32 deviceMax) {
+        if (deviceMax < 1.0f) deviceMax = 1.0f;
+        if (requested < 1.0f) return 1.0f;
+        return (requested < deviceMax) ? requested : deviceMax;
+    }
+
     bool Initialize(ProcAddressLoader loader) {
         EFCOM_ASSERT(loader != nullptr, "Initialize: loader no puede ser null");
         if (gladLoadGL((GLADloadfunc)loader) == 0) return false;
+
+        // Una sola consulta: el maximo no cambia mientras viva el contexto.
+        glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &g_maxAnisotropy);
+        if (g_maxAnisotropy < 1.0f) g_maxAnisotropy = 1.0f;
 
 #ifdef _DEBUG
         // SYNCHRONOUS es lo que hace util al callback: sin el dispara en
@@ -420,6 +434,10 @@ namespace efecom {
         if (desc.wrapS == TextureWrap::ClampToBorder || desc.wrapT == TextureWrap::ClampToBorder) {
             glTextureParameterfv(id, GL_TEXTURE_BORDER_COLOR, desc.borderColor);
         }
+        if (desc.maxAnisotropy > 1.0f) {
+            glTextureParameterf(id, GL_TEXTURE_MAX_ANISOTROPY,
+                                ClampAnisotropy(desc.maxAnisotropy, g_maxAnisotropy));
+        }
 
         // Storage inmutable: el tamano y el formato quedan fijos. Es lo correcto
         // para un attachment, y obliga a que Framebuffer::Resize recree la
@@ -476,6 +494,54 @@ namespace efecom {
         return id;
     }
 
+    u32 CreateTexture3DStorage(const Texture3DStorageDesc& desc) {
+        EFCOM_ASSERT(desc.width > 0u && desc.height > 0u && desc.depth > 0u,
+                     "CreateTexture3DStorage: las tres dimensiones tienen que ser > 0");
+
+        u32 id = 0;
+        glCreateTextures(GL_TEXTURE_3D, 1, &id);
+        EFCOM_ASSERT(id != 0, "CreateTexture3DStorage: glCreateTextures devuelve 0 (sin contexto GL)");
+
+        glTextureStorage3D(id, 1, to_gl(desc.format).internalFormat,
+                           (GLsizei)desc.width, (GLsizei)desc.height, (GLsizei)desc.depth);
+
+        glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+        return id;
+    }
+
+    void ClearTexture(u32 texture) {
+        EFCOM_ASSERT(texture != 0u, "ClearTexture: textura invalida");
+        // glClearTexImage es core desde 4.4 y con nullptr llena de ceros SIN
+        // subir un buffer desde CPU. Hacerlo con UpdateTexture obligaria a un
+        // std::vector de 100 MB de ceros por cada revoxelizacion.
+        glClearTexImage(texture, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    }
+
+    u32 CreateDepthTexture2DArray(u32 resolution, u32 layers) {
+        EFCOM_ASSERT(resolution > 0u && layers > 0u,
+                     "CreateDepthTexture2DArray: resolucion y capas tienen que ser > 0");
+
+        u32 id = 0;
+        glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &id);
+        EFCOM_ASSERT(id != 0, "CreateDepthTexture2DArray: glCreateTextures devuelve 0 (sin contexto GL)");
+
+        glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+        glTextureParameteri(id, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+        const f32 blanco[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        glTextureParameterfv(id, GL_TEXTURE_BORDER_COLOR, blanco);
+
+        glTextureStorage3D(id, 1, to_gl(TextureFormat::Depth32F).internalFormat,
+                           (GLsizei)resolution, (GLsizei)resolution, (GLsizei)layers);
+        return id;
+    }
+
     // ── Cubemaps ───────────────────────────────────────────────────────────
     u32 CreateCubemap(u32 size, TextureFormat format, u32 mipCount) {
         u32 id = 0;
@@ -514,6 +580,7 @@ namespace efecom {
         GLbitfield glBits = 0;
         if ((u32)bits & (u32)Barrier::ShaderImageAccess) glBits |= GL_SHADER_IMAGE_ACCESS_BARRIER_BIT;
         if ((u32)bits & (u32)Barrier::TextureFetch)      glBits |= GL_TEXTURE_FETCH_BARRIER_BIT;
+        if ((u32)bits & (u32)Barrier::ShaderStorage)     glBits |= GL_SHADER_STORAGE_BARRIER_BIT;
         glMemoryBarrier(glBits);
     }
 
@@ -556,8 +623,24 @@ namespace efecom {
         glNamedFramebufferTexture(framebuffer, GL_DEPTH_ATTACHMENT, texture, 0);
     }
 
+    void FramebufferDepthTextureLayer(u32 framebuffer, u32 texture, u32 layer) {
+        glNamedFramebufferTextureLayer(framebuffer, GL_DEPTH_ATTACHMENT,
+                                       texture, 0, (GLint)layer);
+    }
+
     void FramebufferDisableColor(u32 framebuffer) {
         // Sin color attachment: no dibujamos ni leemos color.
+        glNamedFramebufferDrawBuffer(framebuffer, GL_NONE);
+        glNamedFramebufferReadBuffer(framebuffer, GL_NONE);
+    }
+
+    void FramebufferDefaultSize(u32 framebuffer, u32 width, u32 height) {
+        glNamedFramebufferParameteri(framebuffer, GL_FRAMEBUFFER_DEFAULT_WIDTH,  (GLint)width);
+        glNamedFramebufferParameteri(framebuffer, GL_FRAMEBUFFER_DEFAULT_HEIGHT, (GLint)height);
+        // Capas y muestras en su minimo valido: el FBO sin attachments solo
+        // define el area de barrido, no almacena nada.
+        glNamedFramebufferParameteri(framebuffer, GL_FRAMEBUFFER_DEFAULT_LAYERS,  0);
+        glNamedFramebufferParameteri(framebuffer, GL_FRAMEBUFFER_DEFAULT_SAMPLES, 0);
         glNamedFramebufferDrawBuffer(framebuffer, GL_NONE);
         glNamedFramebufferReadBuffer(framebuffer, GL_NONE);
     }

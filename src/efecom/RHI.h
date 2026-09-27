@@ -218,7 +218,17 @@ namespace efecom {
         TextureWrap   wrapT     = TextureWrap::Repeat;
         bool          generateMipmaps = false;
         f32           borderColor[4]  = { 1.0f, 1.0f, 1.0f, 1.0f }; // para ClampToBorder
+        // 1.0 = sin filtrado anisotropico (el default de GL). Se clampea contra
+        // el maximo del device antes de llegar al driver.
+        f32           maxAnisotropy   = 1.0f;
     };
+
+    // Maximo de anisotropia que soporta el device (>= 1.0). Valido tras Initialize.
+    f32 GetMaxAnisotropy();
+
+    // Puro: acota lo pedido al rango que acepta el driver. Pedir de mas es un
+    // GL_INVALID_VALUE, no un degradado silencioso.
+    f32 ClampAnisotropy(f32 requested, f32 deviceMax);
 
     // pixels puede ser null (texturas vacías para attachments).
     u32  CreateTexture2D(const Texture2DDesc& desc, const void* pixels);
@@ -236,6 +246,31 @@ namespace efecom {
         TextureWrap   wrapT     = TextureWrap::ClampToEdge;
     };
     u32 CreateTexture2DStorage(const Texture2DStorageDesc& desc);
+
+    // Volumen de storage inmutable, sin mips. Para el grid de voxeles de DDGI.
+    //
+    // Filtro NEAREST: el trazado quiere el contenido del voxel que piso, no una
+    // mezcla con sus vecinos. Un filtro lineal sobre la opacidad convertiria
+    // cada superficie en una rampa de medio voxel y el DDA pegaria antes de
+    // llegar a la geometria.
+    struct Texture3DStorageDesc {
+        u32           width  = 0;
+        u32           height = 0;
+        u32           depth  = 0;
+        TextureFormat format = TextureFormat::RGBA8;
+    };
+    u32 CreateTexture3DStorage(const Texture3DStorageDesc& desc);
+
+    // Deja el contenido de la textura en cero, sin subir un buffer desde CPU.
+    void ClearTexture(u32 texture);
+
+    // Array de 'layers' capas cuadradas de profundidad, storage inmutable, sin
+    // mips. Para shadow maps en cascada: una capa por cascada, un solo sampler.
+    //
+    // Filtro NEAREST y borde blanco, igual que Texture::CreateDepthAttachment: el
+    // PCF lo hace el fragment shader, y fuera del frustum la profundidad de borde
+    // 1.0 significa "iluminado".
+    u32 CreateDepthTexture2DArray(u32 resolution, u32 layers);
 
     // Cubemaps
     // Storage inmutable de 6 caras cuadradas con mipCount niveles.
@@ -256,6 +291,7 @@ namespace efecom {
     enum class Barrier : u32 {
         ShaderImageAccess = 1u << 0, // escrituras vía imageStore
         TextureFetch      = 1u << 1, // lecturas vía sampler
+        ShaderStorage     = 1u << 2, // escrituras a SSBO desde un compute
     };
     void IssueMemoryBarrier(Barrier bits);
 
@@ -268,7 +304,17 @@ namespace efecom {
     void BindRenderTarget(u32 target, u32 width, u32 height);
     void FramebufferColorTexture(u32 framebuffer, u32 texture);
     void FramebufferDepthTexture(u32 framebuffer, u32 texture);
+
+    // Adjunta UNA capa de un array como el depth del FBO. Se vuelve a llamar
+    // antes de cada cascada: un solo FBO, una capa por vez.
+    void FramebufferDepthTextureLayer(u32 framebuffer, u32 texture, u32 layer);
     void FramebufferDisableColor(u32 framebuffer); // FBO solo-profundidad (shadow maps)
+
+    // Tamano por defecto de un FBO SIN NINGUN attachment. Sin esto ese FBO es
+    // incompleto y no se puede dibujar en el; con esto el rasterizador tiene un
+    // area de barrido propia, independiente de la ventana. Lo usa la
+    // voxelizacion, que no produce pixeles: su unico efecto son los imageStore.
+    void FramebufferDefaultSize(u32 framebuffer, u32 width, u32 height);
     bool FramebufferComplete(u32 framebuffer);
     u32  CreateDepthRenderbuffer(u32 width, u32 height);
     void DestroyRenderbuffer(u32 renderbuffer);

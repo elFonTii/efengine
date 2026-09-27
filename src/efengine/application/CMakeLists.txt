@@ -6,6 +6,7 @@ target_sources(efengine_application PRIVATE
     DebugUI.cpp
     FramePipeline.cpp
     passes/ShadowPassSetup.cpp
+    passes/CascadedShadowPassSetup.cpp
     passes/IblPassSetup.cpp
     passes/DdgiPassSetup.cpp
     passes/AoPassSetup.cpp

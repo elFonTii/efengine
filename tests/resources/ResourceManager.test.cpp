@@ -36,3 +36,7 @@ TEST_CASE("ResourceManager::PathOf modelo que no cargo el manager -> null") {
     renderer::Model ajeno(std::vector<renderer::Mesh>{});
     CHECK(rm.PathOf(&ajeno) == nullptr);
 }
+TEST_CASE("ResourceManager::GetModelMaterials ruta inexistente -> null") {
+    efengine::resources::ResourceManager rm;
+    CHECK(rm.GetModelMaterials("assets/no_existe_xyz.fbx") == nullptr);
+}

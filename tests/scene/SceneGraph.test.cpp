@@ -485,3 +485,63 @@ TEST_CASE("SceneGraph: destruir el nodo de la camara activa invalida el handle")
     // slot cambio. El consumidor chequea IsValid, como con PrimarySun.
     CHECK(g.IsValid(g.ActiveCamera()) == false);
 }
+
+TEST_CASE("SceneGraph: DetachCollider saca el collider y es no-op si no hay nada que sacar") {
+    scene::SceneGraph g;
+    const scene::NodeHandle n = g.CreateChild(g.Root(), "con collider");
+
+    scene::ColliderAttachment col;
+    col.kind = scene::ShapeKind::Sphere;
+    g.AttachCollider(n, col);
+    REQUIRE(g.Get(n).collider.has_value());
+
+    g.DetachCollider(n);
+    CHECK_FALSE(g.Get(n).collider.has_value());
+
+    // Dos veces y sobre un handle nulo: la UI puede pedirlo sobre un nodo que ya
+    // se destruyo.
+    g.DetachCollider(n);
+    g.DetachCollider(scene::NodeHandle{});
+    CHECK_FALSE(g.Get(n).collider.has_value());
+}
+
+TEST_CASE("SceneGraph::MeshSpans: un modelo sin submallas no aporta spans") {
+    scene::SceneGraph g;
+    renderer::Model model = MakeEmptyModelSG();
+
+    scene::NodeHandle n = g.CreateNode("malla");
+    g.AttachMesh(n, { &model, {} });
+    g.UpdateWorldTransforms();
+
+    REQUIRE(g.Renderables().size() == 1u);
+    CHECK(g.MeshSpans().empty());
+}
+
+TEST_CASE("SceneGraph::MeshSpans: dos updates seguidos no acumulan") {
+    // Con un modelo sin submallas esto no verifica el rearmado, solo que la
+    // cuenta no crezca. La transformacion de cada span la cubre AppendMeshSpan
+    // en tests/renderer/Cull.test.cpp: aca Mesh no se puede construir sin GL.
+    scene::SceneGraph g;
+    renderer::Model model = MakeEmptyModelSG();
+
+    scene::NodeHandle n = g.CreateNode("malla");
+    g.AttachMesh(n, { &model, {} });
+
+    g.UpdateWorldTransforms();
+    const size_t primero = g.MeshSpans().size();
+    g.UpdateWorldTransforms();
+
+    CHECK(g.MeshSpans().size() == primero);
+}
+
+TEST_CASE("SceneGraph::Clear vacia los spans") {
+    scene::SceneGraph g;
+    renderer::Model model = MakeEmptyModelSG();
+
+    scene::NodeHandle n = g.CreateNode("malla");
+    g.AttachMesh(n, { &model, {} });
+    g.UpdateWorldTransforms();
+
+    g.Clear();
+    CHECK(g.MeshSpans().empty());
+}

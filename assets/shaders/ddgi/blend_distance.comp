@@ -90,12 +90,11 @@ void main() {
             vec2  ndc = (vec2(x, y) + 0.5) / float(faceSize) * 2.0 - 1.0;
             float r2  = 1.0 + ndc.x * ndc.x + ndc.y * ndc.y;
 
-            // El cielo y lo que no pega nada vienen con 1e4. Se recorta al
-            // far plane de la captura -- mas alla de eso no se capturo nada,
-            // asi que guardar 1e4 solo destruye la precision del half-float.
-            float dist = min(texelFetch(uCapture,
-                                        ivec2(face * faceSize + x, slot * faceSize + y), 0).a,
-                             uDdgiParams2.x);
+            // Cara trasera (a < 0): el 20% de su magnitud, como RTXGI. Chebyshev
+            // rechaza mas a un probe que ve dorsos. El cielo (1e4) se recorta al far.
+            float a    = texelFetch(uCapture,
+                                    ivec2(face * faceSize + x, slot * faceSize + y), 0).a;
+            float dist = min((a < 0.0) ? -a * 0.2 : a, uDdgiParams2.x);
 
             sDir[i]  = dirForFace(uint(face), ndc);
             sDist[i] = vec2(dist, 1.0 / (r2 * sqrt(r2)));

@@ -101,18 +101,22 @@ namespace renderer {
         return s;
     }
 
-    // Sin culling a proposito, por la misma razon que ShadowDepthState pero al
-    // reves: aca lo que importa NO es que la luz atraviese las paredes, sino que
-    // un probe metido adentro de un solido VEA la cara interna que lo contiene.
-    // Con CullMode::Back esa cara se descarta y el probe ve derecho a traves,
-    // hacia el exterior, guarda distancias largas y radiancia brillante, y
-    // Chebyshev concluye que la region es visible. Eso ERA el light leaking.
-    //
-    // El costo es que se rasteriza la cara de atras de cada objeto en las 6 caras
-    // de cada probe. Se mide en el panel ("Pase (CPU)") antes y despues.
-    efecom::PipelineState DdgiCaptureState() {
-        efecom::PipelineState s = OpaqueState();
-        s.cullMode = efecom::CullMode::None;
+    // La voxelizacion no dibuja una imagen: su unico efecto son los imageStore
+    // de voxelize.frag. Sin depth (el eje de la pasada no define oclusion:
+    // TODO lo que el rayo atraviesa tiene que estamparse), sin culling (un muro
+    // visto de canto se estampa desde los tres ejes, y la mitad de ellos lo ve
+    // por atras) y con la mascara de color apagada, porque el target que haya
+    // bindeado no es el resultado.
+    efecom::PipelineState VoxelizeState() {
+        efecom::PipelineState s;
+        s.depthTest   = false;
+        s.depthWrite  = false;
+        s.cullMode    = efecom::CullMode::None;
+        s.blendEnable = false;
+        s.colorWrite[0] = false;
+        s.colorWrite[1] = false;
+        s.colorWrite[2] = false;
+        s.colorWrite[3] = false;
         return s;
     }
 

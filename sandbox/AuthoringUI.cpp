@@ -5,6 +5,7 @@
 #include <efengine/renderer/Mesh.h>
 #include <efengine/renderer/Model.h>
 #include <efengine/resources/MaterialBuilder.h>
+#include <efengine/resources/MaterialImport.h>
 #include <efengine/resources/ResourceManager.h>
 #include <efengine/resources/SceneAssets.h>
 #include <efengine/scene/Node.h>
@@ -70,16 +71,20 @@ namespace {
             return;
         }
 
-        const u32 mat = EnsureDefaultMaterial(ctx);
-        if (mat == resources::SceneAssets::kInvalidIndex) {
-            st.meshError = "No se pudo crear el material default";
-            return;
+        renderer::MaterialMap materiales =
+            resources::ImportMaterials(ctx.rm, ctx.assets, path.c_str());
+
+        if (materiales.empty()) {
+            const u32 mat = EnsureDefaultMaterial(ctx);
+            if (mat == resources::SceneAssets::kInvalidIndex) {
+                st.meshError = "No se pudo crear el material default";
+                return;
+            }
+            materiales = renderer::MakeUniformMaterialMap(nombresDeSubmesh(*modelo),
+                                                          ctx.assets.MaterialAt(mat));
         }
 
-        ctx.scene.AttachMesh(handle, scene::MeshAttachment{
-            modelo,
-            renderer::MakeUniformMaterialMap(nombresDeSubmesh(*modelo), ctx.assets.MaterialAt(mat))
-        });
+        ctx.scene.AttachMesh(handle, scene::MeshAttachment{ modelo, std::move(materiales) });
     }
 
     void dibujarComboDeMaterial(EditorContext& ctx, scene::MeshAttachment& mesh,

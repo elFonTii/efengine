@@ -26,8 +26,9 @@ Thumbs.db
 conan/
 vcpkg_installed/
 
-# Document Directory
-docs/
+docs/html/
+docs/**/*.md
+docs/superpowers
 
 # Layout de paneles que ImGui guarda al salir. Es preferencia local de cada uno;
 # el layout por defecto lo arma ensureDefaultLayout() en sandbox/EditorUI.cpp.
@@ -36,3 +37,8 @@ imgui.ini
 # Blender files
 blender/
 evidencias/
+# Bistro: 1.4 GB de DDS + los PNG que genera sh/convert_bistro.ps1.
+# El .fbx y las texturas se bajan aparte, no viven en el repo.
+assets/bistro/
+# HDR de entorno: pesan decenas de MB y cada uno elige el suyo (ddde828).
+assets/hdr/

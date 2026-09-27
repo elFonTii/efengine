@@ -328,3 +328,57 @@ TEST_CASE("Layout std140: DdgiBlock sigue siendo multiplo de 16 con params2") {
     CHECK(offsetof(DdgiBlock, params1) == 96u);
     CHECK(offsetof(DdgiBlock, params2) == 112u);
 }
+
+TEST_CASE("MakeDdgiBlock: params1.w lleva el flag de clasificacion") {
+    DdgiSettings s;
+    CHECK(s.classificationEnabled);
+    CHECK(MakeDdgiBlock(s.grid, s, UpdateRange{}, true).params1.w == doctest::Approx(1.0f));
+
+    s.classificationEnabled = false;
+    CHECK(MakeDdgiBlock(s.grid, s, UpdateRange{}, true).params1.w == doctest::Approx(0.0f));
+}
+
+TEST_CASE("MakeDdgiBlock: backfaceFadeEnd nunca queda en o debajo de start") {
+    DdgiSettings s;
+    s.backfaceFadeStart = 0.5f;
+    s.backfaceFadeEnd   = 0.2f;
+    const DdgiBlock b = MakeDdgiBlock(s.grid, s, UpdateRange{}, true);
+    CHECK(b.params2.y == doctest::Approx(0.5f));
+    CHECK(b.params2.z > b.params2.y);
+
+    s.backfaceFadeEnd = 0.5f;
+    CHECK(MakeDdgiBlock(s.grid, s, UpdateRange{}, true).params2.z > 0.5f);
+}
+
+TEST_CASE("Layout std140: ProbeUpdatePassBlock es un vec4") {
+    CHECK(sizeof(ProbeUpdatePassBlock) == 16u);
+    CHECK(offsetof(ProbeUpdatePassBlock, params) == 0u);
+}
+
+TEST_CASE("MakeProbeUpdatePassBlock: distancia minima y flag de reubicacion") {
+    DdgiSettings s;
+    CHECK(s.relocationEnabled);
+    CHECK(s.minFrontfaceDistance == doctest::Approx(1.0f));
+
+    s.minFrontfaceDistance = 0.75f;
+    ProbeUpdatePassBlock b = MakeProbeUpdatePassBlock(s);
+    CHECK(b.params.x == doctest::Approx(0.75f));
+    CHECK(b.params.y == doctest::Approx(1.0f));
+
+    s.relocationEnabled    = false;
+    s.minFrontfaceDistance = -2.0f;
+    b = MakeProbeUpdatePassBlock(s);
+    CHECK(b.params.x == doctest::Approx(0.0f));
+    CHECK(b.params.y == doctest::Approx(0.0f));
+}
+
+TEST_CASE("kProbeDataBinding es el binding 0 de SSBO") {
+    CHECK(kProbeDataBinding == 0u);
+}
+
+TEST_CASE("MakeTraceVoxelPassBlock: el umbral de opacidad no pasa de 0.7") {
+    const VoxelGridDesc desc {};
+    CHECK(MakeTraceVoxelPassBlock(desc, 0.5f).gridParams.z == doctest::Approx(0.5f));
+    CHECK(MakeTraceVoxelPassBlock(desc, 0.8f).gridParams.z == doctest::Approx(0.7f));
+    CHECK(MakeTraceVoxelPassBlock(desc, 0.0f).gridParams.z > 0.0f);
+}

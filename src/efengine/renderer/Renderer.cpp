@@ -5,10 +5,12 @@
 #include <efengine/core/Assert.h>
 #include <efengine/core/Log.h>
 #include <efengine/renderer/Texture.h>
+#include <efengine/renderer/StorageBuffer.h>
 #include <efengine/renderer/Cubemap.h>
 #include <efengine/renderer/PipelineStates.h>
 #include <efengine/renderer/DdgiSettings.h>
 #include <efengine/renderer/AoMath.h>
+#include <efengine/renderer/CascadedShadowMap.h>
 
 namespace efengine {
 namespace renderer {
@@ -19,7 +21,8 @@ namespace renderer {
         , m_objectUbo(sizeof(ObjectBlock))
         , m_materialUbo(sizeof(MaterialBlock))
         , m_ddgiUbo(sizeof(DdgiBlock))
-        , m_aoUbo(sizeof(AoBlock)) {
+        , m_aoUbo(sizeof(AoBlock))
+        , m_cascadeUbo(sizeof(CascadeBlock)) {
         // glBindBufferBase es estado GLOBAL, no por programa: alcanza engancharlos
         // una vez aca. Por eso desaparecio el set m_frameShaders, que existia solo
         // para no re-setear los mismos uniforms en cada programa del frame.
@@ -29,6 +32,7 @@ namespace renderer {
         m_materialUbo.BindTo(kMaterialBinding);
         m_ddgiUbo.BindTo(kDdgiBinding);
         m_aoUbo.BindTo(kAoBinding);
+        m_cascadeUbo.BindTo(kCascadeBinding);
     }
 
     void Renderer::Clear(f32 r, f32 g, f32 b, f32 a) const {
@@ -75,7 +79,11 @@ namespace renderer {
 
         // Los mapas de frame van a sus unidades fijas. Los samplers ya saben su
         // unidad por layout(binding=N): aca solo se bindea la textura.
-        if (shadow.map != null) shadow.map->Bind(8);
+        // La unidad 8 es del array de cascadas: el mapa unico de ShadowPass ya no
+        // se bindea aca, lo sigue usando la captura de DDGI con su propio programa.
+        if (lighting.cascades.enabled && lighting.cascades.map != null) {
+            lighting.cascades.map->BindTexture(8u);
+        }
         if (ibl.irradiance != null && ibl.prefiltered != null && ibl.brdfLut != null) {
             ibl.irradiance->Bind(9);
             ibl.prefiltered->Bind(10);
@@ -92,10 +100,11 @@ namespace renderer {
         // bindea nada y el bloque apaga DDGI: samplear una unidad vacia da
         // resultados indefinidos, no negro.
         const bool atlasValid = (ddgi.irradianceAtlas != null && ddgi.distanceAtlas != null
-                                 && ddgi.settings != null);
+                                 && ddgi.probeData != null && ddgi.settings != null);
         if (atlasValid) {
             ddgi.irradianceAtlas->Bind(kIrradianceAtlasUnit);
             ddgi.distanceAtlas->Bind(kDistanceAtlasUnit);
+            ddgi.probeData->BindTo(kProbeDataBinding);
         }
 
         const DdgiSettings defaults {};
@@ -114,6 +123,9 @@ namespace renderer {
 
         const AoBlock aoBlock = MakeAoBlock(lighting.ao, lighting.indirect);
         m_aoUbo.Update(&aoBlock, sizeof(aoBlock));
+
+        const CascadeBlock cascadas = MakeCascadeBlock(lighting.cascades);
+        m_cascadeUbo.Update(&cascadas, sizeof(cascadas));
     }
 
     void Renderer::SetFrameBlock(const FrameBlock& block) const {
@@ -167,6 +179,47 @@ namespace renderer {
                  (options.shader != null) ? *options.shader : mat.shader(),
                  options.instances);
         }
+    }
+
+    BatchStats Renderer::SubmitBatch(const std::vector<BatchDraw>& draws,
+                                     const DrawOptions& options) {
+        BatchStats stats;
+        if (draws.empty()) return stats;
+
+        EF_ASSERT(options.state != null,
+                  "Renderer::SubmitBatch: requiere un PipelineState forzado");
+        EF_ASSERT(options.shader != null,
+                  "Renderer::SubmitBatch: requiere un shader forzado");
+
+        // Una sola vez para toda la lista, no una por submalla.
+        efecom::ApplyPipelineState(*options.state);
+
+        const Material*  materialVigente = null;
+        const glm::mat4* worldVigente    = null;
+
+        for (const BatchDraw& d : draws) {
+            if (d.va == null || d.material == null || d.world == null) continue;
+
+            // Comparacion por puntero: la lista viene ordenada por material y
+            // despues por objeto, asi que los dos saltos son rachas largas.
+            if (worldVigente != d.world) {
+                SetObjectMatrix(*d.world);
+                worldVigente = d.world;
+            }
+
+            if (materialVigente != d.material) {
+                const MaterialBlock block = d.material->ToBlock();
+                m_materialUbo.Update(&block, sizeof(block));
+                d.material->BindTextures();
+                materialVigente = d.material;
+                ++stats.materialUploads;
+            }
+
+            Draw(*d.va, *options.shader, options.instances);
+            ++stats.draws;
+        }
+
+        return stats;
     }
 }
 }

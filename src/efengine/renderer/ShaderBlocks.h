@@ -6,6 +6,8 @@
 #include <efengine/renderer/ShadowContext.h>
 #include <efengine/renderer/IblContext.h>
 #include <efengine/renderer/DdgiSettings.h>
+#include <efengine/renderer/CascadeContext.h>
+#include <efengine/renderer/VoxelMath.h>
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -23,6 +25,10 @@ namespace renderer {
     inline constexpr u32 kPassBinding     = 4u;   // 1x por invocacion de pase
     inline constexpr u32 kDdgiBinding     = 5u;   // 1x por frame — solo lo declaran los shaders de DDGI
     inline constexpr u32 kAoBinding       = 6u;   // 1x por frame — solo lo declara pbr.frag
+    inline constexpr u32 kCascadeBinding  = 7u;   // 1x por frame — solo lo declara pbr.frag
+
+    // Binding de SSBO (espacio aparte de los de UBO): datos por probe de DDGI.
+    inline constexpr u32 kProbeDataBinding = 0u;
 
     // Unidades de sampler de los atlas de DDGI. 0-7 material, 8 sombra, 9/10/11 IBL.
     inline constexpr u32 kIrradianceAtlasUnit = 12u;
@@ -102,7 +108,7 @@ namespace renderer {
         glm::ivec4 atlasLayout;   // x=cols, y=rows, z=irrTile(8), w=distTile(16)
         glm::ivec4 updateRange;   // x=firstProbe, y=count, z=faceSize, w=probesPerFrame
         glm::vec4  params0;       // hysteresis, intensity, normalBias, viewBias
-        glm::vec4  params1;       // enabled, chebyshevSharpness, _, _
+        glm::vec4  params1;       // enabled, chebyshevSharpness, debugView, classificationEnabled
         glm::vec4  params2;       // maxDistance, backfaceFadeStart, backfaceFadeEnd, _
     };
 
@@ -122,25 +128,6 @@ namespace renderer {
         glm::vec4  params1;       // projScale (px por metro a 1 m), escala vs full, _, _
         glm::ivec4 counts;        // x=slices, y=steps, z=direccion del blur (0=H,1=V), w=debugView
     };
-
-    // Binding 0 de SSBO: una vista de la captura de probes.
-    //
-    // El array entero se sube una vez por frame y el vertex shader elige la suya
-    // por gl_InstanceID. Es lo que convierte probes*6 draws por objeto en UNO.
-    // Ver el comentario largo de assets/shaders/ddgi/capture_tiles.glsl.
-    //
-    // std430 y no std140: en std140 un array de structs paddea CADA elemento a
-    // 16 bytes de alineacion externa, y ademas obliga a declarar el array con
-    // tamano fijo. Con std430 el layout es el natural de C++ -- de ahi que los
-    // static_assert de ShaderBlocks.cpp alcancen para verificarlo.
-    struct alignas(16) DdgiCaptureTile {
-        glm::mat4 viewProj;         // vista de esta (probe, cara)
-        glm::mat4 invViewProjRot;   // su inversa sin traslacion, para el cielo
-        glm::vec4 rect;             // xy = escala en NDC, zw = offset en NDC
-        glm::vec4 probeCenter;      // .xyz
-    };
-
-    inline constexpr u32 kDdgiTileBinding = 0u;   // binding de SSBO
 
     // PassParams (binding 4) de ddgi/indirect.frag: el pase que resuelve la
     // indirecta difusa a media resolucion.
@@ -178,6 +165,50 @@ namespace renderer {
         glm::vec4 upsample;
     };
 
+    // Las 4 matrices y los 4 escalares por cascada. Los escalares van empaquetados
+    // en vec4 y no en arrays de float porque std140 le da 16 bytes a cada elemento
+    // de un array de escalares: seria 4x el espacio y un layout que hay que
+    // recordar en vez de leer.
+    struct alignas(16) CascadeBlock {
+        glm::mat4 matrices[4];      // 4 == kMaxCascades
+        glm::vec4 splitFar;         // corte lejano de cada cascada, en distancia de vista
+        glm::vec4 normalOffsets;    // normal offset de cada cascada, en METROS
+        glm::vec4 params;           // x=count (0 = apagado), y=blendRatio, z=debugView
+    };
+
+    // PassParams (binding 4) de voxel/voxelize.*. El motor no tiene uniforms
+    // sueltos (ver Shader.h), asi que la ortografica del eje y el encuadre del
+    // grid viajan por el bloque de pase como cualquier otro dato.
+    struct alignas(16) VoxelizePassBlock {
+        glm::mat4 viewProj;
+        glm::vec4 gridOrigin;   // .xyz = esquina minima
+        glm::vec4 gridParams;   // x = voxelSize (m), y = resolucion por eje
+    };
+
+    // PassParams (binding 4) de ddgi/trace_voxel.comp. Mismo motivo que
+    // VoxelizePassBlock: sin uniforms sueltos, el encuadre del grid y los dos
+    // escalares del trazado viajan por el bloque de pase.
+    //
+    // resolucion y umbral comparten el vec4 de gridParams en vez de tener uno
+    // propio: std140 le da 16 bytes a cualquier escalar suelto, asi que tres
+    // floats sueltos costarian 48 bytes y un layout que hay que recordar.
+    //
+    // La intensidad de IBL NO esta aca aunque el shader la use: vive en
+    // FrameBlock::iblParams.y, que es de donde la lee tambien pbr.frag. Una
+    // copia en este bloque seria una segunda fuente de verdad.
+    struct alignas(16) TraceVoxelPassBlock {
+        glm::vec4 gridOrigin;   // .xyz = esquina minima del grid, .w sin uso
+        glm::vec4 gridParams;   // x = voxelSize (m), y = resolucion por eje,
+                                // z = umbral de opacidad, w = libre
+    };
+
+    // PassParams (binding 4) de ddgi/probe_update.comp.
+    struct alignas(16) ProbeUpdatePassBlock {
+        glm::vec4 params;   // x = minFrontfaceDistance (m), y = relocationEnabled, zw = libres
+    };
+
+    CascadeBlock MakeCascadeBlock(const CascadeContext& ctx);
+
     // ── Funciones puras que arman los bloques ──────────────────────────────
     // No tocan la GPU: son las que vuelven testeable headless lo que antes era
     // una tira de glUniform*.
@@ -200,6 +231,15 @@ namespace renderer {
     // puro en vez de samplear una unidad de textura sin contenido.
     DdgiBlock MakeDdgiBlock(const DdgiGrid& grid, const DdgiSettings& settings,
                             UpdateRange range, bool atlasValid);
+
+    // opacityThreshold viaja por parametro y no sale de VoxelGridDesc porque es
+    // del trazado, no del encuadre: el mismo grid se puede trazar con otro
+    // umbral sin revoxelizar.
+    TraceVoxelPassBlock MakeTraceVoxelPassBlock(const VoxelGridDesc& desc,
+                                                f32 opacityThreshold);
+
+    // minFrontfaceDistance se recorta a >= 0: negativa invertiria las reglas.
+    ProbeUpdatePassBlock MakeProbeUpdatePassBlock(const DdgiSettings& settings);
 
 }
 }

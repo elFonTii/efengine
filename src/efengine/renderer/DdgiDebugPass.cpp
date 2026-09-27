@@ -9,6 +9,8 @@
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/Texture.h>
+#include <efengine/renderer/StorageBuffer.h>
+#include <efengine/renderer/ShaderBlocks.h>
 #include <efengine/renderer/PipelineStates.h>
 #include <efengine/renderer/DdgiVolume.h>
 #include <efengine/renderer/DdgiSettings.h>
@@ -84,6 +86,7 @@ namespace renderer {
 
     void DdgiDebugPass::Execute(FrameContext& ctx) {
         if (m_ddgi == null || !m_ddgi->settings().debugProbes) return;
+        m_ddgi->probeData().BindTo(kProbeDataBinding);
 
         const DdgiSettings& ds = m_ddgi->settings();
         // Modo 3 = el mismo volcado pero mirando el alfa: sin esto la distancia

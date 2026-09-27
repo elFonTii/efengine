@@ -1,0 +1,123 @@
+#version 450 core
+// Clasifica y reubica los probes del barrido leyendo la captura recien trazada.
+// Reglas de ProbeRelocationCS.hlsl (RTXGI), validadas en
+// docs/superpowers/sims/2026-09-26-reubicacion_sim.mjs: cambiar alla primero.
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) uniform sampler2D uCapture;
+
+layout(std140, binding = 4) uniform ProbeUpdateParams {
+    vec4 uProbeUpdate;   // x = minFrontfaceDistance (m), y = relocationEnabled, zw = libres
+};
+
+#define DDGI_PROBE_DATA_WRITABLE
+#include "ddgi/common.glsl"
+
+const uint  kHilos     = 256u;
+const float kCielo     = 5.0e3;    // trace_voxel.comp escribe 1e4 si el rayo se escapa
+const float kCotaCelda = 0.2025;   // 0.45^2
+
+shared uint  sBackfaces;
+shared float sTrasD[kHilos];  shared int sTrasI[kHilos];    // cara trasera mas cercana
+shared float sCercaD[kHilos]; shared int sCercaI[kHilos];   // cara delantera mas cercana
+shared float sLejosD[kHilos]; shared int sLejosI[kHilos];   // cara delantera mas lejana
+
+// A igual distancia gana el indice menor: el resultado no depende del orden de los hilos.
+bool Gana(float d, int i, float dRef, int iRef, bool menor) {
+    if (i < 0)    return false;
+    if (iRef < 0) return true;
+    if (d != dRef) return menor ? (d < dRef) : (d > dRef);
+    return i < iRef;
+}
+
+vec3 DireccionDeTexel(int i, int faceSize) {
+    int porCara = faceSize * faceSize;
+    int r       = i % porCara;
+    vec2 uv     = (vec2(r % faceSize, r / faceSize) + 0.5) / float(faceSize) * 2.0 - 1.0;
+    return dirForFace(uint(i / porCara), uv);
+}
+
+void main() {
+    int slot = int(gl_WorkGroupID.x);
+    if (slot >= uDdgiRange.y) return;   // uniforme en el workgroup
+
+    int   probe    = (uDdgiRange.x + slot) % uDdgiCounts.w;
+    int   faceSize = uDdgiRange.z;
+    int   porCara  = faceSize * faceSize;
+    int   nTexels  = 6 * porCara;
+    uint  tid      = gl_LocalInvocationIndex;
+    float maxDist  = uDdgiParams2.x;
+
+    if (tid == 0u) sBackfaces = 0u;
+    barrier();
+
+    float trasD = 1.0e30, cercaD = 1.0e30, lejosD = -1.0;
+    int   trasI = -1,     cercaI = -1,     lejosI = -1;
+    uint  traseras = 0u;
+
+    for (int i = int(tid); i < nTexels; i += int(kHilos)) {
+        int r   = i % porCara;
+        float a = texelFetch(uCapture, ivec2((i / porCara) * faceSize + r % faceSize,
+                                             slot * faceSize + r / faceSize), 0).a;
+        if (a < 0.0) {
+            traseras += 1u;
+            if (Gana(-a, i, trasD, trasI, true)) { trasD = -a; trasI = i; }
+        } else {
+            float d = (a >= kCielo) ? maxDist : min(a, maxDist);
+            if (Gana(d, i, cercaD, cercaI, true))  { cercaD = d; cercaI = i; }
+            if (Gana(d, i, lejosD, lejosI, false)) { lejosD = d; lejosI = i; }
+        }
+    }
+
+    atomicAdd(sBackfaces, traseras);
+    sTrasD[tid]  = trasD;  sTrasI[tid]  = trasI;
+    sCercaD[tid] = cercaD; sCercaI[tid] = cercaI;
+    sLejosD[tid] = lejosD; sLejosI[tid] = lejosI;
+    barrier();
+
+    for (uint paso = kHilos / 2u; paso > 0u; paso >>= 1u) {
+        if (tid < paso) {
+            uint o = tid + paso;
+            if (Gana(sTrasD[o], sTrasI[o], sTrasD[tid], sTrasI[tid], true)) {
+                sTrasD[tid] = sTrasD[o]; sTrasI[tid] = sTrasI[o];
+            }
+            if (Gana(sCercaD[o], sCercaI[o], sCercaD[tid], sCercaI[tid], true)) {
+                sCercaD[tid] = sCercaD[o]; sCercaI[tid] = sCercaI[o];
+            }
+            if (Gana(sLejosD[o], sLejosI[o], sLejosD[tid], sLejosI[tid], false)) {
+                sLejosD[tid] = sLejosD[o]; sLejosI[tid] = sLejosI[o];
+            }
+        }
+        barrier();
+    }
+
+    if (tid != 0u) return;
+
+    float fraccion = float(sBackfaces) / float(nTexels);
+    vec3  offset   = uDdgiProbeData[probe].xyz;
+    vec3  nuevo    = offset;
+    float minFront = uProbeUpdate.x;
+
+    if (uProbeUpdate.y < 0.5) {
+        nuevo = vec3(0.0);
+    } else {
+        if (fraccion > uDdgiParams2.y && sTrasI[0] >= 0) {
+            // 1. Adentro de algo: atravesar la cara trasera mas cercana.
+            nuevo = offset + DireccionDeTexel(sTrasI[0], faceSize) * (sTrasD[0] + minFront * 0.5);
+        } else if (sCercaI[0] >= 0 && sCercaD[0] < minFront) {
+            // 2. Pegado a una superficie: hacia la delantera mas lejana, si eso no
+            //    lo acerca tambien a la mas cercana.
+            vec3 cerca = DireccionDeTexel(sCercaI[0], faceSize);
+            vec3 lejos = DireccionDeTexel(sLejosI[0], faceSize);
+            if (dot(cerca, lejos) <= 0.0) nuevo = offset + lejos * min(sLejosD[0], 1.0);
+        } else if (sCercaI[0] >= 0 && sCercaD[0] > minFront) {
+            // 3. Libre de sobra: volver hacia la posicion de grilla.
+            float largo = length(offset);
+            if (largo > 1.0e-6) nuevo = offset - (offset / largo) * min(sCercaD[0] - minFront, largo);
+        }
+        vec3 enCeldas = nuevo / uDdgiSpacing.xyz;
+        if (dot(enCeldas, enCeldas) >= kCotaCelda) nuevo = offset;
+    }
+
+    uDdgiProbeData[probe] = vec4(nuevo, fraccion);
+}

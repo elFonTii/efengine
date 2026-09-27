@@ -39,4 +39,7 @@ void main() {
                                       uDdgiAtlas.z + 2 * kDdgiBorder, atlasSize)).rgb;
         FragColor = vec4(irr, 1.0);
     }
+
+    // Rojo = inactivo por clasificacion.
+    FragColor.rgb = mix(FragColor.rgb, vec3(1.0, 0.0, 0.0), 1.0 - DdgiProbeWeight(probe));
 }

@@ -1,5 +1,8 @@
 # efengine
 
+> **Página del proyecto:** [elfontii.github.io/efengine](https://elfontii.github.io/efengine/) — la visión, el estado actual y el roadmap.
+> Este README es la referencia técnica: cómo compilarlo y cómo usar la API.
+
 Es un motor gráfico forward renderer en **C++17 / OpenGL 4.5 Core**,  construido desde cero como proyecto de aprendizaje y a largo plazo. Compila sin excepciones, se prohiben los `new`/`delete` crudos y patrón RAII en todos los subsistemas. robustez y escalabilidad son los pilares. efengine pretende ser un motor con un alto impacto visual implementando e innovando en técnicas de iluminación global. efengine NO pretende ser un motor de alto rendimiento.
 
 - **Ventanas e input:** GLFW 3.4
@@ -11,6 +14,15 @@ Es un motor gráfico forward renderer en **C++17 / OpenGL 4.5 Core**,  construid
 - **Tests:** doctest + CTest
 
 ---
+
+### 2026-18-9
+Sombras por cascadas, en  total 4
+<img width="1905" height="980" alt="image" src="https://github.com/user-attachments/assets/d6a89d1d-eb37-4196-a197-84e012636bfe" />
+
+Stress test con Amazon Lumberyard Bistro Scene, carga de materiales automática desde Assimp FBX y culling de DDGI
+Mantiene un promedio por frame de 6ms con una RTX 3070, el mayor salto hasta el momento
+<img width="1919" height="988" alt="image" src="https://github.com/user-attachments/assets/c44c9541-a497-4b5f-b12d-26873aba09a4" />
+
 ### 2026-16-08
 DDGI Probes optimization + Chebyshev
 <img width="1917" height="1030" alt="image" src="https://github.com/user-attachments/assets/9e8f7c81-a2cd-4df3-a34d-abf739c1656d" />
@@ -114,7 +126,7 @@ Opciones:
 |---|---|---|
 | `EFENGINE_BUILD_TESTS` | `ON` | Compila los tests (doctest + CTest). Apagable si se embebe el motor. |
 
-Con Doxygen instalado, `cmake --build build --target docs` genera la documentación en `docs/html`.
+Con Doxygen instalado, `cmake --build build --target docs` genera la documentación en `build/docs/html`.
 
 ---
 

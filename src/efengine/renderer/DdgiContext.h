@@ -6,6 +6,7 @@ namespace efengine {
 namespace renderer {
 
     class Texture;
+    class StorageBuffer;
     struct DdgiSettings;
 
     // Lo que un frame necesita saber de DDGI. Espeja a IblContext y a
@@ -17,6 +18,7 @@ namespace renderer {
     struct DdgiContext {
         const Texture*      irradianceAtlas = null;
         const Texture*      distanceAtlas   = null;
+        const StorageBuffer* probeData      = null;   // offset + fraccion de backfaces por probe
         const DdgiSettings* settings        = null;
         UpdateRange         range           {};
     };

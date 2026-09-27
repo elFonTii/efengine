@@ -20,7 +20,8 @@ namespace application {
     //   - SceneTargetPass antes que SkyboxPass, y el skybox antes del forward.
     //   - DdgiDebugPass ultimo: dibuja sobre la imagen HDR, antes del post.
     void BuildFramePipeline(renderer::ScenePipeline& p, const PassDeps& d) {
-        RegisterShadowPass(p, d);
+        RegisterCascadedShadowPass(p, d);   // las cascadas que usa pbr.frag
+        RegisterShadowPass(p, d);           // el mapa unico de escena que usa la captura de DDGI
         RegisterIblPass(p, d);
         RegisterDdgiPass(p, d);
         RegisterAoPass(p, d);
