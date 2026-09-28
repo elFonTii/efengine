@@ -479,3 +479,45 @@ TEST_CASE("EfeSceneSerializer: una escena sin camara activa se resuelve sin quej
     REQUIRE(SceneSerializer::Resolve(doc, vuelta, assetsVuelta, rm, reg));
     CHECK(vuelta.IsValid(vuelta.ActiveCamera()) == false);
 }
+
+TEST_CASE("EfeSceneSerializer: un spot con todos sus campos sobrevive el round-trip") {
+    scene::SceneGraph origen;
+    const scene::NodeHandle h = origen.CreateNode("spot");
+    scene::LightAttachment a;
+    a.kind           = scene::LightKind::Spot;
+    a.color          = glm::vec3(0.2f, 0.4f, 0.6f);
+    a.intensity      = 250.0f;
+    a.useTemperature = true;
+    a.temperatureK   = 3200.0f;
+    a.range          = 12.5f;
+    a.innerConeDeg   = 15.0f;
+    a.outerConeDeg   = 40.0f;
+    a.sourceRadius   = 0.05f;
+    a.castShadows    = true;
+    origen.AttachLight(h, a);
+
+    resources::SceneAssets assetsOrigen;
+    resources::ResourceManager rm;
+    const SceneRegistry reg = armarRegistry();
+    std::vector<u8> bytes;
+    REQUIRE(SceneSerializer::SaveToBytes(origen, assetsOrigen, rm, reg, bytes));
+
+    scene::SceneGraph destino;
+    resources::SceneAssets assetsDestino;
+    REQUIRE(SceneSerializer::LoadFromBytes(bytes.data(), bytes.size(), destino, assetsDestino, rm, reg));
+
+    const scene::NodeHandle d = destino.FindByName("spot");
+    REQUIRE(destino.IsValid(d));
+    REQUIRE(destino.Get(d).light.has_value());
+    const scene::LightAttachment& b = *destino.Get(d).light;
+    CHECK(b.kind == scene::LightKind::Spot);
+    CHECK(b.color.z == doctest::Approx(0.6f));
+    CHECK(b.intensity == doctest::Approx(250.0f));
+    CHECK(b.useTemperature);
+    CHECK(b.temperatureK == doctest::Approx(3200.0f));
+    CHECK(b.range == doctest::Approx(12.5f));
+    CHECK(b.innerConeDeg == doctest::Approx(15.0f));
+    CHECK(b.outerConeDeg == doctest::Approx(40.0f));
+    CHECK(b.sourceRadius == doctest::Approx(0.05f));
+    CHECK(b.castShadows);
+}

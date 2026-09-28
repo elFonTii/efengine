@@ -7,6 +7,8 @@
 #include <efengine/serialization/StringTable.h>
 
 #include <glm/glm.hpp>
+#include <algorithm>
+#include <cmath>
 #include <optional>
 #include <vector>
 
@@ -61,12 +63,37 @@ namespace serialization {
         std::vector<MaterialBinding> bindings;
     };
 
-    enum class LightKindId : u32 { Point = 0, Directional = 1 };
+    enum class LightKindId : u32 { Point = 0, Directional = 1, Spot = 2 };
 
     struct LightRecord {
         LightKindId kind  = LightKindId::Point;
         glm::vec3   color = glm::vec3(1.0f);
+        // v6
+        f32 intensity      = 1.0f;
+        f32 range          = 10.0f;
+        f32 innerConeDeg   = 30.0f;
+        f32 outerConeDeg   = 45.0f;
+        f32 sourceRadius   = 0.0f;
+        f32 temperatureK   = 6500.0f;
+        u32 useTemperature = 0u;
+        u32 castShadows    = 0u;
     };
+
+    // v5 guardaba color x intensidad en 'color' y las puntuales no tenian rango.
+    // El rango corta donde la luz ya aportaba < 0,001: la escena se ve igual.
+    inline void MigrateLightRecordV5(LightRecord& l) {
+        const f32 m = std::max(l.color.x, std::max(l.color.y, l.color.z));
+        if (m > 0.0f) {
+            l.intensity = m;
+            l.color    /= m;
+        } else {
+            l.intensity = 0.0f;
+            l.color     = glm::vec3(0.0f);
+        }
+        if (l.kind == LightKindId::Point) {
+            l.range = std::clamp(std::sqrt(l.intensity / 0.001f), 1.0f, 1000.0f);
+        }
+    }
 
     struct CameraRecord {
         f32 fovDeg    = 45.0f;
@@ -206,9 +233,23 @@ namespace serialization {
     void Serialize(Ar& ar, LightRecord& l) {
         u32 kind = static_cast<u32>(l.kind);
         ar.Field(kind);
-        l.kind = (kind == static_cast<u32>(LightKindId::Directional))
-                     ? LightKindId::Directional : LightKindId::Point;
+        l.kind = (kind == static_cast<u32>(LightKindId::Directional)) ? LightKindId::Directional
+               : (kind == static_cast<u32>(LightKindId::Spot))        ? LightKindId::Spot
+                                                                      : LightKindId::Point;
         ar.Field(l.color);
+        // El writer siempre emite kCurrentVersion: la rama de migracion solo corre al leer.
+        if (ar.Version() >= 6u) {
+            ar.Field(l.intensity);
+            ar.Field(l.range);
+            ar.Field(l.innerConeDeg);
+            ar.Field(l.outerConeDeg);
+            ar.Field(l.sourceRadius);
+            ar.Field(l.temperatureK);
+            ar.Field(l.useTemperature);
+            ar.Field(l.castShadows);
+        } else {
+            MigrateLightRecordV5(l);
+        }
     }
 
     template <class Ar>

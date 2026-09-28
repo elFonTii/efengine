@@ -94,6 +94,24 @@ namespace serialization {
         }
 
         // Devuelve el indice de archivo del nodo que acaba de escribir.
+        LightKindId aKindId(scene::LightKind k) {
+            switch (k) {
+                case scene::LightKind::Directional: return LightKindId::Directional;
+                case scene::LightKind::Spot:        return LightKindId::Spot;
+                case scene::LightKind::Point:       break;
+            }
+            return LightKindId::Point;
+        }
+
+        scene::LightKind aKind(LightKindId k) {
+            switch (k) {
+                case LightKindId::Directional: return scene::LightKind::Directional;
+                case LightKindId::Spot:        return scene::LightKind::Spot;
+                case LightKindId::Point:       break;
+            }
+            return scene::LightKind::Point;
+        }
+
         u32 extractNode(ExtractCtx& ctx, scene::NodeHandle handle, u32 parentFileIndex) {
             const scene::Node& node = ctx.graph.Get(handle);
 
@@ -104,10 +122,19 @@ namespace serialization {
 
             if (node.mesh) extractMesh(ctx, *node.mesh, rec);
             if (node.light) {
+                const scene::LightAttachment& a = *node.light;
                 rec.light.emplace();
-                rec.light->kind  = (node.light->kind == scene::LightKind::Directional)
-                                       ? LightKindId::Directional : LightKindId::Point;
-                rec.light->color = node.light->color;
+                LightRecord& l   = *rec.light;
+                l.kind           = aKindId(a.kind);
+                l.color          = a.color;
+                l.intensity      = a.intensity;
+                l.range          = a.range;
+                l.innerConeDeg   = a.innerConeDeg;
+                l.outerConeDeg   = a.outerConeDeg;
+                l.sourceRadius   = a.sourceRadius;
+                l.temperatureK   = a.temperatureK;
+                l.useTemperature = a.useTemperature ? 1u : 0u;
+                l.castShadows    = a.castShadows ? 1u : 0u;
             }
             if (node.camera) {
                 rec.camera.emplace();
@@ -313,10 +340,19 @@ namespace serialization {
             }
 
             if (rec.light) {
-                const scene::LightKind kind = (rec.light->kind == LightKindId::Directional)
-                                                  ? scene::LightKind::Directional
-                                                  : scene::LightKind::Point;
-                outGraph.AttachLight(handle, scene::LightAttachment{ kind, rec.light->color });
+                const LightRecord& l = *rec.light;
+                scene::LightAttachment a;
+                a.kind           = aKind(l.kind);
+                a.color          = l.color;
+                a.intensity      = l.intensity;
+                a.range          = l.range;
+                a.innerConeDeg   = l.innerConeDeg;
+                a.outerConeDeg   = l.outerConeDeg;
+                a.sourceRadius   = l.sourceRadius;
+                a.temperatureK   = l.temperatureK;
+                a.useTemperature = l.useTemperature != 0u;
+                a.castShadows    = l.castShadows != 0u;
+                outGraph.AttachLight(handle, a);
             }
 
             if (rec.camera) {

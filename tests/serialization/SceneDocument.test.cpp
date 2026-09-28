@@ -4,6 +4,7 @@
 #include <efengine/serialization/EfeFile.h>
 #include <vector>
 #include <cstring>
+#include <cmath>
 
 using namespace efengine;
 using namespace efengine::serialization;
@@ -345,6 +346,70 @@ namespace {
         root.parent  = kInvalidIndex;
         nodes.push_back(root);
         SerializeVector(w, nodes, kMinEncodedNode);
+        EndChunk(w, marker);
+
+        return w.Take();
+    }
+
+    // Un .efe v5 con luces: 'color' guarda color x intensidad y no hay campos de
+    // v6. El NODE va a mano porque el helper de produccion ya emite v6.
+    std::vector<u8> documentoV5ConLuces() {
+        BinaryWriter w;
+        w.Bytes(kMagic, 4u);
+        u32 endian  = kEndianCheck;
+        u32 version = 5u;
+        u32 content = static_cast<u32>(ContentType::Scene);
+        u32 chunks  = 4u;
+        w.Field(endian);
+        w.Field(version);
+        w.Field(content);
+        w.Field(chunks);
+
+        StringTable strings;
+        const u32 sRoot    = strings.Intern("root");
+        const u32 sFarol   = strings.Intern("farol");
+        const u32 sSol     = strings.Intern("sol");
+        const u32 sApagada = strings.Intern("apagada");
+
+        usize marker = BeginChunk(w, ChunkId::Strings);
+        strings.Serialize(w);
+        EndChunk(w, marker);
+
+        marker = BeginChunk(w, ChunkId::Settings);
+        f32 ibl = 1.0f;
+        u32 sun = 2u;
+        u32 cam = kInvalidIndex;
+        w.Field(ibl);
+        w.Field(sun);
+        w.Field(cam);
+        EndChunk(w, marker);
+
+        marker = BeginChunk(w, ChunkId::Materials);
+        u32 materiales = 0u;
+        w.Count(materiales, MinEncodedMaterial(5u));
+        EndChunk(w, marker);
+
+        marker = BeginChunk(w, ChunkId::Nodes);
+        u32 nodos = 4u;
+        w.Count(nodos, kMinEncodedNode);
+        auto nodo = [&](u32 nombre, u32 padre, bool conLuz, u32 kind, glm::vec3 color) {
+            w.Field(nombre);
+            w.Field(padre);
+            u32 flags = conLuz ? NodeFlags::HasLight : 0u;
+            w.Field(flags);
+            math::Transform t;
+            Serialize(w, t);
+            if (conLuz) {
+                w.Field(kind);
+                w.Field(color);
+            }
+            u32 behaviors = 0u;
+            w.Count(behaviors, kMinEncodedBehavior);
+        };
+        nodo(sRoot,    kInvalidIndex, false, 0u, glm::vec3(0.0f));
+        nodo(sFarol,   0u, true, 0u, glm::vec3(500.0f, 250.0f, 0.0f));
+        nodo(sSol,     0u, true, 1u, glm::vec3(3.0f));
+        nodo(sApagada, 0u, true, 0u, glm::vec3(0.0f));
         EndChunk(w, marker);
 
         return w.Take();
@@ -781,4 +846,87 @@ TEST_CASE("SceneDocument: un archivo v4 se lee sin camara y sin camara activa") 
     CHECK(leido.nodes[1].collider.has_value() == false);
     // El binario v5 NO leyo el campo: para un v4 la escena no declara camara.
     CHECK(leido.activeCameraNode == kInvalidIndex);
+}
+
+TEST_CASE("SceneDocument: un archivo v5 migra las luces a tinte + intensidad + rango") {
+    const std::vector<u8> bytes = documentoV5ConLuces();
+    SceneDocument doc;
+    REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), doc));
+    REQUIRE(doc.nodes.size() == 4u);
+    REQUIRE(doc.nodes[1].light.has_value());
+    REQUIRE(doc.nodes[2].light.has_value());
+    REQUIRE(doc.nodes[3].light.has_value());
+
+    const LightRecord& farol = *doc.nodes[1].light;
+    CHECK(farol.kind == LightKindId::Point);
+    CHECK(farol.intensity == doctest::Approx(500.0f));
+    CHECK(farol.color.x == doctest::Approx(1.0f));
+    CHECK(farol.color.y == doctest::Approx(0.5f));
+    CHECK(farol.color.z == doctest::Approx(0.0f));
+    CHECK(farol.range == doctest::Approx(std::sqrt(500.0f / 0.001f)));
+    CHECK(farol.useTemperature == 0u);
+    CHECK(farol.castShadows == 0u);
+
+    const LightRecord& sol = *doc.nodes[2].light;
+    CHECK(sol.kind == LightKindId::Directional);
+    CHECK(sol.intensity == doctest::Approx(3.0f));
+    CHECK(sol.color.x == doctest::Approx(1.0f));
+    CHECK(sol.range == doctest::Approx(10.0f));
+
+    const LightRecord& apagada = *doc.nodes[3].light;
+    CHECK(apagada.intensity == 0.0f);
+    CHECK(apagada.color.x == 0.0f);
+    CHECK(apagada.range == doctest::Approx(1.0f));
+
+    CHECK(doc.primarySunNode == 2u);
+}
+
+TEST_CASE("SceneDocument v6: todos los campos de la luz sobreviven el round-trip") {
+    SceneDocument doc;
+    doc.nodes.resize(2);
+    doc.nodes[0].nameStr = doc.strings.Intern("root");
+    doc.nodes[0].parent  = kInvalidIndex;
+    doc.nodes[1].nameStr = doc.strings.Intern("spot");
+    doc.nodes[1].parent  = 0u;
+    doc.nodes[1].light.emplace();
+    LightRecord& l = *doc.nodes[1].light;
+    l.kind           = LightKindId::Spot;
+    l.color          = glm::vec3(0.25f, 0.5f, 0.75f);
+    l.intensity      = 1234.5f;
+    l.range          = 7.25f;
+    l.innerConeDeg   = 12.5f;
+    l.outerConeDeg   = 33.0f;
+    l.sourceRadius   = 0.125f;
+    l.temperatureK   = 2700.0f;
+    l.useTemperature = 1u;
+    l.castShadows    = 1u;
+
+    std::vector<u8> bytes;
+    REQUIRE(WriteSceneDocument(doc, bytes));
+    SceneDocument leido;
+    REQUIRE(ParseSceneDocument(bytes.data(), bytes.size(), leido));
+    REQUIRE(leido.nodes.size() == 2u);
+    REQUIRE(leido.nodes[1].light.has_value());
+
+    const LightRecord& r = *leido.nodes[1].light;
+    CHECK(r.kind == LightKindId::Spot);
+    CHECK(r.color.y == doctest::Approx(0.5f));
+    CHECK(r.intensity == doctest::Approx(1234.5f));
+    CHECK(r.range == doctest::Approx(7.25f));
+    CHECK(r.innerConeDeg == doctest::Approx(12.5f));
+    CHECK(r.outerConeDeg == doctest::Approx(33.0f));
+    CHECK(r.sourceRadius == doctest::Approx(0.125f));
+    CHECK(r.temperatureK == doctest::Approx(2700.0f));
+    CHECK(r.useTemperature == 1u);
+    CHECK(r.castShadows == 1u);
+}
+
+TEST_CASE("MigrateLightRecordV5: una puntual muy intensa recorta el rango a 1000 m") {
+    LightRecord l;
+    l.kind  = LightKindId::Point;
+    l.color = glm::vec3(5000.0f);
+    MigrateLightRecordV5(l);
+    CHECK(l.intensity == doctest::Approx(5000.0f));
+    CHECK(l.color.x == doctest::Approx(1.0f));
+    CHECK(l.range == doctest::Approx(1000.0f));
 }

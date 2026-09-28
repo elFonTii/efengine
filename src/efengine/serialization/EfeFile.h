@@ -23,7 +23,10 @@ namespace serialization {
     // (ambientFactor -> iblIntensity). v3 agrega doubleSided al MaterialRecord.
     // v4 agrega uvTiling/uvOffset al MaterialRecord. v5 agrega CameraRecord y
     // ColliderRecord al final del NodeRecord, y activeCameraNode al chunk SCNE.
-    inline constexpr u32 kCurrentVersion      = 5u;
+    // v6 agrega intensidad, rango, conos, radio de fuente, temperatura y
+    // castShadows al LightRecord, cambia el significado de su color (tinte, antes
+    // color x intensidad) y suma LightKindId::Spot.
+    inline constexpr u32 kCurrentVersion      = 6u;
 
     // Version mas vieja que esta build todavia sabe leer. Se escribe SIEMPRE
     // kCurrentVersion: leer v1 es solo para no dejar ilegibles las escenas guardadas.
