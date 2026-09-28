@@ -19,6 +19,7 @@ namespace sandbox {
 
     // Los paneles que la lista referencia. Uno por archivo en panels/.
     void dibujarPanelSombras(EditorContext& ctx);
+    void dibujarPanelLuces(EditorContext& ctx);
     void dibujarPanelDdgi(EditorContext& ctx);
     void dibujarPanelAo(EditorContext& ctx);
 

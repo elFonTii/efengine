@@ -10,6 +10,7 @@ namespace sandbox {
     const std::vector<DrawPanelFn>& PanelesDePases() {
         static const std::vector<DrawPanelFn> paneles {
             &dibujarPanelSombras,
+            &dibujarPanelLuces,
             &dibujarPanelDdgi,
             &dibujarPanelAo,
         };
