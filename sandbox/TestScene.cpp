@@ -174,8 +174,11 @@ void BuildCornellScene(EditorContext& ctx) {
     math::Transform tSol;
     tSol.rotation = math::EulerFromForward(glm::normalize(glm::vec3(0.30f, -0.62f, 0.72f)));
     ctx.scene.SetLocalTransform(sol, tSol);
-    ctx.scene.AttachLight(sol, scene::LightAttachment{ scene::LightKind::Directional,
-                                                       glm::vec3(3.0f, 3.0f, 3.0f) });
+    scene::LightAttachment luzSol;
+    luzSol.kind      = scene::LightKind::Directional;
+    luzSol.color     = glm::vec3(1.0f);
+    luzSol.intensity = 3.0f;
+    ctx.scene.AttachLight(sol, luzSol);
     ctx.scene.SetPrimarySun(sol);
 
     RefreshHandles(ctx);

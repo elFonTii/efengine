@@ -7,6 +7,7 @@ add_executable(sandbox
     EditorUI.cpp
     AssetCatalog.cpp
     AuthoringUI.cpp
+    LightInspector.cpp
     TestScene.cpp
     ProbeScene.cpp
     SunGizmo.cpp

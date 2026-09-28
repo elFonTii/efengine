@@ -1,6 +1,7 @@
 #include "EditorUI.h"
 
 #include "AuthoringUI.h"
+#include "LightInspector.h"
 #include "TestScene.h"
 #include "SunGizmo.h"
 #include "ColliderGizmo.h"
@@ -562,14 +563,7 @@ namespace {
             }
         }
 
-        if (node.light) {
-            ImGui::SeparatorText("Luz");
-            const char* kindName = node.light->kind == scene::LightKind::Point ? "Point" : "Directional";
-            ImGui::TextDisabled("tipo: %s", kindName);
-            const f32 maxInt = node.light->kind == scene::LightKind::Point ? 20000.0f : 20.0f;
-            const f32 speed  = node.light->kind == scene::LightKind::Point ? 10.0f    : 0.05f;
-            ImGui::DragFloat3("Color/Int", glm::value_ptr(node.light->color), speed, 0.0f, maxInt);
-        }
+        DrawLightSection(ctx, st.selected);
         }
 
         ImGui::End();
