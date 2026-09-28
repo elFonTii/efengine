@@ -8,6 +8,7 @@
 #include <efengine/renderer/DdgiSettings.h>
 #include <efengine/renderer/CascadeContext.h>
 #include <efengine/renderer/VoxelMath.h>
+#include <efengine/renderer/ClusterMath.h>
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -26,6 +27,7 @@ namespace renderer {
     inline constexpr u32 kDdgiBinding     = 5u;   // 1x por frame — solo lo declaran los shaders de DDGI
     inline constexpr u32 kAoBinding       = 6u;   // 1x por frame — solo lo declara pbr.frag
     inline constexpr u32 kCascadeBinding  = 7u;   // 1x por frame — solo lo declara pbr.frag
+    inline constexpr u32 kClusterBinding  = 8u;   // 1x por frame — solo lo declaran pbr.frag y el cull
 
     // Binding de SSBO (espacio aparte de los de UBO): datos por probe de DDGI.
     inline constexpr u32 kProbeDataBinding = 0u;
@@ -176,6 +178,15 @@ namespace renderer {
         glm::vec4 params;           // x=count (0 = apagado), y=blendRatio, z=debugView
     };
 
+    // Constantes de la grilla de clusters (binding 8). En cero apaga la grilla:
+    // pbr.frag recorre todas las visibles. Lo sube BeginScene en cero cada frame
+    // y ClusterLightPass lo pisa, asi un pase que falta no deja una grilla vieja.
+    struct alignas(16) ClusterBlock {
+        glm::uvec4 dims;      // x = tilesX, y = tilesY, z = cortes, w = max por cluster
+        glm::vec4  zParams;   // x = nearSplit, y = farLimit, z = (cortes-1)/ln(farLimit/nearSplit), w = ln(nearSplit)
+        glm::vec4  screen;    // x = tile en px, y = vista de debug
+    };
+
     // PassParams (binding 4) de voxel/voxelize.*. El motor no tiene uniforms
     // sueltos (ver Shader.h), asi que la ortografica del eje y el encuadre del
     // grid viajan por el bloque de pase como cualquier otro dato.
@@ -208,6 +219,7 @@ namespace renderer {
     };
 
     CascadeBlock MakeCascadeBlock(const CascadeContext& ctx);
+    ClusterBlock MakeClusterBlock(const ClusterGrid& grid, u32 debugView);
 
     // ── Funciones puras que arman los bloques ──────────────────────────────
     // No tocan la GPU: son las que vuelven testeable headless lo que antes era

@@ -3,6 +3,7 @@
 
 #include <glm/gtc/matrix_inverse.hpp>
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 
 namespace efengine {
@@ -16,6 +17,11 @@ namespace renderer {
     static_assert(offsetof(CascadeBlock, splitFar)      == 256u, "CascadeBlock.splitFar");
     static_assert(offsetof(CascadeBlock, normalOffsets) == 272u, "CascadeBlock.normalOffsets");
     static_assert(offsetof(CascadeBlock, params)        == 288u, "CascadeBlock.params");
+
+    static_assert(sizeof(ClusterBlock) == 48u, "ClusterBlock: tamano std140 roto");
+    static_assert(offsetof(ClusterBlock, dims)    ==  0u, "ClusterBlock.dims");
+    static_assert(offsetof(ClusterBlock, zParams) == 16u, "ClusterBlock.zParams");
+    static_assert(offsetof(ClusterBlock, screen)  == 32u, "ClusterBlock.screen");
 
     static_assert(kMaxCascades == 4u,
                   "CascadeBlock: los arrays son de 4; sincronizar con kMaxCascades y con el shader");
@@ -228,6 +234,16 @@ namespace renderer {
         ProbeUpdatePassBlock b {};
         b.params = glm::vec4(std::max(settings.minFrontfaceDistance, 0.0f),
                              settings.relocationEnabled ? 1.0f : 0.0f, 0.0f, 0.0f);
+        return b;
+    }
+
+    ClusterBlock MakeClusterBlock(const ClusterGrid& g, u32 debugView) {
+        ClusterBlock b {};
+        b.dims    = glm::uvec4(g.tilesX, g.tilesY, g.slices, g.maxLightsPerCluster);
+        b.zParams = glm::vec4(g.nearSplit, g.farLimit,
+                              static_cast<f32>(g.slices - 1u) / std::log(g.farLimit / g.nearSplit),
+                              std::log(g.nearSplit));
+        b.screen  = glm::vec4(static_cast<f32>(g.tileSizePx), static_cast<f32>(debugView), 0.0f, 0.0f);
         return b;
     }
 
