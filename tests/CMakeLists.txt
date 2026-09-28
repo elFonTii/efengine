@@ -52,6 +52,7 @@ add_executable(efengine_tests
     scene/Behavior.test.cpp
     scene/BehaviorFixed.test.cpp
     scene/SceneGraphClear.test.cpp
+    scene/LightResolve.test.cpp
     physics/ShapeDesc.test.cpp
     physics/PhysicsWorld.test.cpp
     gameplay/CollisionMesh.test.cpp

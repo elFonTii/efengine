@@ -1,6 +1,7 @@
 #pragma once
 #include <efengine/scene/Node.h>
 #include <efengine/renderer/PointLight.h>
+#include <efengine/renderer/Light.h>
 #include <efengine/renderer/DirectionalLight.h>
 #include <efengine/renderer/Bounds.h>
 #include <efengine/renderer/Cull.h>
@@ -83,6 +84,9 @@ namespace scene {
             void DetachMesh(NodeHandle handle);
 
             void AttachLight(NodeHandle handle, LightAttachment light);
+            // Si el nodo era el sol primario, el handle queda nulo: un sol sin
+            // luz no es sol. Handle invalido o nodo sin luz: no-op.
+            void DetachLight(NodeHandle handle);
 
             void AttachCamera(NodeHandle handle, CameraAttachment camera);
 
@@ -114,6 +118,7 @@ namespace scene {
 
             const std::vector<RenderItem>&           Renderables() const { return m_renderables; }
             const std::vector<renderer::PointLight>& PointLights() const { return m_pointLights; }
+            const std::vector<renderer::Light>&      Lights()      const { return m_lights; }   // todas, resueltas a mundo
             const renderer::DirectionalLight&        Sun()         const { return m_sun; }
 
             // AABB de mundo de todo lo renderizable, recalculada por
@@ -161,6 +166,7 @@ namespace scene {
             NodeHandle                        m_activeCamera;
             std::vector<RenderItem>           m_renderables;
             std::vector<renderer::PointLight> m_pointLights;
+            std::vector<renderer::Light>      m_lights;
             renderer::DirectionalLight        m_sun { glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };
             renderer::AABB                    m_worldBounds = renderer::AABB::Empty();
             std::vector<renderer::MeshSpan>   m_meshSpans;

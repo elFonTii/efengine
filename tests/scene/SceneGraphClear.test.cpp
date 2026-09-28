@@ -86,6 +86,7 @@ TEST_CASE("SceneGraphClear: Clear resetea el sol primario y las listas juntadas"
 
     CHECK(g.PrimarySun().IsNull());
     CHECK(g.PointLights().empty());
+    CHECK(g.Lights().empty());
     CHECK(g.Renderables().empty());
 }
 

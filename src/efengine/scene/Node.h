@@ -13,7 +13,8 @@
 
 namespace efengine {
 namespace scene {
-    enum class LightKind { Point, Directional };
+    // Spot al final: mismo orden que LightKindId del .efe.
+    enum class LightKind { Point, Directional, Spot };
 
     struct MeshAttachment { 
         const renderer::Model* model = nullptr;
@@ -22,7 +23,15 @@ namespace scene {
 
     struct LightAttachment {
         LightKind kind = LightKind::Point;
-        glm::vec3 color { 1.0f };
+        glm::vec3 color { 1.0f };            // tinte 0-1
+        f32  intensity      = 1.0f;
+        bool useTemperature = false;
+        f32  temperatureK   = 6500.0f;
+        f32  range          = 10.0f;         // m, Point y Spot
+        f32  innerConeDeg   = 30.0f;         // semiangulo, Spot
+        f32  outerConeDeg   = 45.0f;         // semiangulo, Spot
+        f32  sourceRadius   = 0.0f;          // m, Point y Spot
+        bool castShadows    = false;         // reservado para el ciclo 2
     };
 
     struct CameraAttachment {

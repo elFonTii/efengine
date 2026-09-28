@@ -545,3 +545,93 @@ TEST_CASE("SceneGraph::Clear vacia los spans") {
     g.Clear();
     CHECK(g.MeshSpans().empty());
 }
+
+TEST_CASE("SceneGraph: Lights() junta locales y direccionales resueltas a mundo") {
+    scene::SceneGraph g;
+    scene::NodeHandle padre = g.CreateNode("poste");
+    math::Transform tp; tp.position = glm::vec3(0.0f, 4.0f, 0.0f);
+    g.SetLocalTransform(padre, tp);
+
+    scene::NodeHandle foco = g.CreateChild(padre, "foco");
+    scene::LightAttachment spot;
+    spot.kind = scene::LightKind::Spot;
+    spot.intensity = 50.0f;
+    g.AttachLight(foco, spot);
+
+    scene::NodeHandle sol = g.CreateNode("sol");
+    g.AttachLight(sol, { scene::LightKind::Directional, glm::vec3(3.0f) });
+    g.SetPrimarySun(sol);
+
+    g.UpdateWorldTransforms();
+
+    REQUIRE(g.Lights().size() == 2u);
+    const renderer::Light* l = nullptr;
+    const renderer::Light* s = nullptr;
+    for (const renderer::Light& x : g.Lights()) {
+        if (x.type == renderer::LightType::Spot)        l = &x;
+        if (x.type == renderer::LightType::Directional) s = &x;
+    }
+    REQUIRE(l != nullptr);
+    REQUIRE(s != nullptr);
+    CHECK(l->position.y == doctest::Approx(4.0f));
+    CHECK(l->color.r == doctest::Approx(50.0f));
+    CHECK_FALSE(l->primarySun);
+    CHECK(s->primarySun);
+}
+
+TEST_CASE("SceneGraph: solo el PrimarySun lleva la marca") {
+    scene::SceneGraph g;
+    scene::NodeHandle a = g.CreateNode("a");
+    scene::NodeHandle b = g.CreateNode("b");
+    g.AttachLight(a, { scene::LightKind::Directional, glm::vec3(1.0f) });
+    g.AttachLight(b, { scene::LightKind::Directional, glm::vec3(2.0f) });
+    g.SetPrimarySun(b);
+    g.UpdateWorldTransforms();
+
+    u32 marcadas = 0u;
+    for (const renderer::Light& x : g.Lights()) {
+        if (x.primarySun) {
+            ++marcadas;
+            CHECK(x.color.r == doctest::Approx(2.0f));
+        }
+    }
+    CHECK(marcadas == 1u);
+}
+
+TEST_CASE("SceneGraph::DetachLight saca la luz y suelta el sol primario") {
+    scene::SceneGraph g;
+    scene::NodeHandle sol = g.CreateNode("sol");
+    g.AttachLight(sol, { scene::LightKind::Directional, glm::vec3(3.0f) });
+    g.SetPrimarySun(sol);
+    g.UpdateWorldTransforms();
+    REQUIRE(g.Sun().color.r == doctest::Approx(3.0f));
+
+    g.DetachLight(sol);
+    g.UpdateWorldTransforms();
+
+    CHECK_FALSE(g.Get(sol).light.has_value());
+    CHECK(g.PrimarySun().IsNull());
+    CHECK(g.Lights().empty());
+    CHECK(g.Sun().color.r == 0.0f);
+}
+
+TEST_CASE("SceneGraph::DetachLight sobre un handle invalido no hace nada") {
+    scene::SceneGraph g;
+    g.DetachLight(scene::NodeHandle{});
+    CHECK(g.Lights().empty());
+}
+
+TEST_CASE("SceneGraph: sin sol primario valido, Sun() vuelve al default") {
+    scene::SceneGraph g;
+    scene::NodeHandle sol = g.CreateNode("sol");
+    g.AttachLight(sol, { scene::LightKind::Directional, glm::vec3(3.0f) });
+    g.SetPrimarySun(sol);
+    g.UpdateWorldTransforms();
+    REQUIRE(g.Sun().color.r == doctest::Approx(3.0f));
+
+    g.Destroy(sol);
+    g.UpdateWorldTransforms();
+
+    CHECK(g.Sun().color.r == 0.0f);
+    CHECK(g.Sun().direction.y == doctest::Approx(-1.0f));
+}

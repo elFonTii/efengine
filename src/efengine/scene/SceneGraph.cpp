@@ -2,6 +2,7 @@
 #include <efengine/core/Assert.h>
 #include <efengine/core/Log.h>
 #include <efengine/math/Transform.h>
+#include <efengine/scene/LightResolve.h>
 #include <utility>
 #include <cmath>
 
@@ -148,6 +149,12 @@ namespace scene {
         m_slots[handle.index].node.light = light;
     }
 
+    void SceneGraph::DetachLight(NodeHandle handle) {
+        if (!IsValid(handle)) return;
+        m_slots[handle.index].node.light.reset();
+        if (handle == m_primarySun) m_primarySun = NodeHandle{};
+    }
+
     void SceneGraph::AttachCamera(NodeHandle handle, CameraAttachment camera) {
         EF_ASSERT(IsValid(handle), "SceneGraph::AttachCamera: handle invalido");
         m_slots[handle.index].node.camera = camera;
@@ -219,6 +226,7 @@ namespace scene {
         // Sin el clear las listas se duplicarian en cada frame.
         m_renderables.clear();
         m_pointLights.clear();
+        m_lights.clear();
         m_worldBounds = renderer::AABB::Empty();
         m_meshSpans.clear();
 
@@ -238,14 +246,15 @@ namespace scene {
             }
         }
 
-        // Sol: direccion desde el world del nodo primario; color desde su adjunto.
+        // Sin sol primario valido el sol se apaga: un handle muerto no puede
+        // dejar el color del frame anterior.
+        m_sun = renderer::DirectionalLight{ glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };
         if (IsValid(m_primarySun)) {
             const Node& sun = m_slots[m_primarySun.index].node;
             if (sun.light && sun.light->kind == LightKind::Directional) {
-                // w=0 anula la traslacion: una direccion no tiene posicion.
                 glm::vec3 fwd = glm::vec3(sun.worldMatrix * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f));
                 if (glm::length(fwd) > 0.0f) m_sun.direction = glm::normalize(fwd);
-                m_sun.color = sun.light->color;
+                m_sun.color = EffectiveLightColor(*sun.light);
             }
         }
     }
@@ -261,9 +270,13 @@ namespace scene {
         if (node.mesh && node.mesh->model) {
             m_renderables.push_back(RenderItem{ node.worldMatrix, node.mesh->model, &node.mesh->materials });
         }
-        if (node.light && node.light->kind == LightKind::Point) {
-            // La columna 3 de la matriz world es la traslacion.
-            m_pointLights.push_back(renderer::PointLight{ glm::vec3(node.worldMatrix[3]), node.light->color });
+        if (node.light) {
+            renderer::Light luz = ResolveLight(*node.light, node.worldMatrix);
+            luz.primarySun = (handle == m_primarySun) && luz.type == renderer::LightType::Directional;
+            if (luz.type == renderer::LightType::Point) {
+                m_pointLights.push_back(renderer::PointLight{ luz.position, luz.color });
+            }
+            m_lights.push_back(luz);
         }
 
         for (NodeHandle child : node.children) {
@@ -306,6 +319,7 @@ namespace scene {
         m_activeCamera = NodeHandle{};
         m_renderables.clear();
         m_pointLights.clear();
+        m_lights.clear();
         m_meshSpans.clear();
         m_sun = renderer::DirectionalLight{ glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };
 
