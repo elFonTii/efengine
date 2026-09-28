@@ -2,6 +2,7 @@
 
 #include "AuthoringUI.h"
 #include "LightInspector.h"
+#include "LightStressScene.h"
 #include "TestScene.h"
 #include "SunGizmo.h"
 #include "ColliderGizmo.h"
@@ -270,6 +271,22 @@ namespace {
             if (ImGui::MenuItem("Sala de Cornell")) {
                 BuildCornellScene(ctx);        // hace Clear de escena y assets, y RefreshHandles
                 st.currentScenePath.clear();   // escena generada en codigo: no salio de ningun archivo
+            }
+            if (ImGui::BeginMenu("Estres de luces")) {
+                struct Variante { const char* nombre; LightStressDesc desc; };
+                static const Variante kVariantes[] = {
+                    { "256 luces en 200 m",                        { 256u,  200.0f } },
+                    { "1024 luces en 200 m",                       { 1024u, 200.0f } },
+                    { "4096 luces en 200 m",                       { 4096u, 200.0f } },
+                    { "1024 luces en 100 m (densidad de la 4096)", { 1024u, 100.0f } },
+                };
+                for (const Variante& v : kVariantes) {
+                    if (ImGui::MenuItem(v.nombre)) {
+                        BuildLightStressScene(ctx, v.desc);
+                        st.currentScenePath.clear();
+                    }
+                }
+                ImGui::EndMenu();
             }
             ImGui::Separator();
             // MenuItem con bool* devuelve true en el frame en que cambia, igual que Checkbox:

@@ -1,4 +1,5 @@
 #include "EditorUI.h"
+#include "LightStressScene.h"
 #include "ProbeScene.h"
 #include "TestScene.h"
 
@@ -24,8 +25,10 @@
 #include <glm/glm.hpp>
 
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <memory>
+#include <string>
 #include <vector>
 
 
@@ -145,10 +148,34 @@ namespace {
             f32 m_degPerSec = 0.0f;
             f32 m_angle     = 0.0f;
     };
+
+    // Arranque por linea de comandos, para el smoke test y para medir:
+    //   --estres <luces> [lado]   escena de estres de luces
+    //   --efe <ruta>              abre ese .efe en vez de la sonda
+    struct ArranqueCli {
+        u32         estresLuces = 0u;
+        f32         estresLado  = 200.0f;
+        std::string efe;
+    };
+
+    ArranqueCli leerArgumentos(int argc, char** argv) {
+        ArranqueCli a;
+        for (int i = 1; i < argc; ++i) {
+            const std::string arg = argv[i];
+            if (arg == "--estres" && i + 1 < argc) {
+                a.estresLuces = static_cast<u32>(std::strtoul(argv[++i], nullptr, 10));
+                if (i + 1 < argc && argv[i + 1][0] != '-') a.estresLado = std::strtof(argv[++i], nullptr);
+            } else if (arg == "--efe" && i + 1 < argc) {
+                a.efe = argv[++i];
+            }
+        }
+        return a;
+    }
 }
 
-int main() {
+int main(int argc, char** argv) {
     using namespace efengine;
+    const ArranqueCli cli = leerArgumentos(argc, argv);
 
     EF_LOG_INFO("=== efengine: sandbox street rat ===");
 
@@ -194,7 +221,15 @@ int main() {
     // cualquier otro de assets/scenes, y la sala de Cornell sigue estando ahi.
     constexpr const char* kBootScene = "assets/scenes/sandbox.efe";
 
-    if (kProbeModel[0] != '\0' && std::filesystem::exists(kProbeModel)) {
+    if (cli.estresLuces > 0u) {
+        sandbox::BuildLightStressScene(editor, sandbox::LightStressDesc{ cli.estresLuces, cli.estresLado });
+    } else if (!cli.efe.empty()) {
+        if (serialization::SceneSerializer::Load(cli.efe.c_str(), scene, assets, rm, registry)) {
+            editorState.currentScenePath = cli.efe;
+        } else {
+            EF_LOG_ERROR("No se pudo cargar '%s'", cli.efe.c_str());
+        }
+    } else if (kProbeModel[0] != '\0' && std::filesystem::exists(kProbeModel)) {
         sandbox::BuildProbeScene(editor, kProbeModel);
     } else if (serialization::SceneSerializer::Load(kBootScene, scene, assets, rm, registry)) {
         editorState.currentScenePath = kBootScene;

@@ -8,6 +8,8 @@ add_executable(sandbox
     AssetCatalog.cpp
     AuthoringUI.cpp
     LightInspector.cpp
+    SceneHelpers.cpp
+    LightStressScene.cpp
     TestScene.cpp
     ProbeScene.cpp
     SunGizmo.cpp
