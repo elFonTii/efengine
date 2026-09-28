@@ -16,6 +16,7 @@ namespace application {
     //   - Shadow, Ibl, Ddgi y Ao antes que FrameUploadPass: suben sus propios
     //     bloques Frame (la captura de DDGI, uno por cara), asi que tienen que
     //     correr antes de que se fije el del frame.
+    //   - ClusterLightPass despues de FrameUploadPass (lee uView) y antes del forward.
     //   - IndirectPass despues de FrameUploadPass, porque lee la camara del
     //     bloque ya subido, y despues de AoPass, porque lee su prepass.
     //   - SceneTargetPass antes que SkyboxPass, y el skybox antes del forward.
@@ -28,6 +29,7 @@ namespace application {
         RegisterDdgiPass(p, d);
         RegisterAoPass(p, d);
         RegisterFrameUploadPass(p, d);   // la frontera: aca se sube el bloque Frame
+        RegisterClusterLightPass(p, d);  // lee uView del bloque Frame ya subido
         RegisterIndirectPass(p, d);
         RegisterSceneTargetPass(p, d);
         RegisterSkyboxPass(p, d);

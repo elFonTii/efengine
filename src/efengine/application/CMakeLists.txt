@@ -12,6 +12,7 @@ target_sources(efengine_application PRIVATE
     passes/DdgiPassSetup.cpp
     passes/AoPassSetup.cpp
     passes/FrameUploadPassSetup.cpp
+    passes/ClusterLightPassSetup.cpp
     passes/IndirectPassSetup.cpp
     passes/SceneTargetPassSetup.cpp
     passes/SkyboxPassSetup.cpp

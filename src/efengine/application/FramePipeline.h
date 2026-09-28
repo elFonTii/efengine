@@ -19,6 +19,7 @@ namespace application {
     void RegisterDdgiPass       (renderer::ScenePipeline&, const PassDeps&);
     void RegisterAoPass         (renderer::ScenePipeline&, const PassDeps&);
     void RegisterFrameUploadPass(renderer::ScenePipeline&, const PassDeps&);
+    void RegisterClusterLightPass(renderer::ScenePipeline&, const PassDeps&);
     void RegisterIndirectPass   (renderer::ScenePipeline&, const PassDeps&);
     void RegisterSceneTargetPass(renderer::ScenePipeline&, const PassDeps&);
     void RegisterSkyboxPass     (renderer::ScenePipeline&, const PassDeps&);

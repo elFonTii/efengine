@@ -93,6 +93,10 @@ namespace renderer {
             // UBO Lights (binding 1) + SSBO LocalLights (1) y VisibleLights (2).
             void UploadLights(const PackedLights& lights) const;
 
+            // Bloque Clusters (binding 8). BeginScene lo sube en cero cada frame;
+            // ClusterLightPass lo pisa despues con la grilla real.
+            void SetClusterBlock(const ClusterBlock& block) const;
+
             void Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix,
                         const DrawOptions& options = DrawOptions());
 
@@ -148,6 +152,7 @@ namespace renderer {
             UniformBuffer m_ddgiUbo;
             UniformBuffer m_aoUbo;
             UniformBuffer m_cascadeUbo;
+            UniformBuffer m_clusterUbo;
             StorageBuffer m_localLightsSsbo;
             StorageBuffer m_visibleLightsSsbo;
     };

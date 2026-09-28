@@ -1,0 +1,116 @@
+#version 450 core
+// Asigna luces a clusters: un hilo por cluster, las visibles en tandas de 128
+// por memoria compartida. Los tests de interseccion espejan
+// LocalLightTouchesAabb de renderer/LightMath.h, que es donde se prueban.
+#define CLUSTER_LIGHTS_WRITABLE
+
+layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
+
+layout(std140, binding = 0) uniform Frame {
+    mat4 uView;
+    mat4 uProjection;
+    mat4 uLightSpaceMatrix;
+    mat4 uInvViewProjRot;
+    vec4 uViewPos;
+    vec4 uShadowParams;
+    vec4 uIblParams;
+};
+
+#include "common/lights.glsl"
+#include "common/clusters.glsl"
+
+// [2c] = min, [2c+1] = max, en espacio de vista. Lo arma BuildClusterAabbs.
+layout(std430, binding = 4) readonly buffer ClusterAabbs {
+    vec4 uClusterAabbs[];
+};
+
+const uint kTanda = 128u;
+
+shared vec4 sPosRango[kTanda];   // xyz = posicion en vista, w = rango
+shared vec4 sDirCono[kTanda];    // xyz = direccion en vista, w = cos exterior
+shared vec2 sSenoTipo[kTanda];   // x = sin exterior, y = tipo
+shared uint sIndice[kTanda];
+
+bool EsferaTocaCaja(vec3 c, float r, vec3 bmin, vec3 bmax) {
+    vec3 d = c - clamp(c, bmin, bmax);
+    return dot(d, d) <= r * r;
+}
+
+vec4 EsferaDelCono(vec3 p, vec3 d, float rango, float cosT, float sinT) {
+    if (cosT < 0.70710678) return vec4(p + d * (cosT * rango), sinT * rango);
+    float r = rango / (2.0 * cosT);
+    return vec4(p + d * r, r);
+}
+
+bool ConoTocaEsfera(vec3 p, vec3 d, float rango, float cosT, float sinT, vec3 c, float r) {
+    vec3  v      = c - p;
+    float vLenSq = dot(v, v);
+    float v1Len  = dot(v, d);
+    float dist   = cosT * sqrt(max(vLenSq - v1Len * v1Len, 0.0)) - v1Len * sinT;
+    return !(dist > r || v1Len > r + rango || v1Len < -r);
+}
+
+void main() {
+    uint cluster = gl_GlobalInvocationID.x;
+    uint total   = uClusterDims.x * uClusterDims.y * uClusterDims.z;
+    bool activo  = cluster < total;
+
+    vec3  bmin   = vec3(0.0);
+    vec3  bmax   = vec3(0.0);
+    vec3  centro = vec3(0.0);
+    float radio  = 0.0;
+    if (activo) {
+        bmin   = uClusterAabbs[2u * cluster].xyz;
+        bmax   = uClusterAabbs[2u * cluster + 1u].xyz;
+        centro = (bmin + bmax) * 0.5;
+        radio  = length(bmax - bmin) * 0.5;
+    }
+
+    uint base     = cluster * ClusterStride();
+    uint maximo   = uClusterDims.w;
+    uint cuenta   = 0u;
+    uint visibles = uLightCounts.z;
+    uint local    = gl_LocalInvocationIndex;
+
+    // El for es uniforme en el workgroup (visibles sale del bloque), asi que los
+    // barrier() de adentro los alcanzan todos los hilos, activos o no.
+    for (uint tanda = 0u; tanda < visibles; tanda += kTanda) {
+        uint i = tanda + local;
+        if (i < visibles) {
+            uint     g   = uVisibleLights[i];
+            GpuLight luz = uLocalLights[g];
+            sPosRango[local] = vec4((uView * vec4(luz.positionRange.xyz, 1.0)).xyz, luz.positionRange.w);
+            sDirCono[local]  = vec4(normalize(mat3(uView) * luz.directionType.xyz), luz.spotParams.z);
+            sSenoTipo[local] = vec2(luz.spotParams.w, luz.directionType.w);
+            sIndice[local]   = g;
+        }
+        memoryBarrierShared();
+        barrier();
+
+        uint n = min(kTanda, visibles - tanda);
+        if (activo) {
+            for (uint j = 0u; j < n; ++j) {
+                vec3  p     = sPosRango[j].xyz;
+                float rango = sPosRango[j].w;
+                bool  toca;
+                if (sSenoTipo[j].y < 0.5) {
+                    toca = EsferaTocaCaja(p, rango, bmin, bmax);
+                } else {
+                    vec3  d    = sDirCono[j].xyz;
+                    float cosT = sDirCono[j].w;
+                    float sinT = sSenoTipo[j].x;
+                    vec4  esf  = EsferaDelCono(p, d, rango, cosT, sinT);
+                    toca = EsferaTocaCaja(esf.xyz, esf.w, bmin, bmax)
+                        && ConoTocaEsfera(p, d, rango, cosT, sinT, centro, radio);
+                }
+                if (toca && cuenta < maximo) {
+                    uClusterLights[base + 1u + cuenta] = sIndice[j];
+                    ++cuenta;
+                }
+            }
+        }
+        barrier();
+    }
+
+    if (activo) uClusterLights[base] = cuenta;
+}

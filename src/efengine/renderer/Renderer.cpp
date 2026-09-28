@@ -24,6 +24,7 @@ namespace renderer {
         , m_ddgiUbo(sizeof(DdgiBlock))
         , m_aoUbo(sizeof(AoBlock))
         , m_cascadeUbo(sizeof(CascadeBlock))
+        , m_clusterUbo(sizeof(ClusterBlock))
         , m_localLightsSsbo(static_cast<usize>(kMaxLocalLights) * sizeof(GpuLight))
         , m_visibleLightsSsbo(static_cast<usize>(kMaxLocalLights) * sizeof(u32)) {
         // glBindBufferBase es estado GLOBAL, no por programa: alcanza engancharlos
@@ -36,6 +37,7 @@ namespace renderer {
         m_ddgiUbo.BindTo(kDdgiBinding);
         m_aoUbo.BindTo(kAoBinding);
         m_cascadeUbo.BindTo(kCascadeBinding);
+        m_clusterUbo.BindTo(kClusterBinding);
         m_localLightsSsbo.BindTo(kLocalLightsBinding);
         m_visibleLightsSsbo.BindTo(kVisibleLightsBinding);
     }
@@ -134,6 +136,16 @@ namespace renderer {
 
         const CascadeBlock cascadas = MakeCascadeBlock(lighting.cascades);
         m_cascadeUbo.Update(&cascadas, sizeof(cascadas));
+
+        // Grilla apagada hasta que ClusterLightPass la suba: si ese pase falta o
+        // esta deshabilitado, pbr.frag recorre las visibles en vez de leer una
+        // grilla de otro frame.
+        const ClusterBlock sinGrilla {};
+        m_clusterUbo.Update(&sinGrilla, sizeof(sinGrilla));
+    }
+
+    void Renderer::SetClusterBlock(const ClusterBlock& block) const {
+        m_clusterUbo.Update(&block, sizeof(block));
     }
 
     void Renderer::SetFrameBlock(const FrameBlock& block) const {

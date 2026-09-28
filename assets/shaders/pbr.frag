@@ -20,6 +20,7 @@ layout(std140, binding = 0) uniform Frame {
 
 // Bloque Lights (binding 1), SSBO de locales y visibles, y su matematica.
 #include "common/lights.glsl"
+#include "common/clusters.glsl"
 
 layout(std140, binding = 3) uniform MaterialParams {
     vec4  uAlbedoTint;    // .rgb
@@ -325,6 +326,14 @@ vec2 ParallaxOcclusionMapping(vec2 uv, vec3 viewDirT) {
     return mix(currentUV, prevUV, weight);
 }
 
+vec3 HeatRamp(float t) {
+    t = clamp(t, 0.0, 1.0);
+    vec3 azul  = vec3(0.0, 0.2, 1.0);
+    vec3 verde = vec3(0.0, 1.0, 0.2);
+    vec3 rojo  = vec3(1.0, 0.1, 0.0);
+    return (t < 0.5) ? mix(azul, verde, t * 2.0) : mix(verde, rojo, t * 2.0 - 1.0);
+}
+
 void main() {
     // --- Parallax Occlusion Mapping: desplaza las UV antes de muestrear nada ---
     // viewDirT: dirección hacia la cámara en espacio tangente (mundo→tangente
@@ -375,11 +384,25 @@ void main() {
     // los metales reflejan con su propio color (albedo).
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-    // --- Luz directa: locales ---
-    // Sin grilla de clusters todavia: todas las visibles por pixel.
-    vec3 Lo = vec3(0.0);
-    for (uint k = 0u; k < uLightCounts.z; ++k) {
-        Lo += EvaluarLuzLocal(uLocalLights[uVisibleLights[k]], N, V, F0, albedo, metallic, roughness);
+    // --- Luz directa: locales, las del cluster del pixel ---
+    // Sin grilla (el pase fallo o esta apagado) se recorren todas las visibles:
+    // misma imagen, mas lenta.
+    vec3  Lo              = vec3(0.0);
+    uint  lucesDelCluster = 0u;
+    uint  corteZ          = 0u;
+    if (ClustersEnabled()) {
+        float profundidad = ViewDepth();
+        corteZ = ClusterSlice(profundidad);
+        uint base = ClusterIndex(gl_FragCoord.xy, profundidad) * ClusterStride();
+        lucesDelCluster = uClusterLights[base];
+        for (uint k = 0u; k < lucesDelCluster; ++k) {
+            Lo += EvaluarLuzLocal(uLocalLights[uClusterLights[base + 1u + k]],
+                                  N, V, F0, albedo, metallic, roughness);
+        }
+    } else {
+        for (uint k = 0u; k < uLightCounts.z; ++k) {
+            Lo += EvaluarLuzLocal(uLocalLights[uVisibleLights[k]], N, V, F0, albedo, metallic, roughness);
+        }
     }
 
     // --- Direccionales: el PrimarySun (w = 1) con las cascadas, el resto sin sombra ---
@@ -554,6 +577,19 @@ void main() {
     else if (aoVista == 2) color = aoMuestra.xyz * 0.5 + 0.5;      // bent normal (world)
     else if (aoVista == 3) color = aoMuestra.xyz * 0.5 + 0.5;      // normal del prepass (view)
     else if (aoVista == 4) color = aoMuestra.xyz;                  // viewZ, una banda por metro
+
+    // Vistas de clusters: despues de las de DDGI/AO, asi que ganan si hay dos.
+    int vistaClusters = int(uClusterScreen.y + 0.5);
+    if (ClustersEnabled() && vistaClusters == 1) {
+        vec3 calor = (lucesDelCluster == 0u)            ? vec3(0.0)
+                   : (lucesDelCluster >= uClusterDims.w) ? vec3(1.0, 0.0, 1.0)   // saturado
+                   : HeatRamp(float(lucesDelCluster) / float(uClusterDims.w));
+        color = calor * 0.6 + 0.4 * color / (1.0 + color);
+    } else if (ClustersEnabled() && vistaClusters == 2) {
+        const vec3 kBandas[4] = vec3[4](vec3(0.9, 0.3, 0.3), vec3(0.3, 0.9, 0.3),
+                                        vec3(0.3, 0.4, 0.9), vec3(0.9, 0.9, 0.3));
+        color = kBandas[corteZ % 4u] * 0.8 + 0.2 * color / (1.0 + color);
+    }
 
     // Radiancia lineal HDR sin tonemapear: el tone mapping + gamma ahora ocurren
     // una sola vez en el present pass (assets/shaders/tonemap.frag), Ciclo 1 HDR.
