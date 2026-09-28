@@ -233,9 +233,10 @@ TEST_CASE("SceneGraph: la posicion de una luz punto sale del world del nodo") {
 
     g.UpdateWorldTransforms();
 
-    REQUIRE(g.PointLights().size() == 1u);
-    CHECK(g.PointLights()[0].position.y == doctest::Approx(10.0f));   // sigue a la mano
-    CHECK(g.PointLights()[0].color.r    == doctest::Approx(5000.0f));
+    REQUIRE(g.Lights().size() == 1u);
+    CHECK(g.Lights()[0].type == renderer::LightType::Point);
+    CHECK(g.Lights()[0].position.y == doctest::Approx(10.0f));
+    CHECK(g.Lights()[0].color.r    == doctest::Approx(5000.0f));
 }
 
 TEST_CASE("SceneGraph: el sol primario reporta su direccion desde la rotacion del nodo") {

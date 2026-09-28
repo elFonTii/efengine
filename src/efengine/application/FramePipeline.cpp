@@ -8,6 +8,7 @@ namespace application {
     // Este archivo NO verifica dependencias, igual que PostChain::Add: las
     // restricciones reales estan documentadas en cada pase, y son estas.
     //
+    //   - LightUploadPass primero: DdgiPass traza con las luces antes de BeginScene.
     //   - ShadowPass antes que DdgiPass: la captura de probes sombrea con la
     //     matriz y el depth del sol.
     //   - IblPass antes que DdgiPass y SkyboxPass: los dos leen el cubemap
@@ -20,6 +21,7 @@ namespace application {
     //   - SceneTargetPass antes que SkyboxPass, y el skybox antes del forward.
     //   - DdgiDebugPass ultimo: dibuja sobre la imagen HDR, antes del post.
     void BuildFramePipeline(renderer::ScenePipeline& p, const PassDeps& d) {
+        RegisterLightUploadPass(p, d);      // antes que todo: DDGI lee las luces de este frame
         RegisterCascadedShadowPass(p, d);   // las cascadas que usa pbr.frag
         RegisterShadowPass(p, d);           // el mapa unico de escena que usa la captura de DDGI
         RegisterIblPass(p, d);

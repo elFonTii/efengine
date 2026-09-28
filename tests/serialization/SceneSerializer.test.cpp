@@ -144,7 +144,7 @@ TEST_CASE("EfeSceneSerializer: round-trip de jerarquia, transforms, luces y beha
     // --- sol primario ---
     CHECK(destino.PrimarySun() == sol);
     CHECK(destino.Sun().color.x == doctest::Approx(3.0f));
-    CHECK(destino.PointLights().size() == 1u);
+    CHECK(destino.Lights().size() == 2u);
 
     // --- behaviors: tipo, params y enabled ---
     REQUIRE(destino.Get(actor).behaviors.size() == 1u);

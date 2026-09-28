@@ -33,15 +33,6 @@ TEST_CASE("Layout std140: los offsets de FrameBlock son los calculados a mano") 
     CHECK(sizeof(FrameBlock) == 304u);
 }
 
-TEST_CASE("Layout std140: los offsets de LightsBlock son los calculados a mano") {
-    CHECK(offsetof(LightsBlock, positions)    ==   0u);
-    CHECK(offsetof(LightsBlock, colors)       ==  64u);
-    CHECK(offsetof(LightsBlock, dirDirection) == 128u);
-    CHECK(offsetof(LightsBlock, dirColor)     == 144u);
-    CHECK(offsetof(LightsBlock, counts)       == 160u);
-    CHECK(sizeof(LightsBlock) == 176u);
-}
-
 TEST_CASE("Layout std140: los offsets de MaterialBlock son los calculados a mano") {
     CHECK(offsetof(MaterialBlock, albedoTint)   ==  0u);
     CHECK(offsetof(MaterialBlock, emissiveTint) == 16u);
@@ -51,42 +42,6 @@ TEST_CASE("Layout std140: los offsets de MaterialBlock son los calculados a mano
     CHECK(offsetof(MaterialBlock, uvTransform)  == 80u);   // v4: el tiling de UV
     CHECK(sizeof(MaterialBlock) == 96u);
     CHECK(sizeof(ObjectBlock)   == 64u);
-}
-
-TEST_CASE("MakeLightsBlock: copia posicion y color de cada luz al slot que le toca") {
-    std::vector<PointLight> luces;
-    luces.push_back(PointLight{ glm::vec3(1.0f, 2.0f, 3.0f), glm::vec3(0.5f, 0.0f, 0.0f) });
-    luces.push_back(PointLight{ glm::vec3(4.0f, 5.0f, 6.0f), glm::vec3(0.0f, 0.5f, 0.0f) });
-
-    DirectionalLight sol { glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(1.0f, 0.9f, 0.8f) };
-
-    const LightsBlock b = MakeLightsBlock(luces, sol);
-
-    CHECK(b.counts.x == 2);
-    CHECK(b.positions[0].x == doctest::Approx(1.0f));
-    CHECK(b.positions[0].z == doctest::Approx(3.0f));
-    CHECK(b.colors[1].y    == doctest::Approx(0.5f));
-    CHECK(b.dirDirection.y == doctest::Approx(-1.0f));
-    CHECK(b.dirColor.z     == doctest::Approx(0.8f));
-}
-
-TEST_CASE("MakeLightsBlock: mas luces que kMaxLights se recortan, no desbordan") {
-    std::vector<PointLight> luces;
-    for (u32 i = 0u; i < Renderer::kMaxLights + 3u; ++i) {
-        luces.push_back(PointLight{ glm::vec3(static_cast<f32>(i)), glm::vec3(1.0f) });
-    }
-
-    const LightsBlock b = MakeLightsBlock(luces, DirectionalLight{});
-
-    CHECK(b.counts.x == static_cast<i32>(Renderer::kMaxLights));
-    // La ultima luz que entra es la de indice kMaxLights - 1, no la ultima del vector.
-    CHECK(b.positions[Renderer::kMaxLights - 1u].x
-          == doctest::Approx(static_cast<f32>(Renderer::kMaxLights - 1u)));
-}
-
-TEST_CASE("MakeLightsBlock: sin luces puntuales el contador queda en cero") {
-    const LightsBlock b = MakeLightsBlock({}, DirectionalLight{});
-    CHECK(b.counts.x == 0);
 }
 
 TEST_CASE("MakeFrameBlock: empaqueta shadowParams como (enabled, biasMin, biasMax)") {

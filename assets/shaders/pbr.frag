@@ -6,8 +6,6 @@ in mat3 vTBN;       // base tangente→mundo (columna 2 = normal)
 
 out vec4 FragColor;
 
-#define MAX_LIGHTS 4
-
 // Constante por frame: view/proj, la matriz light-space, la del skybox, y los
 // escalares de sombra e IBL. Lo sube Renderer::BeginScene una vez.
 layout(std140, binding = 0) uniform Frame {
@@ -20,13 +18,8 @@ layout(std140, binding = 0) uniform Frame {
     vec4 uIblParams;      // x=hasIbl, y=intensity, z=prefilterMaxLod
 };
 
-layout(std140, binding = 1) uniform Lights {
-    vec4  uLightPositions[MAX_LIGHTS];  // .xyz
-    vec4  uLightColors[MAX_LIGHTS];     // .rgb
-    vec4  uLightDir;                    // .xyz — direccion en la que VIAJA la luz
-    vec4  uDirLightColor;               // .rgb
-    ivec4 uLightCounts;                 // x = cantidad de puntuales activas
-};
+// Bloque Lights (binding 1), SSBO de locales y visibles, y su matematica.
+#include "common/lights.glsl"
 
 layout(std140, binding = 3) uniform MaterialParams {
     vec4  uAlbedoTint;    // .rgb
@@ -168,22 +161,42 @@ vec3 MultiBounce(float ao, vec3 albedo) {
     return clamp(ao * (ao * (ao * a + b) + c), vec3(ao), vec3(1.0));
 }
 
-// Cook-Torrance para una luz: devuelve (kD*albedo/PI + specular) * NdotL.
-// La radiancia (color/atenuación) se multiplica fuera.
-vec3 CookTorranceBRDF(vec3 N, vec3 V, vec3 L, vec3 F0, vec3 albedo, float metallic, float roughness) {
-    vec3  H = normalize(V + L);
+// Cook-Torrance para una luz. Ld = hacia el centro (difusa), Ls = hacia el
+// punto representativo (especular), energia = normalizacion de la esfera. Con
+// Ld == Ls y energia 1 es exactamente el Cook-Torrance de un punto.
+vec3 CookTorranceBRDF(vec3 N, vec3 V, vec3 Ld, vec3 Ls, float energia,
+                      vec3 F0, vec3 albedo, float metallic, float roughness) {
+    vec3  H = normalize(V + Ls);
     float D = DistributionGGX(N, H, roughness);
-    float G = GeometrySmith(N, V, L, roughness);
+    float G = GeometrySmith(N, V, Ls, roughness);
     vec3  F = FresnelSchlick(max(dot(H, V), 0.0), F0);
 
-    vec3  numerator   = D * G * F;
-    float NdotL       = max(dot(N, L), 0.0);
-    float denominator = 4.0 * max(dot(N, V), 0.0) * NdotL + 0.0001;
-    vec3  specular    = numerator / denominator;
+    float NdotLs   = max(dot(N, Ls), 0.0);
+    vec3  specular = D * G * F / (4.0 * max(dot(N, V), 0.0) * NdotLs + 0.0001) * NdotLs * energia;
 
-    // kS = F (especular); kD = resto para difuso. Los metales no tienen difuso.
     vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
-    return (kD * albedo / PI + specular) * NdotL;
+    return kD * albedo / PI * max(dot(N, Ld), 0.0) + specular;
+}
+
+vec3 EvaluarLuzLocal(GpuLight luz, vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, float roughness) {
+    vec3  Lvec  = luz.positionRange.xyz - vFragPos;
+    float d2    = dot(Lvec, Lvec);
+    float rango = luz.positionRange.w;
+    if (d2 >= rango * rango) return vec3(0.0);
+
+    float d   = sqrt(d2);
+    vec3  l   = Lvec / max(d, 1e-6);
+    float att = LightFalloff(d2, rango, luz.colorRadius.w) * SpotAngular(luz, l);
+    if (att <= 0.0) return vec3(0.0);
+
+    vec3  ls      = l;
+    float energia = 1.0;
+    if (luz.colorRadius.w > 0.0) {
+        ls      = RepresentativePoint(Lvec, reflect(-V, N), luz.colorRadius.w);
+        energia = SphereNormalization(roughness, luz.colorRadius.w, d);
+    }
+    return CookTorranceBRDF(N, V, l, ls, energia, F0, albedo, metallic, roughness)
+         * luz.colorRadius.rgb * att;
 }
 
 // Factor de sombra [0=iluminado, 1=en sombra] con PCF 3x3 sobre N cascadas.
@@ -362,27 +375,25 @@ void main() {
     // los metales reflejan con su propio color (albedo).
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-    // --- Luz directa: puntuales (Cook-Torrance vía helper) ---
+    // --- Luz directa: locales ---
+    // Sin grilla de clusters todavia: todas las visibles por pixel.
     vec3 Lo = vec3(0.0);
-    for (int i = 0; i < uLightCounts.x; ++i) {
-        vec3  L           = normalize(uLightPositions[i].xyz - vFragPos);
-        float dist        = length(uLightPositions[i].xyz - vFragPos);
-        float attenuation = 1.0 / (dist * dist);     // caída física por distancia²
-        vec3  radiance    = uLightColors[i].rgb * attenuation;
-
-        Lo += CookTorranceBRDF(N, V, L, F0, albedo, metallic, roughness) * radiance;
+    for (uint k = 0u; k < uLightCounts.z; ++k) {
+        Lo += EvaluarLuzLocal(uLocalLights[uVisibleLights[k]], N, V, F0, albedo, metallic, roughness);
     }
 
-    // --- Luz direccional (sol): sin atenuación, con sombra PCF ---
-    // 'shadow' vive afuera del bloque porque kDdgiViewShadow lo escribe crudo.
+    // --- Direccionales: el PrimarySun (w = 1) con las cascadas, el resto sin sombra ---
+    // 'shadow' vive afuera porque kDdgiViewShadow lo escribe crudo.
     float shadow = 0.0;
-    {
-        vec3  Ld     = normalize(-uLightDir.xyz);
-        // El encendido lo decide uCascadeParams.x adentro de ShadowFactor, NO
-        // uShadowParams.x: ese flag es del ShadowPass encuadrado a la escena,
-        // que solo corre con DDGI prendido porque es su unico consumidor.
-        shadow = ShadowFactor(Ng, Ld);
-        Lo += (1.0 - shadow) * CookTorranceBRDF(N, V, Ld, F0, albedo, metallic, roughness) * uDirLightColor.rgb;
+    for (uint i = 0u; i < uLightCounts.y; ++i) {
+        vec3  Ld = normalize(-uDirDirection[i].xyz);
+        float s  = 0.0;
+        if (uDirColor[i].w > 0.5) {
+            s      = ShadowFactor(Ng, Ld);
+            shadow = s;
+        }
+        Lo += (1.0 - s) * CookTorranceBRDF(N, V, Ld, Ld, 1.0, F0, albedo, metallic, roughness)
+            * uDirColor[i].rgb;
     }
 
     // --- Luz indirecta: IBL difuso + especular (split-sum) ---

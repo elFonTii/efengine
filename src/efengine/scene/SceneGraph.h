@@ -1,6 +1,5 @@
 #pragma once
 #include <efengine/scene/Node.h>
-#include <efengine/renderer/PointLight.h>
 #include <efengine/renderer/Light.h>
 #include <efengine/renderer/DirectionalLight.h>
 #include <efengine/renderer/Bounds.h>
@@ -117,7 +116,6 @@ namespace scene {
             NodeHandle ActiveCamera() const { return m_activeCamera; }
 
             const std::vector<RenderItem>&           Renderables() const { return m_renderables; }
-            const std::vector<renderer::PointLight>& PointLights() const { return m_pointLights; }
             const std::vector<renderer::Light>&      Lights()      const { return m_lights; }   // todas, resueltas a mundo
             const renderer::DirectionalLight&        Sun()         const { return m_sun; }
 
@@ -165,7 +163,6 @@ namespace scene {
             NodeHandle                        m_primarySun;
             NodeHandle                        m_activeCamera;
             std::vector<RenderItem>           m_renderables;
-            std::vector<renderer::PointLight> m_pointLights;
             std::vector<renderer::Light>      m_lights;
             renderer::DirectionalLight        m_sun { glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };
             renderer::AABB                    m_worldBounds = renderer::AABB::Empty();

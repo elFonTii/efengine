@@ -79,13 +79,12 @@ TEST_CASE("SceneGraphClear: Clear resetea el sol primario y las listas juntadas"
     scene::NodeHandle luz = g.CreateNode("luz");
     g.AttachLight(luz, { scene::LightKind::Point, glm::vec3(100.0f) });
     g.UpdateWorldTransforms();
-    REQUIRE(g.PointLights().size() == 1u);
+    REQUIRE(g.Lights().size() == 2u);
 
     g.Clear();
     g.UpdateWorldTransforms();
 
     CHECK(g.PrimarySun().IsNull());
-    CHECK(g.PointLights().empty());
     CHECK(g.Lights().empty());
     CHECK(g.Renderables().empty());
 }

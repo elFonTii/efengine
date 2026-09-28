@@ -46,12 +46,15 @@ namespace renderer {
 
     static_assert(sizeof(ProbeUpdatePassBlock) == 16u, "ProbeUpdatePassBlock: tamano std140 roto");
 
-    static_assert(sizeof(LightsBlock) == 176u, "LightsBlock: tamano std140 roto");
-    static_assert(offsetof(LightsBlock, positions)    ==   0u, "LightsBlock.positions");
-    static_assert(offsetof(LightsBlock, colors)       ==  64u, "LightsBlock.colors");
-    static_assert(offsetof(LightsBlock, dirDirection) == 128u, "LightsBlock.dirDirection");
-    static_assert(offsetof(LightsBlock, dirColor)     == 144u, "LightsBlock.dirColor");
-    static_assert(offsetof(LightsBlock, counts)       == 160u, "LightsBlock.counts");
+    static_assert(sizeof(LightsBlock) == 144u, "LightsBlock: tamano std140 roto");
+    static_assert(offsetof(LightsBlock, dirDirection) ==   0u, "LightsBlock.dirDirection");
+    static_assert(offsetof(LightsBlock, dirColor)     ==  64u, "LightsBlock.dirColor");
+    static_assert(offsetof(LightsBlock, counts)       == 128u, "LightsBlock.counts");
+
+    static_assert(sizeof(GpuLight) == 80u, "GpuLight: tamano std430 roto");
+    static_assert(offsetof(GpuLight, spotParams) == 48u, "GpuLight.spotParams");
+    static_assert(offsetof(GpuLight, reserved)   == 64u, "GpuLight.reserved");
+    static_assert(kMaxDirectionalLights == 4u, "LightsBlock: sincronizar con uDirDirection[4] de common/lights.glsl");
 
     static_assert(sizeof(ObjectBlock) == 64u, "ObjectBlock: tamano std140 roto");
 
@@ -97,10 +100,6 @@ namespace renderer {
     static_assert(offsetof(AoBlock, params)   ==  0u, "AoBlock.params");
     static_assert(offsetof(AoBlock, upsample) == 16u, "AoBlock.upsample");
 
-    // El array del bloque tiene que tener exactamente los slots que el motor cree.
-    static_assert(Renderer::kMaxLights == 4u,
-                  "LightsBlock: los arrays son de 4; sincronizar con kMaxLights y con MAX_LIGHTS del shader");
-
     FrameBlock MakeFrameBlock(const glm::mat4& view, const glm::mat4& projection,
                               const glm::vec3& viewPos,
                               const ShadowContext& shadow, const IblContext& ibl) {
@@ -124,26 +123,6 @@ namespace renderer {
                           && ibl.prefiltered != null
                           && ibl.brdfLut != null);
         b.iblParams = glm::vec4(hasIbl ? 1.0f : 0.0f, ibl.intensity, ibl.maxLod, 0.0f);
-
-        return b;
-    }
-
-    LightsBlock MakeLightsBlock(const std::vector<PointLight>& lights,
-                                const DirectionalLight& sun) {
-        LightsBlock b {};
-
-        const usize count = (lights.size() < Renderer::kMaxLights)
-                          ? lights.size()
-                          : static_cast<usize>(Renderer::kMaxLights);
-
-        for (usize i = 0u; i < count; ++i) {
-            b.positions[i] = glm::vec4(lights[i].position, 0.0f);
-            b.colors[i]    = glm::vec4(lights[i].color, 0.0f);
-        }
-
-        b.dirDirection = glm::vec4(sun.direction, 0.0f);
-        b.dirColor     = glm::vec4(sun.color, 0.0f);
-        b.counts       = glm::ivec4(static_cast<i32>(count), 0, 0, 0);
 
         return b;
     }

@@ -1,1 +1,0 @@
-#include "efengine/renderer/PointLight.h"

@@ -225,7 +225,6 @@ namespace scene {
     void SceneGraph::UpdateWorldTransforms() {
         // Sin el clear las listas se duplicarian en cada frame.
         m_renderables.clear();
-        m_pointLights.clear();
         m_lights.clear();
         m_worldBounds = renderer::AABB::Empty();
         m_meshSpans.clear();
@@ -273,9 +272,6 @@ namespace scene {
         if (node.light) {
             renderer::Light luz = ResolveLight(*node.light, node.worldMatrix);
             luz.primarySun = (handle == m_primarySun) && luz.type == renderer::LightType::Directional;
-            if (luz.type == renderer::LightType::Point) {
-                m_pointLights.push_back(renderer::PointLight{ luz.position, luz.color });
-            }
             m_lights.push_back(luz);
         }
 
@@ -318,7 +314,6 @@ namespace scene {
         m_primarySun   = NodeHandle{};
         m_activeCamera = NodeHandle{};
         m_renderables.clear();
-        m_pointLights.clear();
         m_lights.clear();
         m_meshSpans.clear();
         m_sun = renderer::DirectionalLight{ glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f) };

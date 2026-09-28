@@ -39,8 +39,6 @@ layout(std140, binding = 4) uniform TraceVoxelParams {
                          // que se desincroniza en cuanto alguien toque una sola.
 };
 
-#define MAX_LIGHTS 4
-
 layout(std140, binding = 0) uniform Frame {
     mat4 uView;
     mat4 uProjection;
@@ -51,13 +49,7 @@ layout(std140, binding = 0) uniform Frame {
     vec4 uIblParams;
 };
 
-layout(std140, binding = 1) uniform Lights {
-    vec4  uLightPositions[MAX_LIGHTS];
-    vec4  uLightColors[MAX_LIGHTS];
-    vec4  uLightDir;
-    vec4  uDirLightColor;
-    ivec4 uLightCounts;
-};
+#include "common/lights.glsl"
 
 // Trae tambien common/cubeface.glsl, de donde sale dirForFace.
 #include "ddgi/common.glsl"
@@ -84,10 +76,9 @@ vec3 OctDecodeNormal(vec2 e) {
 // que se note hasta mucho despues. Las dos diferencias: el punto y la normal
 // llegan por parametro porque aca no hay varyings, y no hace el PCF 3x3 -- un
 // rayo pega en UN voxel, y el promedio espacial lo hace la integracion del blend.
-float SombraDelSol(vec3 mundo, vec3 N) {
+float SombraDelSol(vec3 mundo, vec3 N, vec3 L) {
     if (uShadowParams.x < 0.5) return 0.0;
 
-    vec3  L        = normalize(-uLightDir.xyz);
     float NdotL    = dot(N, L);
     float sinTheta = sqrt(clamp(1.0 - NdotL * NdotL, 0.0, 1.0));
     vec3  muestra  = mundo + N * (uShadowParams.w * sinTheta);
@@ -237,16 +228,23 @@ void main() {
         // la razon de siempre (el atlas guarda radiancia
         // media, asi que E = PI*L y el /PI del BRDF se cancela).
         vec3 directa = vec3(0.0);
-        for (int i = 0; i < uLightCounts.x; ++i) {
-            vec3  d  = uLightPositions[i].xyz - mundo;
-            float dd = max(dot(d, d), 0.0001);
-            vec3  Lp = d / sqrt(dd);
-            directa += albedo / kDdgiPI * max(dot(N, Lp), 0.0) * uLightColors[i].rgb / dd;
+        // Todas las locales y no solo las visibles: la sonda ve lo que la camara
+        // no. Sin sombra en este ciclo; el rango finito acota la fuga.
+        for (uint i = 0u; i < uLightCounts.x; ++i) {
+            GpuLight luz  = uLocalLights[i];
+            vec3  Lvec    = luz.positionRange.xyz - mundo;
+            float d2      = dot(Lvec, Lvec);
+            float rango   = luz.positionRange.w;
+            if (d2 >= rango * rango) continue;
+            vec3  l       = Lvec * inversesqrt(max(d2, 1e-8));
+            float att     = LightFalloff(d2, rango, luz.colorRadius.w) * SpotAngular(luz, l);
+            directa += albedo / kDdgiPI * max(dot(N, l), 0.0) * luz.colorRadius.rgb * att;
         }
-
-        vec3 L = normalize(-uLightDir.xyz);
-        directa += (1.0 - SombraDelSol(mundo, N)) * albedo / kDdgiPI
-                 * max(dot(N, L), 0.0) * uDirLightColor.rgb;
+        for (uint i = 0u; i < uLightCounts.y; ++i) {
+            vec3  L = normalize(-uDirDirection[i].xyz);
+            float s = (uDirColor[i].w > 0.5) ? SombraDelSol(mundo, N, L) : 0.0;
+            directa += (1.0 - s) * albedo / kDdgiPI * max(dot(N, L), 0.0) * uDirColor[i].rgb;
+        }
 
         // El rebote. NO aplicar aqui la
         // intensidad de DDGI -- se aplica una sola vez, cuando pbr.frag

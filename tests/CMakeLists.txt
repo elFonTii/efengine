@@ -29,6 +29,7 @@ add_executable(efengine_tests
     renderer/LightMath.test.cpp
     renderer/Frustum.test.cpp
     renderer/ClusterMath.test.cpp
+    renderer/LightPacking.test.cpp
     renderer/VoxelMath.test.cpp
     renderer/VoxelGrid.test.cpp
     renderer/DdgiVolume.test.cpp

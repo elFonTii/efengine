@@ -7,7 +7,6 @@
 #include <efengine/renderer/Model.h>
 #include <efengine/renderer/Material.h>
 #include <efengine/renderer/Shader.h>
-#include <efengine/renderer/PointLight.h>
 #include <efengine/renderer/DirectionalLight.h>
 #include <efengine/renderer/ShadowContext.h>
 #include <efengine/renderer/IblContext.h>
@@ -15,6 +14,7 @@
 #include <efengine/renderer/SceneLighting.h>
 #include <efengine/renderer/IndirectContext.h>
 #include <efengine/renderer/UniformBuffer.h>
+#include <efengine/renderer/StorageBuffer.h>
 
 #include <glm/glm.hpp>
 #include <string>
@@ -70,10 +70,10 @@ namespace renderer {
 
 
 
+    struct PackedLights;
+
     class Renderer {
         public:
-            static constexpr u32 kMaxLights = 4; // DEBE COINCIDIR CON MAX_LIGHTS DEL SHADER PRINCIPAL
-
             // Crea los 4 UBOs de escena y los engancha a sus bindings. Necesita
             // contexto GL: en Application se declara despues de Context.
             Renderer();
@@ -85,9 +85,13 @@ namespace renderer {
             // Los cuatro contextos de iluminacion viajan en un solo struct: con
             // el AO eran nueve parametros, y el proximo sistema habria sumado el
             // decimo. Ver SceneLighting.h.
+            // Las luces ya no viajan aca: las sube LightUploadPass al principio
+            // del frame, antes de DDGI. Ver UploadLights.
             void BeginScene(const glm::mat4& view, const glm::mat4& projection,
-                            const glm::vec3& viewPos, const std::vector<PointLight>& lights,
-                            const DirectionalLight& sun, const SceneLighting& lighting);
+                            const glm::vec3& viewPos, const SceneLighting& lighting);
+
+            // UBO Lights (binding 1) + SSBO LocalLights (1) y VisibleLights (2).
+            void UploadLights(const PackedLights& lights) const;
 
             void Submit(const Model& model, const MaterialMap& materials, const glm::mat4& modelMatrix,
                         const DrawOptions& options = DrawOptions());
@@ -144,6 +148,8 @@ namespace renderer {
             UniformBuffer m_ddgiUbo;
             UniformBuffer m_aoUbo;
             UniformBuffer m_cascadeUbo;
+            StorageBuffer m_localLightsSsbo;
+            StorageBuffer m_visibleLightsSsbo;
     };
 
 }

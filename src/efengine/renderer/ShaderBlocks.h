@@ -1,8 +1,6 @@
 #pragma once
 
 #include <efengine/core/Types.h>
-#include <efengine/renderer/PointLight.h>
-#include <efengine/renderer/DirectionalLight.h>
 #include <efengine/renderer/ShadowContext.h>
 #include <efengine/renderer/IblContext.h>
 #include <efengine/renderer/DdgiSettings.h>
@@ -31,6 +29,15 @@ namespace renderer {
 
     // Binding de SSBO (espacio aparte de los de UBO): datos por probe de DDGI.
     inline constexpr u32 kProbeDataBinding = 0u;
+
+    // SSBO de las luces. Espacio de indices aparte de los UBO.
+    inline constexpr u32 kLocalLightsBinding   = 1u;   // GpuLight[]
+    inline constexpr u32 kVisibleLightsBinding = 2u;   // indices de las que tocan el frustum
+    inline constexpr u32 kClusterLightsBinding = 3u;   // por cluster: [count, indices...]
+    inline constexpr u32 kClusterAabbsBinding  = 4u;   // por cluster: min, max en vista
+
+    inline constexpr u32 kMaxLocalLights       = 4096u;
+    inline constexpr u32 kMaxDirectionalLights = 4u;
 
     // Unidades de sampler de los atlas de DDGI. 0-7 material, 8 sombra, 9/10/11 IBL.
     inline constexpr u32 kIrradianceAtlasUnit = 12u;
@@ -65,11 +72,19 @@ namespace renderer {
     };
 
     struct alignas(16) LightsBlock {
-        glm::vec4  positions[4];    // .xyz — 4 == Renderer::kMaxLights
-        glm::vec4  colors[4];       // .rgb
-        glm::vec4  dirDirection;    // .xyz — direccion en la que VIAJA la luz
-        glm::vec4  dirColor;        // .rgb — color * intensidad
-        glm::ivec4 counts;          // x = cantidad de puntuales activas
+        glm::vec4  dirDirection[kMaxDirectionalLights];   // .xyz — hacia donde VIAJA la luz
+        glm::vec4  dirColor[kMaxDirectionalLights];       // .rgb efectivo, .w = 1 si es el PrimarySun
+        glm::uvec4 counts;                                // x = locales, y = direccionales, z = visibles
+    };
+
+    // std430: un elemento de LocalLights. 'reserved' es del ciclo 2 (sombras):
+    // esta desde ya para que el struct no cambie de tamano.
+    struct alignas(16) GpuLight {
+        glm::vec4 positionRange;   // .xyz mundo, .w rango
+        glm::vec4 colorRadius;     // .rgb efectivo, .w radio de la fuente
+        glm::vec4 directionType;   // .xyz direccion del spot, .w tipo (0 point, 1 spot)
+        glm::vec4 spotParams;      // x = scale, y = offset, z = cos exterior, w = sin exterior
+        glm::vec4 reserved;        // x = shadowIndex (-1), y = flags (bit 0 castShadows)
     };
 
     struct alignas(16) ObjectBlock {
@@ -228,10 +243,6 @@ namespace renderer {
     FrameBlock  MakeFrameBlock(const glm::mat4& view, const glm::mat4& projection,
                                const glm::vec3& viewPos,
                                const ShadowContext& shadow, const IblContext& ibl);
-
-    // Recorta a Renderer::kMaxLights sin desbordar. Los slots sobrantes quedan en cero.
-    LightsBlock MakeLightsBlock(const std::vector<PointLight>& lights,
-                                const DirectionalLight& sun);
 
     // maxDistance SI viaja en el bloque (params2.x). Ademas del far plane de la
     // captura, es el techo con el que blend_distance.comp recorta las distancias

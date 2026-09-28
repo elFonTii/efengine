@@ -12,6 +12,7 @@ namespace application {
     //
     // Todas tienen la misma firma a proposito. Ninguna devuelve nada: si el
     // pase no se pudo crear, no se registra y el frame sigue sin el.
+    void RegisterLightUploadPass(renderer::ScenePipeline&, const PassDeps&);
     void RegisterCascadedShadowPass(renderer::ScenePipeline&, const PassDeps&);
     void RegisterShadowPass     (renderer::ScenePipeline&, const PassDeps&);
     void RegisterIblPass        (renderer::ScenePipeline&, const PassDeps&);

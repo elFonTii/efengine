@@ -11,6 +11,7 @@
 #include <efengine/renderer/DdgiSettings.h>
 #include <efengine/renderer/AoMath.h>
 #include <efengine/renderer/CascadedShadowMap.h>
+#include <efengine/renderer/LightPacking.h>
 
 namespace efengine {
 namespace renderer {
@@ -22,7 +23,9 @@ namespace renderer {
         , m_materialUbo(sizeof(MaterialBlock))
         , m_ddgiUbo(sizeof(DdgiBlock))
         , m_aoUbo(sizeof(AoBlock))
-        , m_cascadeUbo(sizeof(CascadeBlock)) {
+        , m_cascadeUbo(sizeof(CascadeBlock))
+        , m_localLightsSsbo(static_cast<usize>(kMaxLocalLights) * sizeof(GpuLight))
+        , m_visibleLightsSsbo(static_cast<usize>(kMaxLocalLights) * sizeof(u32)) {
         // glBindBufferBase es estado GLOBAL, no por programa: alcanza engancharlos
         // una vez aca. Por eso desaparecio el set m_frameShaders, que existia solo
         // para no re-setear los mismos uniforms en cada programa del frame.
@@ -33,6 +36,8 @@ namespace renderer {
         m_ddgiUbo.BindTo(kDdgiBinding);
         m_aoUbo.BindTo(kAoBinding);
         m_cascadeUbo.BindTo(kCascadeBinding);
+        m_localLightsSsbo.BindTo(kLocalLightsBinding);
+        m_visibleLightsSsbo.BindTo(kVisibleLightsBinding);
     }
 
     void Renderer::Clear(f32 r, f32 g, f32 b, f32 a) const {
@@ -66,16 +71,21 @@ namespace renderer {
         // objeto para no perder los uniforms, que con UBOs ni siquiera aplica.
     }
 
+    void Renderer::UploadLights(const PackedLights& p) const {
+        m_lightsUbo.Update(&p.block, sizeof(p.block));
+        if (!p.locals.empty()) {
+            m_localLightsSsbo.Update(p.locals.data(), p.locals.size() * sizeof(GpuLight));
+        }
+        if (!p.visible.empty()) {
+            m_visibleLightsSsbo.Update(p.visible.data(), p.visible.size() * sizeof(u32));
+        }
+    }
+
     void Renderer::BeginScene(const glm::mat4& view, const glm::mat4& projection,
-                              const glm::vec3& viewPos, const std::vector<PointLight>& lights,
-                              const DirectionalLight& sun, const SceneLighting& lighting) {
+                              const glm::vec3& viewPos, const SceneLighting& lighting) {
         const ShadowContext& shadow = lighting.shadow;
         const IblContext&    ibl    = lighting.ibl;
         const DdgiContext&   ddgi   = lighting.ddgi;
-
-        if (lights.size() > kMaxLights) {
-            EF_LOG_WARNING("Se intentan agregar más luces de las que el shader soporta.");
-        }
 
         // Los mapas de frame van a sus unidades fijas. Los samplers ya saben su
         // unidad por layout(binding=N): aca solo se bindea la textura.
@@ -91,10 +101,8 @@ namespace renderer {
         }
 
         const FrameBlock  frameBlock  = MakeFrameBlock(view, projection, viewPos, shadow, ibl);
-        const LightsBlock lightsBlock = MakeLightsBlock(lights, sun);
 
         m_frameUbo.Update(&frameBlock, sizeof(frameBlock));
-        m_lightsUbo.Update(&lightsBlock, sizeof(lightsBlock));
 
         // Los dos atlas de DDGI a sus unidades fijas. Si falta cualquiera, no se
         // bindea nada y el bloque apaga DDGI: samplear una unidad vacia da

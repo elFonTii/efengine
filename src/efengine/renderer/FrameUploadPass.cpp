@@ -10,8 +10,7 @@ namespace renderer {
 
     void FrameUploadPass::Execute(FrameContext& ctx) {
         ctx.renderer.BeginScene(ctx.camera.ViewMatrix(), ctx.camera.ProjectionMatrix(),
-                                ctx.camera.Position(), ctx.scene.PointLights(),
-                                ctx.scene.Sun(), ctx.lighting);
+                                ctx.camera.Position(), ctx.lighting);
     }
 
 }
