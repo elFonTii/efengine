@@ -8,6 +8,7 @@ namespace scene { class SceneGraph; class Camera; }
 namespace renderer {
 
     class Framebuffer;
+    class PostTargets;
     class Texture;
     class Renderer;
 
@@ -23,6 +24,7 @@ namespace renderer {
         const scene::Camera& camera;
         Renderer&            renderer;
         Framebuffer&         sceneFB;
+        PostTargets&         post;
         u32 width  = 0u;
         u32 height = 0u;
         // La camara del frame. Unica fuente de view/projection: ver FrameView.h.

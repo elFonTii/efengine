@@ -13,6 +13,7 @@
 #include <efengine/gameplay/GameWorld.h>
 #include <efengine/renderer/BloomPass.h>
 #include <efengine/renderer/FxaaPass.h>
+#include <efengine/renderer/TonemapPass.h>
 #include <efengine/renderer/GpuProfiler.h>
 #include <efengine/renderer/ScenePipeline.h>
 
@@ -765,18 +766,27 @@ namespace {
         // del panel: eran los unicos en ingles.
         if (ImGui::CollapsingHeader("Bloom")) {
             ImGui::PushID("Bloom");
-            renderer::BloomSettings& s = ctx.app.GetBloomPass().settings();
-            ImGui::SliderFloat("Umbral",      &s.threshold,  0.0f, 5.0f);
-            ImGui::SliderFloat("Knee",        &s.knee,       0.0f, 1.0f);
-            ImGui::SliderFloat("Intensidad",  &s.intensity,  0.0f, 0.5f);
-            ImGui::SliderInt  ("Iteraciones", &s.iterations, 1,    10);
+            if (renderer::BloomPass* bloom = ctx.app.GetPipeline().Find<renderer::BloomPass>()) {
+                ImGui::Checkbox("Habilitado", &bloom->enabled);
+                renderer::BloomSettings& s = bloom->settings();
+                ImGui::SliderFloat("Umbral",      &s.threshold,  0.0f, 5.0f);
+                ImGui::SliderFloat("Knee",        &s.knee,       0.0f, 1.0f);
+                ImGui::SliderFloat("Intensidad",  &s.intensity,  0.0f, 0.5f);
+                ImGui::SliderInt  ("Iteraciones", &s.iterations, 1,    10);
+            } else {
+                ImGui::TextDisabled("BloomPass no disponible");
+            }
             ImGui::PopID();
         }
 
-        if (ImGui::CollapsingHeader("FXAA")) {
-            ImGui::PushID("FXAA");
-            renderer::FxaaSettings& fx = ctx.app.GetFxaaPass().settings();
-            ImGui::Checkbox("Habilitado", &fx.enabled);
+        if (ImGui::CollapsingHeader("Tonemap y FXAA")) {
+            ImGui::PushID("Tonemap");
+            if (renderer::TonemapPass* tm = ctx.app.GetPipeline().Find<renderer::TonemapPass>()) {
+                ImGui::Checkbox("Tonemap (apagado = HDR crudo)", &tm->enabled);
+            }
+            if (renderer::FxaaPass* fx = ctx.app.GetPipeline().Find<renderer::FxaaPass>()) {
+                ImGui::Checkbox("FXAA", &fx->enabled);
+            }
             ImGui::PopID();
         }
 

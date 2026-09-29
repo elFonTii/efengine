@@ -1,4 +1,7 @@
 #include "efengine/renderer/FxaaPass.h"
+#include <efengine/renderer/FrameContext.h>
+#include <efengine/renderer/PipelineStates.h>
+#include <efengine/renderer/PostTargets.h>
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/Texture.h>
@@ -6,7 +9,6 @@
 #include <efengine/core/Assert.h>
 
 #include <efecom/RHI.h>
-#include <efengine/renderer/GpuProfiler.h>
 
 namespace efengine {
 namespace renderer {
@@ -17,20 +19,21 @@ namespace renderer {
         EF_ASSERT(m_shader != null, "FxaaPass::FxaaPass: Se intenta inyectar shader nulo");
     }
 
-    void FxaaPass::Resize(u32 width, u32 height) {} 
-
-    void FxaaPass::Apply(const Texture& input, const RenderTarget& target) {
-    EF_PROFILE_SCOPE("FXAA");
+    void FxaaPass::Execute(FrameContext& ctx) {
+        efecom::ApplyPipelineState(FullscreenState());
+        const Texture& input = ctx.post.Current();
+        const RenderTarget target = ctx.post.AcquireNext();
         target.Bind();
 
-        const PostParamsBlock params {
-            glm::vec4(m_settings.enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f) };
+        // params.x = 1: el pase apagado ahora es IScenePass::enabled.
+        const PostParamsBlock params { glm::vec4(1.0f, 0.0f, 0.0f, 0.0f) };
         m_paramsUbo.Update(&params, sizeof(params));
         m_paramsUbo.BindTo(kPassBinding);
 
         m_shader->Bind();
         input.Bind(0);
         m_renderer.Draw(m_quad, *m_shader);
+        ctx.post.Publish();
     }
 }
 }

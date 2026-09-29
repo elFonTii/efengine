@@ -12,9 +12,9 @@ namespace renderer {
     struct FrameContext;
 
     // Dueno de los pases del frame; los corre en el orden en que se
-    // registraron. El orden ES la lista, igual que en PostChain: este tipo no
+    // registraron. El orden ES la lista: este tipo no
     // verifica dependencias entre pases -- las restricciones reales (que DDGI
-    // corra despues del ShadowPass, que el prepass del AO corra antes del
+    // corra despues del ShadowPass, que el DepthPrepass corra antes del
     // forward) estan documentadas en cada pase y las garantiza quien arma la
     // lista.
     class ScenePipeline {

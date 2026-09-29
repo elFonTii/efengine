@@ -1,6 +1,6 @@
 // assets/shaders/common/tonemap.glsl
 // EL tone mapping del repo: HDR lineal -> LDR sRGB. Ocurre UNA sola vez en todo
-// el frame, en el composite del bloom (assets/shaders/bloom_composite.frag).
+// el frame, en TonemapPass (assets/shaders/tonemap.frag).
 //
 // Vive en un include propio y no dentro de ese shader porque el punto donde se
 // tonemapea es una decision del pipeline, no del bloom: el dia que aparezca otro

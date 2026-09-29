@@ -17,15 +17,7 @@ namespace application {
         , m_context( m_window )
         , m_sceneFB(m_window.GetWidth(), m_window.GetHeight())
         , m_debugUI( m_window )
-        , m_bloomPass( m_renderer, m_fullscreenQuad,
-               m_resources.GetShader("brightpass",     "assets/shaders/screen.vert", "assets/shaders/brightpass.frag"),
-               m_resources.GetShader("blur",           "assets/shaders/screen.vert", "assets/shaders/blur.frag"),
-               m_resources.GetShader("bloomcomposite", "assets/shaders/screen.vert", "assets/shaders/bloom_composite.frag"),
-               m_window.GetWidth(), m_window.GetHeight() )
-        , m_fxaaPass( m_renderer, m_fullscreenQuad,
-                m_resources.GetShader("fxaa", "assets/shaders/screen.vert", "assets/shaders/fxaa.frag")
-         )
-        , m_postChain( m_window.GetWidth(), m_window.GetHeight())
+        , m_postTargets( m_window.GetWidth(), m_window.GetHeight())
          {
 
         const f32 quadVertices[] = {
@@ -40,12 +32,6 @@ namespace application {
 
         renderer::Buffer       vbo(quadVertices, sizeof(quadVertices));
         renderer::IndexBuffer  ebo(quadIndices, 6);
-        // Dos eslabones y no tres: el composite del bloom tonemapea, asi que la
-        // imagen sale de ahi ya en LDR sRGB. El orden efectivo sigue siendo
-        // bloom -> tonemap -> FXAA, que es el correcto: FXAA estima contraste
-        // asumiendo valores perceptuales.
-        m_postChain.Add(&m_bloomPass);
-        m_postChain.Add(&m_fxaaPass);   // ultimo eslabon -> escribe al backbuffer
         renderer::VertexLayout layout;
         layout.Push(renderer::ShaderDataType::Float2);
         layout.Push(renderer::ShaderDataType::Float2); 
@@ -93,7 +79,7 @@ namespace application {
             // recrea la profundidad y el prepass la tiene prestada.
             m_sceneFB.Resize(w, h);
             m_pipeline.Resize(w, h);
-            m_postChain.Resize(w, h);
+            m_postTargets.Resize(w, h);
             if (cambioTamano) ResetTemporalHistory();
             efecom::SetPresentExtent(w, h);
         }
@@ -101,12 +87,9 @@ namespace application {
         scene.UpdateWorldTransforms();
 
         m_lastView = renderer::MakeFrameView(camera, w, h, m_temporal, m_history);
-        renderer::FrameContext ctx { scene, camera, m_renderer, m_sceneFB, w, h, m_lastView };
+        m_postTargets.BeginFrame(m_sceneFB.ColorTexture());
+        renderer::FrameContext ctx { scene, camera, m_renderer, m_sceneFB, m_postTargets, w, h, m_lastView };
         m_pipeline.Execute(&ctx);
-
-        // Ya no hay "desbindear": el post chain declara su propio destino por pase.
-        m_bloomPass.SetExposure(camera.Exposure());
-        m_postChain.Run(m_sceneFB.ColorTexture());
     }
 
     f32 Application::DeltaTime() const { return m_time.DeltaTime(); }

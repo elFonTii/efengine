@@ -316,6 +316,8 @@ namespace efecom {
     // voxelizacion, que no produce pixeles: su unico efecto son los imageStore.
     void FramebufferDefaultSize(u32 framebuffer, u32 width, u32 height);
     bool FramebufferComplete(u32 framebuffer);
+    // Copia 1:1 del color de un FBO al backbuffer (NEAREST). No bindea nada.
+    void BlitColorToPresent(u32 srcFramebuffer, u32 width, u32 height);
     u32  CreateDepthRenderbuffer(u32 width, u32 height);
     void DestroyRenderbuffer(u32 renderbuffer);
     void FramebufferDepthRenderbuffer(u32 framebuffer, u32 renderbuffer);

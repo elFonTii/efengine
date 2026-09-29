@@ -5,9 +5,7 @@
 #include <efengine/renderer/Context.h>
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Framebuffer.h>
-#include <efengine/renderer/BloomPass.h>
-#include <efengine/renderer/FxaaPass.h>
-#include <efengine/renderer/PostChain.h>
+#include <efengine/renderer/PostTargets.h>
 #include <efengine/resources/ResourceManager.h>
 #include <efengine/core/Time.h>
 #include <efengine/platform/InputCodes.h>
@@ -35,8 +33,6 @@ namespace application {
             core::Time& GetTime() { return m_time; }
             const platform::Input& GetInput() const { return m_input; }
             application::DebugUI& GetDebugUI() { return m_debugUI; }
-            renderer::BloomPass& GetBloomPass() { return m_bloomPass; }
-            renderer::FxaaPass& GetFxaaPass() { return m_fxaaPass; }
 
             // El unico accessor de pases de escena. Los paneles encuentran el
             // suyo con Find<T>(): agregar un pase ya no agrega un accessor.
@@ -78,9 +74,7 @@ namespace application {
             resources::ResourceManager m_resources; // 5
             application::DebugUI m_debugUI;
             renderer::VertexArray m_fullscreenQuad; // 6
-            renderer::BloomPass m_bloomPass;
-            renderer::FxaaPass m_fxaaPass;
-            renderer::PostChain m_postChain;
+            renderer::PostTargets m_postTargets;
             core::Time m_time;
             // No participa del contrato de orden: no toca GL.
             platform::Input m_input;

@@ -13,7 +13,7 @@ add_executable(efengine_tests
     platform/Input.test.cpp
     renderer/VertexLayout.test.cpp
     renderer/Vertex.test.cpp
-    renderer/PostChain.test.cpp
+    renderer/PostTargets.test.cpp
     renderer/ScenePipeline.test.cpp
     renderer/Cubemap.test.cpp
     renderer/ShadowMath.test.cpp

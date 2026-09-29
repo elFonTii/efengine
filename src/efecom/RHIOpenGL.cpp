@@ -623,6 +623,13 @@ namespace efecom {
         glNamedFramebufferTexture(framebuffer, GL_DEPTH_ATTACHMENT, texture, 0);
     }
 
+    void BlitColorToPresent(u32 srcFramebuffer, u32 width, u32 height) {
+        glBlitNamedFramebuffer(srcFramebuffer, 0,
+                               0, 0, (GLint)width, (GLint)height,
+                               0, 0, (GLint)width, (GLint)height,
+                               GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    }
+
     void FramebufferDepthTextureLayer(u32 framebuffer, u32 texture, u32 layer) {
         glNamedFramebufferTextureLayer(framebuffer, GL_DEPTH_ATTACHMENT,
                                        texture, 0, (GLint)layer);

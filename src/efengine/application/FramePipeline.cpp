@@ -5,7 +5,7 @@ namespace application {
 
     // EL ORDEN DEL FRAME. Es una lista literal y se lee de arriba abajo.
     //
-    // Este archivo NO verifica dependencias, igual que PostChain::Add: las
+    // Este archivo NO verifica dependencias: las
     // restricciones reales estan documentadas en cada pase, y son estas.
     //
     //   - LightUploadPass primero: DdgiPass traza con las luces antes de BeginScene.
@@ -21,7 +21,8 @@ namespace application {
     //     bloque ya subido, y despues de DepthPrepass, porque lee su prepass.
     //   - DepthPrepass antes que Ao: el AO lee su depthNormal.
     //   - SceneTargetPass antes que SkyboxPass, y el skybox antes del forward.
-    //   - DdgiDebugPass ultimo: dibuja sobre la imagen HDR, antes del post.
+    //   - DdgiDebugPass antes del post: dibuja sobre la imagen HDR.
+    //   - Bloom -> Tonemap -> FXAA -> Present: FXAA espera LDR; Present siempre ultimo.
     void BuildFramePipeline(renderer::ScenePipeline& p, const PassDeps& d) {
         RegisterLightUploadPass(p, d);      // antes que todo: DDGI lee las luces de este frame
         RegisterCascadedShadowPass(p, d);   // las cascadas que usa pbr.frag
@@ -37,6 +38,10 @@ namespace application {
         RegisterSkyboxPass(p, d);
         RegisterForwardPass(p, d);
         RegisterDdgiDebugPass(p, d);     // necesita el DdgiPass ya registrado
+        RegisterBloomPass(p, d);
+        RegisterTonemapPass(p, d);
+        RegisterFxaaPass(p, d);
+        RegisterPresentPass(p, d);       // ultimo: deja bindeado el backbuffer para ImGui
     }
 
 }

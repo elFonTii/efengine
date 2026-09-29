@@ -1,5 +1,8 @@
 #include "efengine/renderer/BloomPass.h"
 #include <efengine/core/Assert.h>
+#include <efengine/renderer/FrameContext.h>
+#include <efengine/renderer/PipelineStates.h>
+#include <efengine/renderer/PostTargets.h>
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/Texture.h>
@@ -7,7 +10,6 @@
 #include <utility>
 
 #include <algorithm>
-#include <efengine/renderer/GpuProfiler.h>
 
 namespace efengine {
 namespace renderer {
@@ -26,8 +28,9 @@ namespace renderer {
         m_fboB.Resize(std::max(1u,width/2), std::max(1u,height/2));
     }
 
-void BloomPass::Apply(const Texture& input, const RenderTarget& target) {
-    EF_PROFILE_SCOPE("Bloom + tonemap");
+void BloomPass::Execute(FrameContext& ctx) {
+    efecom::ApplyPipelineState(FullscreenState());
+    const Texture& input = ctx.post.Current();
     m_paramsUbo.BindTo(kPassBinding);
 
     // brightpass: escena full-res -> m_fboA (1/2 res)
@@ -62,23 +65,17 @@ void BloomPass::Apply(const Texture& input, const RenderTarget& target) {
         horizontal = !horizontal;
     }
 
-    // Composite aditivo + tone mapping: escena full-res + blur (1/2 res, upscale
-    // LINEAR), la suma en HDR lineal, y de ahi a LDR sRGB con ACES. Sale al
-    // target ya en LDR, listo para FXAA.
-    //
-    // La suma va ANTES de la curva a proposito: sumar dos imagenes ya
-    // tonemapeadas no es sumar luz, y el halo saldria apagado justo donde mas
-    // brilla.
+    const RenderTarget target = ctx.post.AcquireNext();
     target.Bind();
     {
-        const PostParamsBlock p {
-            glm::vec4(m_settings.intensity, m_exposure, 0.0f, 0.0f) };
+        const PostParamsBlock p { glm::vec4(m_settings.intensity, 0.0f, 0.0f, 0.0f) };
         m_paramsUbo.Update(&p, sizeof(p));
     }
     m_composite->Bind();
     input.Bind(0);
     src->ColorTexture().Bind(1);
     m_renderer.Draw(m_quad, *m_composite);
+    ctx.post.Publish();
 }
 }
 }

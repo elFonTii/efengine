@@ -17,7 +17,7 @@ target_sources(efengine_application PRIVATE
     passes/SceneTargetPassSetup.cpp
     passes/SkyboxPassSetup.cpp
     passes/ForwardPassSetup.cpp
-    passes/DdgiDebugPassSetup.cpp
+    passes/DdgiDebugPassSetup.cpp passes/BloomPassSetup.cpp passes/TonemapPassSetup.cpp passes/FxaaPassSetup.cpp passes/PresentPassSetup.cpp
 )
 target_include_directories(efengine_application PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(efengine_application PUBLIC

@@ -6,11 +6,9 @@ namespace renderer {
 
     struct FrameContext;
 
-    // Un eslabon del frame. El equivalente de IPostPass para los pases de
-    // escena, que a diferencia del post NO comparten firma: un pase de post
-    // siempre es (textura de entrada) -> (target), mientras que estos publican
-    // y consumen contextos distintos. Por eso el parametro es el FrameContext
-    // entero y no una textura.
+    // Un eslabon del frame. Los pases publican y consumen contextos distintos,
+    // por eso el parametro es el FrameContext entero y no una textura; el post
+    // se pasa el color por FrameContext::post.
     class IScenePass {
         public:
             // Campo publico y no un virtual, igual que Behavior::enabled. El
