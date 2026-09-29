@@ -17,6 +17,7 @@ namespace application {
     void RegisterShadowPass     (renderer::ScenePipeline&, const PassDeps&);
     void RegisterIblPass        (renderer::ScenePipeline&, const PassDeps&);
     void RegisterDdgiPass       (renderer::ScenePipeline&, const PassDeps&);
+    void RegisterDepthPrepass    (renderer::ScenePipeline&, const PassDeps&);
     void RegisterAoPass         (renderer::ScenePipeline&, const PassDeps&);
     void RegisterFrameUploadPass(renderer::ScenePipeline&, const PassDeps&);
     void RegisterClusterLightPass(renderer::ScenePipeline&, const PassDeps&);

@@ -10,7 +10,7 @@ namespace renderer {
 
     void ForwardPass::Execute(FrameContext& ctx) {
         DrawOptions opciones;
-        // Con el prepass del AO ya resuelto, la visibilidad no se vuelve a
+        // Con el DepthPrepass ya resuelto, la visibilidad no se vuelve a
         // calcular: GL_EQUAL sombrea cada pixel una sola vez. Sin el, hay que
         // escribir profundidad como siempre.
         opciones.depth = ctx.depthReady ? DepthMode::Equal : DepthMode::Write;

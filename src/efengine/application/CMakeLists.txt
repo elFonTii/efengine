@@ -10,7 +10,7 @@ target_sources(efengine_application PRIVATE
     passes/CascadedShadowPassSetup.cpp
     passes/IblPassSetup.cpp
     passes/DdgiPassSetup.cpp
-    passes/AoPassSetup.cpp
+    passes/DepthPrepassSetup.cpp passes/AoPassSetup.cpp
     passes/FrameUploadPassSetup.cpp
     passes/ClusterLightPassSetup.cpp
     passes/IndirectPassSetup.cpp

@@ -71,9 +71,8 @@ using namespace efengine;
         // cambio por separado, y sin un interruptor en caliente comparar "con" y
         // "sin" pide recompilar.
         ImGui::Checkbox("Media resolucion", &s.halfRes);
-        ImGui::TextDisabled("kernel y blur a %dx%d; prepass y guia siguen a %dx%d",
-                            opt->aoTexture().width(),  opt->aoTexture().height(),
-                            opt->normalTarget().width(), opt->normalTarget().height());
+        ImGui::TextDisabled("kernel y blur a %dx%d; prepass y guia siguen a pantalla completa",
+                            opt->aoTexture().width(), opt->aoTexture().height());
         if (s.halfRes) {
             ImGui::TextDisabled("pbr.frag lo sube con upsample bilateral (depth + normal)");
         }

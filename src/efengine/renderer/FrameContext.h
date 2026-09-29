@@ -8,6 +8,7 @@ namespace scene { class SceneGraph; class Camera; }
 namespace renderer {
 
     class Framebuffer;
+    class Texture;
     class Renderer;
 
     // Lo que los pases del frame comparten. Calcado de scene::UpdateContext:
@@ -32,14 +33,18 @@ namespace renderer {
         // este es peor que no tener contexto.
         SceneLighting lighting;
 
-        // El prepass del AO ya escribio la profundidad de ESTE frame en el depth
+        // El DepthPrepass ya escribio la profundidad de ESTE frame en el depth
         // de sceneFB: el forward puede dibujar con GL_EQUAL en vez de resolver
-        // la visibilidad otra vez. Lo prende AoPass, lo lee ForwardPass.
+        // la visibilidad otra vez. Lo prende DepthPrepass, lo lee ForwardPass.
         //
         // Arranca en false SIEMPRE. Si el prepass no corrio, ese depth tiene la
         // profundidad del FRAME ANTERIOR, y dibujar con GL_EQUAL contra el deja
         // la pantalla vacia.
         bool depthReady = false;
+
+        // Los dos del DepthPrepass de ESTE frame; null si no corrio.
+        const Texture* depthNormal = null;   // xyz = normal de vista, w = viewZ lineal
+        const Texture* depth       = null;   // D32F de sceneFB
     };
 
 }

@@ -20,9 +20,8 @@ namespace efengine {
 namespace renderer {
 
     std::unique_ptr<AoPass> AoPass::Create(Renderer& renderer, VertexArray& fullscreenQuad,
-                                           const Shaders& shaders, u32 width, u32 height,
-                                           Framebuffer& sceneFB) {
-        if (shaders.depthNormal == null || shaders.gtao == null || shaders.denoise == null) {
+                                           const Shaders& shaders, u32 width, u32 height) {
+        if (shaders.gtao == null || shaders.denoise == null) {
             EF_LOG_ERROR("AoPass::Create: falta algun shader de AO");
             return null;
         }
@@ -31,55 +30,41 @@ namespace renderer {
             return null;
         }
 
-        if (sceneFB.depthRenderbuffer() == 0u) {
-            EF_LOG_ERROR("AoPass::Create: sin depth compartido; el prepass no puede "
-                         "alimentar el forward");
-            return null;
-        }
-
-        EF_LOG_INFO("AoPass: prepass %ux%u (depth compartido), AO %ux%u",
-                    width, height, ReducedExtent(width), ReducedExtent(height));
+        EF_LOG_INFO("AoPass: AO %ux%u", ReducedExtent(width), ReducedExtent(height));
         // El ctor es privado: make_unique no lo alcanza.
         return std::unique_ptr<AoPass>(
-            new AoPass(renderer, fullscreenQuad, shaders, width, height, sceneFB));
+            new AoPass(renderer, fullscreenQuad, shaders, width, height));
     }
 
     AoPass::AoPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
-                   u32 width, u32 height, Framebuffer& sceneFB)
+                   u32 width, u32 height)
         : m_renderer(renderer), m_quad(fullscreenQuad), m_shaders(shaders)
-        , m_sceneFB(&sceneFB)
-        // El prepass escribe en el depth DEL FRAMEBUFFER DE ESCENA, no en uno
-        // propio: es lo que despues deja al forward dibujar con GL_EQUAL.
-        , m_normalFb(width, height, sceneFB.depthRenderbuffer())
         , m_aoA(ReducedExtent(width), ReducedExtent(height))
         , m_aoB(ReducedExtent(width), ReducedExtent(height))
         , m_fullWidth(width), m_fullHeight(height) {}
 
     AoPass::AoPass(AoPass&& o) noexcept
         : m_renderer(o.m_renderer), m_quad(o.m_quad), m_shaders(o.m_shaders)
-        , m_sceneFB(o.m_sceneFB)
-        , m_normalFb(std::move(o.m_normalFb)), m_aoA(std::move(o.m_aoA))
+        , m_aoA(std::move(o.m_aoA))
         , m_aoB(std::move(o.m_aoB))
         , m_fullWidth(o.m_fullWidth), m_fullHeight(o.m_fullHeight)
         , m_settings(o.m_settings)
-        , m_prepassUbo(std::move(o.m_prepassUbo)), m_gtaoUbo(std::move(o.m_gtaoUbo))
-        , m_resultInA(o.m_resultInA), m_depthReady(o.m_depthReady) {}
+        , m_gtaoUbo(std::move(o.m_gtaoUbo))
+        , m_resultInA(o.m_resultInA), m_hasResult(o.m_hasResult) {}
 
     // Las dos referencias (renderer, quad) no se reasignan: son las mismas para
     // todo el proceso, y una referencia no se puede rebindear igual.
     AoPass& AoPass::operator=(AoPass&& o) noexcept {
         if (this != &o) {
             m_shaders    = o.m_shaders;
-            m_normalFb   = std::move(o.m_normalFb);
             m_aoA        = std::move(o.m_aoA);
             m_aoB        = std::move(o.m_aoB);
             m_fullWidth  = o.m_fullWidth;
             m_fullHeight = o.m_fullHeight;
             m_settings   = o.m_settings;
-            m_prepassUbo = std::move(o.m_prepassUbo);
             m_gtaoUbo    = std::move(o.m_gtaoUbo);
             m_resultInA  = o.m_resultInA;
-            m_depthReady = o.m_depthReady;
+            m_hasResult  = o.m_hasResult;
         }
         return *this;
     }
@@ -96,16 +81,9 @@ namespace renderer {
     }
 
     void AoPass::Resize(u32 width, u32 height) {
-        // El rbo se lee AHORA y no se recibe: el Resize del framebuffer de
-        // escena ya corrio (el pipeline lo garantiza) y el handle viejo murio.
-        const u32 sharedDepthRbo = m_sceneFB->depthRenderbuffer();
-        if (width == 0u || height == 0u || sharedDepthRbo == 0u) return;
-
+        if (width == 0u || height == 0u) return;
         m_fullWidth  = width;
         m_fullHeight = height;
-        // El handle tambien cuenta: el dueno pudo realocarse. Framebuffer::Resize
-        // lo compara y no hace nada si no cambio nada.
-        m_normalFb.Resize(width, height, sharedDepthRbo);
         EnsureTargetSize();
     }
 
@@ -121,58 +99,19 @@ namespace renderer {
     }
 
     void AoPass::Execute(FrameContext& ctx) {
-        Render(ctx.scene, ctx.view.view, ctx.view.projection);
-
-        // Afuera de Render y no al final de su cuerpo: Render tiene retornos
-        // tempranos y Application publicaba el contexto igual en esos casos.
-        ctx.lighting.ao = Context();
-
-        // Lo que le dice al forward si puede dibujar con GL_EQUAL.
-        ctx.depthReady  = m_depthReady;
+        m_hasResult = false;
+        if (ctx.depthReady && ctx.depthNormal != null) {
+            Render(*ctx.depthNormal, ctx.view.view, ctx.view.projection);
+            m_hasResult = true;
+        }
+        ctx.lighting.ao = Context(ctx.depthNormal);
     }
 
-    void AoPass::Render(const scene::SceneGraph& scene,
-                        const glm::mat4& view, const glm::mat4& projection) {
-        // Se apaga PRIMERO: si este Render sale temprano, el depth compartido
-        // tiene la profundidad del frame anterior, y dibujar el forward con
-        // GL_EQUAL contra eso deja la pantalla vacia.
-        m_depthReady = false;
-
+    void AoPass::Render(const Texture& depthNormal, const glm::mat4& view, const glm::mat4& projection) {
         // El checkbox de media resolucion se mueve a mitad de frame desde ImGui:
         // los targets se ajustan aca y no en el setter.
         EnsureTargetSize();
         const i32 esc = scale();
-
-        // -- 1. Prepass: normal view-space + profundidad lineal ----------------
-        {
-            EF_PROFILE_SCOPE("AO prepass");
-
-            m_normalFb.Bind();
-            // Negro con alfa 0: viewZ == 0 es el centinela de "aca no hay
-            // geometria". El Clear tambien limpia la PROFUNDIDAD, que es la del
-            // framebuffer de escena: este es el unico clear de depth del frame, y
-            // por eso el forward despues limpia solo color.
-            m_renderer.Clear(0.0f, 0.0f, 0.0f, 0.0f);
-
-            const AoPrepassBlock prepass { view, projection };
-            m_prepassUbo.Update(&prepass, sizeof(prepass));
-            m_prepassUbo.BindTo(kPassBinding);
-
-            m_shaders.depthNormal->Bind();
-            for (const scene::RenderItem& item : scene.Renderables()) {
-                if (!item.model) continue;
-                // overrideShader SIN overrideState: asi cada material conserva su
-                // doubleSided. Forzar el estado dejaria las salas inward=1 (cascaras
-                // de espesor cero, que necesitan CullMode::None) fuera del target.
-                DrawOptions opciones;
-                opciones.shader = m_shaders.depthNormal;
-                m_renderer.Submit(*item.model, *item.materials, item.world, opciones);
-            }
-
-            // A partir de aca el depth compartido tiene la profundidad de la
-            // escena con la camara de este frame.
-            m_depthReady = true;
-        }
 
         // -- 2. Kernel de GTAO -------------------------------------------------
         {
@@ -189,7 +128,7 @@ namespace renderer {
 
             m_aoA.Bind();
             efecom::ApplyPipelineState(FullscreenState());
-            m_normalFb.ColorTexture().Bind(0);
+            depthNormal.Bind(0);
             m_renderer.Draw(m_quad, *m_shaders.gtao);
 
             m_resultInA = true;
@@ -202,7 +141,7 @@ namespace renderer {
             EF_PROFILE_SCOPE("AO blur");
 
             // La guia de profundidad es la misma en las dos pasadas.
-            m_normalFb.ColorTexture().Bind(1);
+            depthNormal.Bind(1);
 
             for (i32 dir = 0; dir < 2; ++dir) {
                 const AoPassBlock blurParams = MakeAoPassBlock(view, projection, m_settings,
@@ -223,16 +162,16 @@ namespace renderer {
         }
     }
 
-    AoContext AoPass::Context() const {
+    AoContext AoPass::Context(const Texture* depthNormal) const {
         AoContext ctx;
-        // Sin prepass de ESTE frame no hay resultado utilizable: texture queda
-        // en null y pbr.frag cae al ao del material.
-        if (!m_depthReady) return ctx;
+        // Sin resultado de ESTE frame: texture queda en null y pbr.frag cae al
+        // ao del material.
+        if (!m_hasResult) return ctx;
 
         ctx.texture     = &aoTexture();
         // El prepass viaja en el contexto porque es la guia de los dos upsamples
         // de pbr.frag, no solo del propio AO. Ver AoContext::depthNormal.
-        ctx.depthNormal = &m_normalFb.ColorTexture();
+        ctx.depthNormal = depthNormal;
         ctx.scale       = scale();
         ctx.enabled     = true;
         ctx.bentNormal  = m_settings.bentNormal;
