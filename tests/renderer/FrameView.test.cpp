@@ -153,3 +153,16 @@ TEST_CASE("MakeStaticFrameView: sin jitter y prev == actual") {
     CHECK(v.frameIndex == 0u);
     CHECK_FALSE(v.jitterEnabled);
 }
+
+TEST_CASE("MakeFrameView: un frame 0x0 (minimizada) invalida la historia") {
+    const scene::Camera cam = Camara();
+    FrameHistory h;
+    MakeFrameView(cam, 1280, 720, TemporalSettings{}, h);
+    REQUIRE(h.valid);
+
+    MakeFrameView(cam, 0, 0, TemporalSettings{}, h);
+    CHECK_FALSE(h.valid);
+
+    const FrameView v = MakeFrameView(cam, 1280, 720, TemporalSettings{}, h);
+    CHECK(v.prevViewProjNoJitter == v.viewProjNoJitter);
+}

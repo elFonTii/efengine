@@ -55,6 +55,12 @@ namespace renderer {
             v.prevJitterNdc        = v.jitterNdc;
         }
 
+        // Minimizada: la camara tiene otro aspecto y nada se ve, no sirve de prev.
+        if (width == 0u || height == 0u) {
+            history.valid = false;
+            return v;
+        }
+
         history.viewProjNoJitter = v.viewProjNoJitter;
         history.jitterNdc        = v.jitterNdc;
         history.valid            = true;
