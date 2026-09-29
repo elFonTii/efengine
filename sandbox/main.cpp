@@ -152,10 +152,12 @@ namespace {
     // Arranque por linea de comandos, para el smoke test y para medir:
     //   --estres <luces> [lado]   escena de estres de luces
     //   --efe <ruta>              abre ese .efe en vez de la sonda
+    //   --fbx <ruta>              monta ese .fbx crudo (relativa al arbol de fuentes)
     struct ArranqueCli {
         u32         estresLuces = 0u;
         f32         estresLado  = 200.0f;
         std::string efe;
+        std::string fbx;
     };
 
     ArranqueCli leerArgumentos(int argc, char** argv) {
@@ -167,6 +169,8 @@ namespace {
                 if (i + 1 < argc && argv[i + 1][0] != '-') a.estresLado = std::strtof(argv[++i], nullptr);
             } else if (arg == "--efe" && i + 1 < argc) {
                 a.efe = argv[++i];
+            } else if (arg == "--fbx" && i + 1 < argc) {
+                a.fbx = argv[++i];
             }
         }
         return a;
@@ -207,15 +211,23 @@ int main(int argc, char** argv) {
     // El estado de la UI vive aca (el loop es el dueno); el editor solo lo usa.
     sandbox::EditorState editorState;
     sandbox::EditorContext editor { app, scene, cam, controller, assets, rm, registry, editorState, game.get() };
-    // SONDA. Con una ruta aca, el sandbox arranca montando ese .fbx crudo en vez
-    // del .efe: es el experimento de "se lo puede tragar el motor?". Vaciar la
-    // constante, o que el archivo no exista (otro clon, el CI), devuelve el
-    // arranque normal por .efe.
     // Ruta ABSOLUTA al arbol de fuentes, no al espejo de assets/ que queda junto
-    // al .exe: bistro/ esta excluido de ese espejo (son 1,5 GB, ver
-    // cmake/CopyAssets.cmake).
-    constexpr const char* kProbeModel =
-        "D:/@ffontana/CONSOLIDADAS/efengine/assets/bistro/BistroInterior.fbx";
+    // al .exe: bistro/ esta excluido de ese espejo (ver cmake/CopyAssets.cmake).
+    constexpr const char* kRaizFuentes     = "D:/@ffontana/CONSOLIDADAS/efengine/";
+    constexpr const char* kModeloPorOmision = "assets/bistro/BistroInterior.fbx";
+
+    std::string modelo;
+    if (!cli.fbx.empty()) {
+        modelo = std::filesystem::path(cli.fbx).is_relative() ? std::string(kRaizFuentes) + cli.fbx : cli.fbx;
+        if (!std::filesystem::exists(modelo)) {
+            EF_LOG_ERROR("--fbx: '%s' no existe; arranque normal", modelo.c_str());
+            modelo.clear();
+        }
+    }
+    if (modelo.empty()) {
+        const std::string porOmision = std::string(kRaizFuentes) + kModeloPorOmision;
+        if (std::filesystem::exists(porOmision)) modelo = porOmision;
+    }
 
     // El .efe que se abre solo cuando no hay sonda. El menu "Escena" carga
     // cualquier otro de assets/scenes, y la sala de Cornell sigue estando ahi.
@@ -229,8 +241,8 @@ int main(int argc, char** argv) {
         } else {
             EF_LOG_ERROR("No se pudo cargar '%s'", cli.efe.c_str());
         }
-    } else if (kProbeModel[0] != '\0' && std::filesystem::exists(kProbeModel)) {
-        sandbox::BuildProbeScene(editor, kProbeModel);
+    } else if (!modelo.empty()) {
+        sandbox::BuildProbeScene(editor, modelo.c_str());
     } else if (serialization::SceneSerializer::Load(kBootScene, scene, assets, rm, registry)) {
         editorState.currentScenePath = kBootScene;
     } else {

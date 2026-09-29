@@ -2,12 +2,16 @@
 
 #include "EditorUI.h"
 
+#include <efengine/application/Application.h>
 #include <efengine/math/Transform.h>
 #include <efengine/renderer/Bounds.h>
+#include <efengine/renderer/DdgiGridFit.h>
+#include <efengine/renderer/DdgiPass.h>
 #include <efengine/renderer/Material.h>
 #include <efengine/renderer/MaterialDef.h>
 #include <efengine/renderer/Mesh.h>
 #include <efengine/renderer/Model.h>
+#include <efengine/renderer/ScenePipeline.h>
 #include <efengine/resources/MaterialBuilder.h>
 #include <efengine/resources/MaterialImport.h>
 #include <efengine/resources/ResourceManager.h>
@@ -142,6 +146,15 @@ void BuildProbeScene(EditorContext& ctx, const char* fbxPath) {
     luzSol.intensity = 8.0f;
     ctx.scene.AttachLight(sol, luzSol);
     ctx.scene.SetPrimarySun(sol);
+
+    // El nodo del modelo esta en el origen sin escala: la caja del modelo ES la de mundo.
+    if (renderer::DdgiPass* ddgi = ctx.app.GetPipeline().Find<renderer::DdgiPass>()) {
+        if (renderer::FitDdgiGridToBounds(ddgi->settings().grid, box)) {
+            const renderer::DdgiGrid& g = ddgi->settings().grid;
+            EF_LOG_INFO("ProbeScene: grilla DDGI encajada, origen (%.2f %.2f %.2f) spacing (%.2f %.2f %.2f)",
+                        g.origin.x, g.origin.y, g.origin.z, g.spacing.x, g.spacing.y, g.spacing.z);
+        }
+    }
 
     ctx.state.selected = h;   // F encuadra el modelo sin tener que buscarlo
     RefreshHandles(ctx);

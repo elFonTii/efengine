@@ -8,6 +8,7 @@
 #include <efengine/renderer/DdgiPass.h>
 #include <efengine/renderer/DdgiSettings.h>
 #include <efengine/renderer/DdgiVolume.h>
+#include <efengine/renderer/DdgiGridFit.h>
 #include <efengine/renderer/AoPass.h>
 #include <efengine/renderer/IndirectPass.h>
 #include <efengine/renderer/Bounds.h>
@@ -57,24 +58,8 @@ using namespace efengine;
                                          1, renderer::kMaxProbesPerAxis);
         ImGui::TextDisabled("total: %u probes", renderer::ProbeCount(s.grid));
 
-        // Encajar la grilla a la escena resuelve de un click la clase entera de
-        // bug "la grilla no cubre la sala", que es con la que arranco este ciclo.
         if (ImGui::Button("Encajar grilla a la escena", ImVec2(-kAnchoEtiqueta, 0.0f))) {
-            const renderer::AABB& b = ctx.scene.WorldBounds();
-            if (b.Valid()) {
-                // Un 10% de margen hacia adentro: un probe DENTRO de una pared
-                // captura su interior y contamina a sus vecinos por el peso
-                // trilineal.
-                const glm::vec3 ext    = b.Extents() * 0.9f;
-                const glm::vec3 minPos = b.Center() - ext;
-                const glm::ivec3 n     = s.grid.counts;
-                s.grid.origin  = minPos;
-                s.grid.spacing = glm::vec3(
-                    n.x > 1 ? (2.0f * ext.x) / f32(n.x - 1) : 1.0f,
-                    n.y > 1 ? (2.0f * ext.y) / f32(n.y - 1) : 1.0f,
-                    n.z > 1 ? (2.0f * ext.z) / f32(n.z - 1) : 1.0f);
-                gridChanged = true;
-            }
+            gridChanged |= renderer::FitDdgiGridToBounds(s.grid, ctx.scene.WorldBounds());
         }
         if (gridChanged) {
             ImGui::TextColored(kColorAviso,

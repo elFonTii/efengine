@@ -33,6 +33,7 @@ add_executable(efengine_tests
     renderer/VoxelMath.test.cpp
     renderer/VoxelGrid.test.cpp
     renderer/DdgiVolume.test.cpp
+    renderer/DdgiGridFit.test.cpp
     renderer/MaterialMap.test.cpp
     renderer/RenderTarget.test.cpp
     renderer/PipelineState.test.cpp
