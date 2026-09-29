@@ -6,6 +6,7 @@
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/DdgiVolume.h>
 #include <efengine/renderer/DdgiSettings.h>
+#include <efengine/renderer/FrameView.h>
 
 #include <cstddef>
 #include <vector>
@@ -44,6 +45,12 @@ TEST_CASE("Layout std140: los offsets de MaterialBlock son los calculados a mano
     CHECK(sizeof(ObjectBlock)   == 64u);
 }
 
+namespace {
+    FrameView Vista(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& pos) {
+        return MakeStaticFrameView(view, proj, pos, 1u, 1u);
+    }
+}
+
 TEST_CASE("MakeFrameBlock: empaqueta shadowParams como (enabled, biasMin, biasMax)") {
     ShadowContext shadow;
     shadow.enabled = true;
@@ -51,8 +58,7 @@ TEST_CASE("MakeFrameBlock: empaqueta shadowParams como (enabled, biasMin, biasMa
     shadow.biasMax = 0.004f;
     shadow.lightSpaceMatrix = glm::mat4(2.0f);
 
-    const FrameBlock b = MakeFrameBlock(glm::mat4(1.0f), glm::mat4(1.0f),
-                                        glm::vec3(7.0f, 8.0f, 9.0f), shadow, IblContext{});
+    const FrameBlock b = MakeFrameBlock(Vista(glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(7.0f, 8.0f, 9.0f)), shadow, IblContext{});
 
     CHECK(b.shadowParams.x == doctest::Approx(1.0f));
     CHECK(b.shadowParams.y == doctest::Approx(0.001f));
@@ -63,15 +69,13 @@ TEST_CASE("MakeFrameBlock: empaqueta shadowParams como (enabled, biasMin, biasMa
 }
 
 TEST_CASE("MakeFrameBlock: shadowParams.x en cero cuando la sombra esta apagada") {
-    const FrameBlock b = MakeFrameBlock(glm::mat4(1.0f), glm::mat4(1.0f),
-                                        glm::vec3(0.0f), ShadowContext{}, IblContext{});
+    const FrameBlock b = MakeFrameBlock(Vista(glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f)), ShadowContext{}, IblContext{});
     CHECK(b.shadowParams.x == doctest::Approx(0.0f));
 }
 
 TEST_CASE("MakeFrameBlock: hasIbl es 1 solo con los tres cubemaps presentes") {
     // Sin ninguno.
-    CHECK(MakeFrameBlock(glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f),
-                         ShadowContext{}, IblContext{}).iblParams.x
+    CHECK(MakeFrameBlock(Vista(glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f)), ShadowContext{}, IblContext{}).iblParams.x
           == doctest::Approx(0.0f));
 
     // Con dos de tres: el shader tiene que apagar el ambiente entero, no
@@ -81,8 +85,7 @@ TEST_CASE("MakeFrameBlock: hasIbl es 1 solo con los tres cubemaps presentes") {
     parcial.irradiance  = falsoCube;
     parcial.prefiltered = falsoCube;
     parcial.brdfLut     = null;
-    CHECK(MakeFrameBlock(glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f),
-                         ShadowContext{}, parcial).iblParams.x
+    CHECK(MakeFrameBlock(Vista(glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f)), ShadowContext{}, parcial).iblParams.x
           == doctest::Approx(0.0f));
 }
 
@@ -96,8 +99,7 @@ TEST_CASE("MakeFrameBlock: iblParams lleva intensidad y maxLod") {
     ibl.intensity   = 0.75f;
     ibl.maxLod      = 4.0f;
 
-    const FrameBlock b = MakeFrameBlock(glm::mat4(1.0f), glm::mat4(1.0f),
-                                        glm::vec3(0.0f), ShadowContext{}, ibl);
+    const FrameBlock b = MakeFrameBlock(Vista(glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f)), ShadowContext{}, ibl);
     CHECK(b.iblParams.x == doctest::Approx(1.0f));
     CHECK(b.iblParams.y == doctest::Approx(0.75f));
     CHECK(b.iblParams.z == doctest::Approx(4.0f));
@@ -111,8 +113,8 @@ TEST_CASE("MakeFrameBlock: invViewProjRot ignora la traslacion de la vista") {
     glm::mat4 viewB = glm::mat4(1.0f);
     viewB[3] = glm::vec4(10.0f, 20.0f, 30.0f, 1.0f);   // solo traslacion
 
-    const FrameBlock a = MakeFrameBlock(viewA, proj, glm::vec3(0.0f), ShadowContext{}, IblContext{});
-    const FrameBlock b = MakeFrameBlock(viewB, proj, glm::vec3(0.0f), ShadowContext{}, IblContext{});
+    const FrameBlock a = MakeFrameBlock(Vista(viewA, proj, glm::vec3(0.0f)), ShadowContext{}, IblContext{});
+    const FrameBlock b = MakeFrameBlock(Vista(viewB, proj, glm::vec3(0.0f)), ShadowContext{}, IblContext{});
 
     for (int c = 0; c < 4; ++c)
         for (int r = 0; r < 4; ++r)
@@ -336,4 +338,11 @@ TEST_CASE("MakeTraceVoxelPassBlock: el umbral de opacidad no pasa de 0.7") {
     CHECK(MakeTraceVoxelPassBlock(desc, 0.5f).gridParams.z == doctest::Approx(0.5f));
     CHECK(MakeTraceVoxelPassBlock(desc, 0.8f).gridParams.z == doctest::Approx(0.7f));
     CHECK(MakeTraceVoxelPassBlock(desc, 0.0f).gridParams.z > 0.0f);
+}
+
+TEST_CASE("MakeFrameBlock: view y projection salen de la FrameView con jitter") {
+    FrameView v = Vista(glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f));
+    v.projection[2][0] = 0.25f;
+    const FrameBlock b = MakeFrameBlock(v, ShadowContext{}, IblContext{});
+    CHECK(b.projection[2][0] == doctest::Approx(0.25f));
 }

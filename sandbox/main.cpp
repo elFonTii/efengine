@@ -253,6 +253,7 @@ int main(int argc, char** argv) {
     }
     sandbox::RefreshHandles(editor);
 
+    bool vistaPreviaAnterior = editorState.previewCamera;
     while (app.Running()) {
         app.BeginFrame();
         // Esc sale primero del mouselook: cerrar el sandbox de un tecleo
@@ -268,6 +269,11 @@ int main(int argc, char** argv) {
         controller.SetKeyboardEnabled(!app.GetDebugUI().WantsKeyboard());
 
         sandbox::DrawEditor(editor);
+        // Cambiar de camara es un corte: la historia de la otra no sirve.
+        if (editorState.previewCamera != vistaPreviaAnterior) {
+            app.ResetTemporalHistory();
+            vistaPreviaAnterior = editorState.previewCamera;
+        }
 
         // Despues de DrawEditor para que use la seleccion de ESTE frame.
         if (in.WasPressed(platform::Key::F)) sandbox::FocusSelection(editor);

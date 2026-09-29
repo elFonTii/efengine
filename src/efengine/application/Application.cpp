@@ -88,27 +88,20 @@ namespace application {
         const u32 w = m_window.GetWidth();
         const u32 h = m_window.GetHeight();
         if(w != 0 && h != 0) {
+            const bool cambioTamano = (w != m_sceneFB.width() || h != m_sceneFB.height());
             // ORDEN OBLIGATORIO: el framebuffer de escena PRIMERO. Su Resize
-            // crea un renderbuffer de profundidad nuevo y destruye el viejo, y
-            // el prepass del AO lo tiene prestado: si los pases se
-            // redimensionaran antes, el AO quedaria enganchado al attachment
-            // muerto. Con esto, AoPass::Resize lee el handle nuevo.
+            // recrea la profundidad y el prepass la tiene prestada.
             m_sceneFB.Resize(w, h);
             m_pipeline.Resize(w, h);
             m_postChain.Resize(w, h);
-            // El backbuffer sigue al framebuffer de la ventana. Sin esto,
-            // RenderTarget::Present() fijaria el viewport del tamano viejo.
+            if (cambioTamano) ResetTemporalHistory();
             efecom::SetPresentExtent(w, h);
         }
 
-        // Recalcula world-transforms y junta las listas de render una vez por
-        // frame: la sombra, la captura de DDGI y el forward leen el mismo
-        // resultado.
         scene.UpdateWorldTransforms();
 
-        // El frame entero es la lista de pases. El orden vive en el ctor, donde
-        // se registran; lo que un pase le pasa a otro viaja en el contexto.
-        renderer::FrameContext ctx { scene, camera, m_renderer, m_sceneFB, w, h };
+        m_lastView = renderer::MakeFrameView(camera, w, h, m_temporal, m_history);
+        renderer::FrameContext ctx { scene, camera, m_renderer, m_sceneFB, w, h, m_lastView };
         m_pipeline.Execute(&ctx);
 
         // Ya no hay "desbindear": el post chain declara su propio destino por pase.

@@ -14,6 +14,7 @@
 #include <efengine/platform/Input.h>
 #include <efengine/renderer/ScenePipeline.h>
 #include <efengine/renderer/GpuProfiler.h>
+#include <efengine/renderer/FrameView.h>
 #include <optional>
 
 namespace efengine {
@@ -40,6 +41,10 @@ namespace application {
             // El unico accessor de pases de escena. Los paneles encuentran el
             // suyo con Find<T>(): agregar un pase ya no agrega un accessor.
             renderer::ScenePipeline& GetPipeline() { return m_pipeline; }
+            renderer::TemporalSettings& GetTemporalSettings() { return m_temporal; }
+            const renderer::FrameView&  LastFrameView() const { return m_lastView; }
+            // El proximo frame no reproyecta contra el anterior.
+            void ResetTemporalHistory() { m_history.valid = false; }
 
             // FRAME API
             bool Running() const { return !m_window.ShouldClose(); }
@@ -83,6 +88,9 @@ namespace application {
             // m_resources: sus pases guardan referencias a los dos, y el orden
             // de declaracion es el que decide quien muere primero.
             renderer::ScenePipeline m_pipeline;
+            renderer::TemporalSettings m_temporal;
+            renderer::FrameHistory     m_history;
+            renderer::FrameView        m_lastView;
 
     };
 

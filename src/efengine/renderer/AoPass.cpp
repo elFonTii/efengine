@@ -121,7 +121,7 @@ namespace renderer {
     }
 
     void AoPass::Execute(FrameContext& ctx) {
-        Render(ctx.scene, ctx.camera.ViewMatrix(), ctx.camera.ProjectionMatrix());
+        Render(ctx.scene, ctx.view.view, ctx.view.projection);
 
         // Afuera de Render y no al final de su cuerpo: Render tiene retornos
         // tempranos y Application publicaba el contexto igual en esos casos.

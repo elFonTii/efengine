@@ -72,7 +72,7 @@ namespace renderer {
     }
 
     void IndirectPass::Execute(FrameContext& ctx) {
-        Render(ctx.lighting.ao, ctx.camera.ViewMatrix(), ctx.camera.ProjectionMatrix());
+        Render(ctx.lighting.ao, ctx.view.view, ctx.view.projection);
 
         // Afuera de Render: tiene retornos tempranos y el contexto se publicaba
         // igual en esos casos (vacio, que es como pbr.frag sabe que tiene que

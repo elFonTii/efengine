@@ -895,6 +895,10 @@ void RefreshHandles(EditorContext& ctx) {
     st.sun        = ctx.scene.FindByName("directional_light");
     st.animate    = algunBehaviorActivo(ctx.scene, st.rat);
     st.animateSun = algunBehaviorActivo(ctx.scene, st.sun);
+
+    // Escena nueva: nada del frame anterior vale para reproyectar.
+    ctx.app.ResetTemporalHistory();
+    ctx.scene.ResetMotion();
 }
 
 void FocusSelection(EditorContext& ctx) {

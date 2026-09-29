@@ -10,7 +10,7 @@ namespace efengine {
 namespace renderer {
 
     void LightUploadPass::Execute(FrameContext& ctx) {
-        const glm::mat4 vp = ctx.camera.ProjectionMatrix() * ctx.camera.ViewMatrix();
+        const glm::mat4 vp = ctx.view.viewProjNoJitter;
         PackLights(ctx.scene.Lights(), ExtractFrustum(vp), m_packed);
 
         m_stats.locals             = static_cast<u32>(m_packed.locals.size());

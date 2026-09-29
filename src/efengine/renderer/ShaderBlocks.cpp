@@ -100,19 +100,18 @@ namespace renderer {
     static_assert(offsetof(AoBlock, params)   ==  0u, "AoBlock.params");
     static_assert(offsetof(AoBlock, upsample) == 16u, "AoBlock.upsample");
 
-    FrameBlock MakeFrameBlock(const glm::mat4& view, const glm::mat4& projection,
-                              const glm::vec3& viewPos,
+    FrameBlock MakeFrameBlock(const FrameView& v,
                               const ShadowContext& shadow, const IblContext& ibl) {
         FrameBlock b {};
-        b.view             = view;
-        b.projection       = projection;
+        b.view             = v.view;
+        b.projection       = v.projection;
         b.lightSpaceMatrix = shadow.lightSpaceMatrix;
 
-        // Sin traslacion: el entorno se ve "infinitamente lejos". Antes lo
-        // calculaba SkyboxPass; vive aca para que el skybox no tenga uniforms propios.
-        b.invViewProjRot = glm::inverse(projection * glm::mat4(glm::mat3(view)));
+        // Sin traslacion: el entorno se ve "infinitamente lejos". Con el jitter
+        // de la geometria, para que el borde del cielo tiemble junto con ella.
+        b.invViewProjRot = glm::inverse(v.projection * glm::mat4(glm::mat3(v.view)));
 
-        b.viewPos      = glm::vec4(viewPos, 0.0f);
+        b.viewPos      = glm::vec4(v.viewPos, 0.0f);
         b.shadowParams = glm::vec4(shadow.enabled ? 1.0f : 0.0f,
                                    shadow.biasMin, shadow.biasMax,
                                    shadow.normalOffset);

@@ -43,10 +43,10 @@ namespace renderer {
         ComputeCascadeSplits(cam.NearPlane(), m_settings.shadowDistance,
                              count, m_settings.lambda, fars);
 
-        const glm::mat4 invView = glm::inverse(cam.ViewMatrix());
+        const glm::mat4 invView = ctx.view.invView;
         // El aspect sale de la proyeccion y no de la ventana: es el que la camara
         // esta usando de verdad este frame.
-        const glm::mat4 proj   = cam.ProjectionMatrix();
+        const glm::mat4 proj   = ctx.view.projectionNoJitter;
         const f32       aspect = proj[1][1] / proj[0][0];
 
         efecom::ApplyPipelineState(ShadowDepthState());

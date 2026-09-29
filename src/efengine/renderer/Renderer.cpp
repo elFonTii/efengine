@@ -83,8 +83,7 @@ namespace renderer {
         }
     }
 
-    void Renderer::BeginScene(const glm::mat4& view, const glm::mat4& projection,
-                              const glm::vec3& viewPos, const SceneLighting& lighting) {
+    void Renderer::BeginScene(const FrameView& view, const SceneLighting& lighting) {
         const ShadowContext& shadow = lighting.shadow;
         const IblContext&    ibl    = lighting.ibl;
         const DdgiContext&   ddgi   = lighting.ddgi;
@@ -102,7 +101,7 @@ namespace renderer {
             ibl.brdfLut->Bind(11);
         }
 
-        const FrameBlock  frameBlock  = MakeFrameBlock(view, projection, viewPos, shadow, ibl);
+        const FrameBlock  frameBlock  = MakeFrameBlock(view, shadow, ibl);
 
         m_frameUbo.Update(&frameBlock, sizeof(frameBlock));
 

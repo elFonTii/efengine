@@ -304,8 +304,9 @@ namespace renderer {
             // El ibl que llega aca es el del frame, y tiene que serlo: el rayo
             // que se escapa lee la intensidad de uIblParams.y, y con un bloque
             // vacio el cielo de la captura sale negro.
-            m_renderer.SetFrameBlock(MakeFrameBlock(glm::mat4(1.0f), glm::mat4(1.0f),
-                                                    glm::vec3(0.0f), shadow, ibl));
+            m_renderer.SetFrameBlock(MakeFrameBlock(
+                MakeStaticFrameView(glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f), 1u, 1u),
+                shadow, ibl));
 
             const TraceVoxelPassBlock bloque =
                 MakeTraceVoxelPassBlock(m_grid.desc(), m_settings.opacityThreshold);

@@ -23,7 +23,7 @@ namespace renderer {
     }
 
     void ClusterLightPass::Execute(FrameContext& ctx) {
-        const glm::mat4   proyeccion = ctx.camera.ProjectionMatrix();
+        const glm::mat4   proyeccion = ctx.view.projectionNoJitter;
         const ClusterGrid grid = MakeClusterGrid(m_settings, ctx.width, ctx.height,
                                                  ctx.camera.NearPlane(), ctx.camera.FarPlane());
 

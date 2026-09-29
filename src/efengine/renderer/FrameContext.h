@@ -1,6 +1,7 @@
 #pragma once
 #include <efengine/core/Types.h>
 #include <efengine/renderer/SceneLighting.h>
+#include <efengine/renderer/FrameView.h>
 
 namespace efengine {
 namespace scene { class SceneGraph; class Camera; }
@@ -23,6 +24,8 @@ namespace renderer {
         Framebuffer&         sceneFB;
         u32 width  = 0u;
         u32 height = 0u;
+        // La camara del frame. Unica fuente de view/projection: ver FrameView.h.
+        FrameView view;
 
         // Los contextos de iluminacion que los pases se pasan entre si. Arranca
         // vacio en cada frame: un contexto del frame anterior con la camara de

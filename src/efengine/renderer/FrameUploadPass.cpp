@@ -9,8 +9,7 @@ namespace efengine {
 namespace renderer {
 
     void FrameUploadPass::Execute(FrameContext& ctx) {
-        ctx.renderer.BeginScene(ctx.camera.ViewMatrix(), ctx.camera.ProjectionMatrix(),
-                                ctx.camera.Position(), ctx.lighting);
+        ctx.renderer.BeginScene(ctx.view, ctx.lighting);
     }
 
 }

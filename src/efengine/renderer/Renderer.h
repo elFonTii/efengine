@@ -11,6 +11,7 @@
 #include <efengine/renderer/ShadowContext.h>
 #include <efengine/renderer/IblContext.h>
 #include <efengine/renderer/ShaderBlocks.h>
+#include <efengine/renderer/FrameView.h>
 #include <efengine/renderer/SceneLighting.h>
 #include <efengine/renderer/IndirectContext.h>
 #include <efengine/renderer/UniformBuffer.h>
@@ -87,8 +88,7 @@ namespace renderer {
             // decimo. Ver SceneLighting.h.
             // Las luces ya no viajan aca: las sube LightUploadPass al principio
             // del frame, antes de DDGI. Ver UploadLights.
-            void BeginScene(const glm::mat4& view, const glm::mat4& projection,
-                            const glm::vec3& viewPos, const SceneLighting& lighting);
+            void BeginScene(const FrameView& view, const SceneLighting& lighting);
 
             // UBO Lights (binding 1) + SSBO LocalLights (1) y VisibleLights (2).
             void UploadLights(const PackedLights& lights) const;

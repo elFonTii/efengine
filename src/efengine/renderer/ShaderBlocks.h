@@ -7,6 +7,7 @@
 #include <efengine/renderer/CascadeContext.h>
 #include <efengine/renderer/VoxelMath.h>
 #include <efengine/renderer/ClusterMath.h>
+#include <efengine/renderer/FrameView.h>
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -240,8 +241,7 @@ namespace renderer {
     // No tocan la GPU: son las que vuelven testeable headless lo que antes era
     // una tira de glUniform*.
 
-    FrameBlock  MakeFrameBlock(const glm::mat4& view, const glm::mat4& projection,
-                               const glm::vec3& viewPos,
+    FrameBlock  MakeFrameBlock(const FrameView& view,
                                const ShadowContext& shadow, const IblContext& ibl);
 
     // maxDistance SI viaja en el bloque (params2.x). Ademas del far plane de la
