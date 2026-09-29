@@ -24,14 +24,21 @@ TEST_CASE("Layout std140: los tamanos de los bloques son multiplos de 16") {
 }
 
 TEST_CASE("Layout std140: los offsets de FrameBlock son los calculados a mano") {
-    CHECK(offsetof(FrameBlock, view)             ==   0u);
-    CHECK(offsetof(FrameBlock, projection)       ==  64u);
-    CHECK(offsetof(FrameBlock, lightSpaceMatrix) == 128u);
-    CHECK(offsetof(FrameBlock, invViewProjRot)   == 192u);
-    CHECK(offsetof(FrameBlock, viewPos)          == 256u);
-    CHECK(offsetof(FrameBlock, shadowParams)     == 272u);
-    CHECK(offsetof(FrameBlock, iblParams)        == 288u);
-    CHECK(sizeof(FrameBlock) == 304u);
+    CHECK(offsetof(FrameBlock, view)                 ==   0u);
+    CHECK(offsetof(FrameBlock, projection)           ==  64u);
+    CHECK(offsetof(FrameBlock, lightSpaceMatrix)     == 128u);
+    CHECK(offsetof(FrameBlock, invViewProjRot)       == 192u);
+    CHECK(offsetof(FrameBlock, viewPos)              == 256u);
+    CHECK(offsetof(FrameBlock, shadowParams)         == 272u);
+    CHECK(offsetof(FrameBlock, iblParams)            == 288u);
+    CHECK(offsetof(FrameBlock, invView)              == 304u);
+    CHECK(offsetof(FrameBlock, invProjection)        == 368u);
+    CHECK(offsetof(FrameBlock, viewProjNoJitter)     == 432u);
+    CHECK(offsetof(FrameBlock, prevViewProjNoJitter) == 496u);
+    CHECK(offsetof(FrameBlock, jitter)               == 560u);
+    CHECK(offsetof(FrameBlock, screen)               == 576u);
+    CHECK(offsetof(FrameBlock, frameParams)          == 592u);
+    CHECK(sizeof(FrameBlock) == 608u);
 }
 
 TEST_CASE("Layout std140: los offsets de MaterialBlock son los calculados a mano") {
@@ -345,4 +352,33 @@ TEST_CASE("MakeFrameBlock: view y projection salen de la FrameView con jitter") 
     v.projection[2][0] = 0.25f;
     const FrameBlock b = MakeFrameBlock(v, ShadowContext{}, IblContext{});
     CHECK(b.projection[2][0] == doctest::Approx(0.25f));
+}
+
+TEST_CASE("MakeFrameBlock: copia los campos temporales de la FrameView") {
+    FrameView v = Vista(glm::mat4(1.0f), glm::mat4(2.0f), glm::vec3(0.0f));
+    v.invView              = glm::mat4(3.0f);
+    v.invProjection        = glm::mat4(4.0f);
+    v.viewProjNoJitter     = glm::mat4(5.0f);
+    v.prevViewProjNoJitter = glm::mat4(6.0f);
+    v.jitterNdc     = glm::vec2(0.1f, 0.2f);
+    v.prevJitterNdc = glm::vec2(0.3f, 0.4f);
+    v.width = 1920u; v.height = 1080u; v.frameIndex = 42u; v.jitterEnabled = true;
+
+    const FrameBlock b = MakeFrameBlock(v, ShadowContext{}, IblContext{});
+    CHECK(b.invView[0][0]              == doctest::Approx(3.0f));
+    CHECK(b.invProjection[0][0]        == doctest::Approx(4.0f));
+    CHECK(b.viewProjNoJitter[0][0]     == doctest::Approx(5.0f));
+    CHECK(b.prevViewProjNoJitter[0][0] == doctest::Approx(6.0f));
+    CHECK(b.jitter == glm::vec4(0.1f, 0.2f, 0.3f, 0.4f));
+    CHECK(b.screen.x == doctest::Approx(1920.0f));
+    CHECK(b.screen.w == doctest::Approx(1.0f / 1080.0f));
+    CHECK(b.frameParams == glm::uvec4(42u, 1u, 0u, 0u));
+}
+
+TEST_CASE("MakeFrameBlock: resolucion 0 no deja infinitos en screen") {
+    FrameView v = Vista(glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f));
+    v.width = 0u; v.height = 0u;
+    const FrameBlock b = MakeFrameBlock(v, ShadowContext{}, IblContext{});
+    CHECK(b.screen.z == doctest::Approx(0.0f));
+    CHECK(b.screen.w == doctest::Approx(0.0f));
 }

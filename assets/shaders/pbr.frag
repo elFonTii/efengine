@@ -8,15 +8,7 @@ out vec4 FragColor;
 
 // Constante por frame: view/proj, la matriz light-space, la del skybox, y los
 // escalares de sombra e IBL. Lo sube Renderer::BeginScene una vez.
-layout(std140, binding = 0) uniform Frame {
-    mat4 uView;
-    mat4 uProjection;
-    mat4 uLightSpaceMatrix;
-    mat4 uInvViewProjRot;
-    vec4 uViewPos;        // .xyz
-    vec4 uShadowParams;   // x=enabled, y=biasMin, z=biasMax, w=normalOffset (m)
-    vec4 uIblParams;      // x=hasIbl, y=intensity, z=prefilterMaxLod
-};
+#include "common/frame.glsl"
 
 // Bloque Lights (binding 1), SSBO de locales y visibles, y su matematica.
 #include "common/lights.glsl"

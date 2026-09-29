@@ -63,13 +63,20 @@ namespace renderer {
 
     // Lo que no cambia en todo el frame. Lo sube Renderer::BeginScene.
     struct alignas(16) FrameBlock {
-        glm::mat4 view;
-        glm::mat4 projection;
-        glm::mat4 lightSpaceMatrix;
-        glm::mat4 invViewProjRot;   // para el skybox: inverse(proj * mat3(view))
-        glm::vec4 viewPos;          // .xyz
-        glm::vec4 shadowParams;     // x=enabled, y=biasMin, z=biasMax, w=normalOffset (m)
-        glm::vec4 iblParams;        // x=hasIbl, y=intensity, z=prefilterMaxLod
+        glm::mat4  view;
+        glm::mat4  projection;          // con jitter
+        glm::mat4  lightSpaceMatrix;
+        glm::mat4  invViewProjRot;      // para el skybox: inverse(proj * mat3(view))
+        glm::vec4  viewPos;             // .xyz
+        glm::vec4  shadowParams;        // x=enabled, y=biasMin, z=biasMax, w=normalOffset (m)
+        glm::vec4  iblParams;           // x=hasIbl, y=intensity, z=prefilterMaxLod
+        glm::mat4  invView;
+        glm::mat4  invProjection;
+        glm::mat4  viewProjNoJitter;
+        glm::mat4  prevViewProjNoJitter;
+        glm::vec4  jitter;              // xy = jitter NDC, zw = el del frame anterior
+        glm::vec4  screen;              // x = ancho, y = alto, z = 1/ancho, w = 1/alto
+        glm::uvec4 frameParams;         // x = frameIndex, y = jitter prendido
     };
 
     struct alignas(16) LightsBlock {

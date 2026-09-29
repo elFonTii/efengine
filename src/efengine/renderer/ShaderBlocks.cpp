@@ -26,14 +26,21 @@ namespace renderer {
     static_assert(kMaxCascades == 4u,
                   "CascadeBlock: los arrays son de 4; sincronizar con kMaxCascades y con el shader");
 
-    static_assert(sizeof(FrameBlock) == 304u, "FrameBlock: tamano std140 roto");
-    static_assert(offsetof(FrameBlock, view)             ==   0u, "FrameBlock.view");
-    static_assert(offsetof(FrameBlock, projection)       ==  64u, "FrameBlock.projection");
-    static_assert(offsetof(FrameBlock, lightSpaceMatrix) == 128u, "FrameBlock.lightSpaceMatrix");
-    static_assert(offsetof(FrameBlock, invViewProjRot)   == 192u, "FrameBlock.invViewProjRot");
-    static_assert(offsetof(FrameBlock, viewPos)          == 256u, "FrameBlock.viewPos");
-    static_assert(offsetof(FrameBlock, shadowParams)     == 272u, "FrameBlock.shadowParams");
-    static_assert(offsetof(FrameBlock, iblParams)        == 288u, "FrameBlock.iblParams");
+    static_assert(sizeof(FrameBlock) == 608u, "FrameBlock: tamano std140 roto");
+    static_assert(offsetof(FrameBlock, view)                 ==   0u, "FrameBlock.view");
+    static_assert(offsetof(FrameBlock, projection)           ==  64u, "FrameBlock.projection");
+    static_assert(offsetof(FrameBlock, lightSpaceMatrix)     == 128u, "FrameBlock.lightSpaceMatrix");
+    static_assert(offsetof(FrameBlock, invViewProjRot)       == 192u, "FrameBlock.invViewProjRot");
+    static_assert(offsetof(FrameBlock, viewPos)              == 256u, "FrameBlock.viewPos");
+    static_assert(offsetof(FrameBlock, shadowParams)         == 272u, "FrameBlock.shadowParams");
+    static_assert(offsetof(FrameBlock, iblParams)            == 288u, "FrameBlock.iblParams");
+    static_assert(offsetof(FrameBlock, invView)              == 304u, "FrameBlock.invView");
+    static_assert(offsetof(FrameBlock, invProjection)        == 368u, "FrameBlock.invProjection");
+    static_assert(offsetof(FrameBlock, viewProjNoJitter)     == 432u, "FrameBlock.viewProjNoJitter");
+    static_assert(offsetof(FrameBlock, prevViewProjNoJitter) == 496u, "FrameBlock.prevViewProjNoJitter");
+    static_assert(offsetof(FrameBlock, jitter)               == 560u, "FrameBlock.jitter");
+    static_assert(offsetof(FrameBlock, screen)               == 576u, "FrameBlock.screen");
+    static_assert(offsetof(FrameBlock, frameParams)          == 592u, "FrameBlock.frameParams");
 
     static_assert(sizeof(VoxelizePassBlock) == 96u, "VoxelizePassBlock: tamano std140 roto");
     static_assert(offsetof(VoxelizePassBlock, viewProj)   ==  0u, "VoxelizePassBlock.viewProj");
@@ -122,6 +129,17 @@ namespace renderer {
                           && ibl.prefiltered != null
                           && ibl.brdfLut != null);
         b.iblParams = glm::vec4(hasIbl ? 1.0f : 0.0f, ibl.intensity, ibl.maxLod, 0.0f);
+
+        b.invView              = v.invView;
+        b.invProjection        = v.invProjection;
+        b.viewProjNoJitter     = v.viewProjNoJitter;
+        b.prevViewProjNoJitter = v.prevViewProjNoJitter;
+        b.jitter = glm::vec4(v.jitterNdc, v.prevJitterNdc);
+
+        const f32 w = static_cast<f32>(v.width);
+        const f32 h = static_cast<f32>(v.height);
+        b.screen = glm::vec4(w, h, w > 0.0f ? 1.0f / w : 0.0f, h > 0.0f ? 1.0f / h : 0.0f);
+        b.frameParams = glm::uvec4(v.frameIndex, v.jitterEnabled ? 1u : 0u, 0u, 0u);
 
         return b;
     }

@@ -29,15 +29,7 @@ out mat3 vTBN;
 // La expresion de gl_Position tambien tiene que quedar identica en los dos.
 invariant gl_Position;
 
-layout(std140, binding = 0) uniform Frame {
-    mat4 uView;
-    mat4 uProjection;
-    mat4 uLightSpaceMatrix;
-    mat4 uInvViewProjRot;
-    vec4 uViewPos;        // .xyz
-    vec4 uShadowParams;   // x=enabled, y=biasMin, z=biasMax
-    vec4 uIblParams;      // x=hasIbl, y=intensity, z=prefilterMaxLod
-};
+#include "common/frame.glsl"
 
 layout(std140, binding = 2) uniform Object {
     mat4 uModel;

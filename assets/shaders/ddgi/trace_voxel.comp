@@ -39,15 +39,7 @@ layout(std140, binding = 4) uniform TraceVoxelParams {
                          // que se desincroniza en cuanto alguien toque una sola.
 };
 
-layout(std140, binding = 0) uniform Frame {
-    mat4 uView;
-    mat4 uProjection;
-    mat4 uLightSpaceMatrix;
-    mat4 uInvViewProjRot;
-    vec4 uViewPos;
-    vec4 uShadowParams;   // x=enabled, y=biasMin, z=biasMax, w=normalOffset (m)
-    vec4 uIblParams;
-};
+#include "common/frame.glsl"
 
 #include "common/lights.glsl"
 

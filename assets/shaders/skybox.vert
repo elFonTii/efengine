@@ -7,15 +7,7 @@ layout(location = 0) in vec2 aPos;   // esquina del quad, en NDC [-1,1]
 out vec3 vDir;                        // dirección de vista en espacio mundo
 
 // uInvViewProjRot lo calcula MakeFrameBlock: el skybox no tiene uniforms propios.
-layout(std140, binding = 0) uniform Frame {
-    mat4 uView;
-    mat4 uProjection;
-    mat4 uLightSpaceMatrix;
-    mat4 uInvViewProjRot;         // inverse(projection * mat4(mat3(view)))
-    vec4 uViewPos;
-    vec4 uShadowParams;
-    vec4 uIblParams;
-};
+#include "common/frame.glsl"
 
 void main() {
     vec4 world = uInvViewProjRot * vec4(aPos, 1.0, 1.0);  // punto en el plano lejano

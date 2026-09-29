@@ -33,15 +33,7 @@ layout(binding = 1) uniform sampler2D uAo;            // target AO: xyz = bent n
 // BeginScene a proposito -- ver el comentario de orden en IndirectPass.h --, asi
 // que la view/proj y la posicion de camara del frame ya estan subidas y no hace
 // falta re-empaquetarlas.
-layout(std140, binding = 0) uniform Frame {
-    mat4 uView;
-    mat4 uProjection;
-    mat4 uLightSpaceMatrix;
-    mat4 uInvViewProjRot;
-    vec4 uViewPos;        // .xyz = camara
-    vec4 uShadowParams;
-    vec4 uIblParams;
-};
+#include "common/frame.glsl"
 
 layout(std140, binding = 4) uniform IndirectParams {
     mat4  uViewToWorld;   // inverse(view): del prepass (view-space) al mundo

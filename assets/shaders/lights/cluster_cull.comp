@@ -6,15 +6,7 @@
 
 layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
 
-layout(std140, binding = 0) uniform Frame {
-    mat4 uView;
-    mat4 uProjection;
-    mat4 uLightSpaceMatrix;
-    mat4 uInvViewProjRot;
-    vec4 uViewPos;
-    vec4 uShadowParams;
-    vec4 uIblParams;
-};
+#include "common/frame.glsl"
 
 #include "common/lights.glsl"
 #include "common/clusters.glsl"

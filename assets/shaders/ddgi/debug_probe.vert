@@ -6,15 +6,7 @@ layout(location = 1) in vec3 aNormal;
 
 out vec3 vNormal;
 
-layout(std140, binding = 0) uniform Frame {
-    mat4 uView;
-    mat4 uProjection;
-    mat4 uLightSpaceMatrix;
-    mat4 uInvViewProjRot;
-    vec4 uViewPos;
-    vec4 uShadowParams;
-    vec4 uIblParams;
-};
+#include "common/frame.glsl"
 
 layout(std140, binding = 2) uniform Object {
     mat4 uModel;

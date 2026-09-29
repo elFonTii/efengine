@@ -8,15 +8,7 @@ out vec3 vFragPos;   // posición en espacio mundo
 out vec3 vNormal;    // normal en espacio mundo
 out vec2 vUV;
 
-layout(std140, binding = 0) uniform Frame {
-    mat4 uView;
-    mat4 uProjection;
-    mat4 uLightSpaceMatrix;
-    mat4 uInvViewProjRot;
-    vec4 uViewPos;
-    vec4 uShadowParams;
-    vec4 uIblParams;
-};
+#include "common/frame.glsl"
 
 layout(std140, binding = 2) uniform Object {
     mat4 uModel;
