@@ -65,6 +65,11 @@ namespace scene {
             math::Transform         local; // transform relativo al padre (parent.transform * local.transform)
             glm::mat4               worldMatrix {1.0f};
             bool                    worldDirty = true;
+            // El world del frame renderizado anterior. Lo mantiene
+            // SceneGraph::UpdateWorldTransforms; prevValid en false hace que el
+            // proximo frame no tenga estela (nodo nuevo, teleport, carga).
+            glm::mat4               prevWorldMatrix {1.0f};
+            bool                    prevValid = false;
 
             NodeHandle              parent;
             std::vector<NodeHandle> children;

@@ -258,16 +258,32 @@ namespace scene {
         }
     }
 
+    void SceneGraph::ResetMotion(NodeHandle handle) {
+        if (Node* n = TryGet(handle)) n->prevValid = false;
+    }
+
+    void SceneGraph::ResetMotion() {
+        for (Slot& s : m_slots) {
+            if (s.alive) s.node.prevValid = false;
+        }
+    }
+
     void SceneGraph::updateNode(NodeHandle handle, const glm::mat4& parentWorld, bool parentChanged) {
         Node& node = m_slots[handle.index].node;
         bool recompute = node.worldDirty || parentChanged;
+        if (node.prevValid) node.prevWorldMatrix = node.worldMatrix;
         if (recompute) {
             node.worldMatrix = parentWorld * node.local.Matrix();
             node.worldDirty = false;
         }
+        if (!node.prevValid) {
+            node.prevWorldMatrix = node.worldMatrix;
+            node.prevValid = true;
+        }
 
         if (node.mesh && node.mesh->model) {
-            m_renderables.push_back(RenderItem{ node.worldMatrix, node.mesh->model, &node.mesh->materials });
+            m_renderables.push_back(RenderItem{ node.worldMatrix, node.mesh->model,
+                                                &node.mesh->materials, node.prevWorldMatrix });
         }
         if (node.light) {
             renderer::Light luz = ResolveLight(*node.light, node.worldMatrix);

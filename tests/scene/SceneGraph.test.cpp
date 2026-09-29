@@ -636,3 +636,79 @@ TEST_CASE("SceneGraph: sin sol primario valido, Sun() vuelve al default") {
     CHECK(g.Sun().color.r == 0.0f);
     CHECK(g.Sun().direction.y == doctest::Approx(-1.0f));
 }
+
+namespace {
+    math::Transform EnX(f32 x) { math::Transform t; t.position = glm::vec3(x, 0.0f, 0.0f); return t; }
+}
+
+TEST_CASE("SceneGraph: un nodo nuevo arranca sin estela") {
+    scene::SceneGraph g;
+    const scene::NodeHandle h = g.CreateNode("movil");
+    g.SetLocalTransform(h, EnX(1.0f));
+    g.UpdateWorldTransforms();
+    CHECK(g.Get(h).prevWorldMatrix == g.Get(h).worldMatrix);
+}
+
+TEST_CASE("SceneGraph: prevWorldMatrix es el world del UpdateWorldTransforms anterior") {
+    scene::SceneGraph g;
+    const scene::NodeHandle h = g.CreateNode("movil");
+    g.SetLocalTransform(h, EnX(1.0f));
+    g.UpdateWorldTransforms();
+
+    g.SetLocalTransform(h, EnX(3.0f));
+    g.UpdateWorldTransforms();
+    CHECK(g.Get(h).worldMatrix[3].x     == doctest::Approx(3.0f));
+    CHECK(g.Get(h).prevWorldMatrix[3].x == doctest::Approx(1.0f));
+
+    // Quieto un frame: el prev alcanza al world aunque el nodo no este sucio.
+    g.UpdateWorldTransforms();
+    CHECK(g.Get(h).prevWorldMatrix[3].x == doctest::Approx(3.0f));
+}
+
+TEST_CASE("SceneGraph: el hijo de un padre que se movio tambien tiene prev") {
+    scene::SceneGraph g;
+    const scene::NodeHandle padre = g.CreateNode("padre");
+    const scene::NodeHandle hijo  = g.CreateChild(padre, "hijo");
+    g.SetLocalTransform(hijo, EnX(1.0f));
+    g.UpdateWorldTransforms();
+
+    g.SetLocalTransform(padre, EnX(10.0f));
+    g.UpdateWorldTransforms();
+    CHECK(g.Get(hijo).worldMatrix[3].x     == doctest::Approx(11.0f));
+    CHECK(g.Get(hijo).prevWorldMatrix[3].x == doctest::Approx(1.0f));
+}
+
+TEST_CASE("SceneGraph::ResetMotion borra la estela del proximo frame") {
+    scene::SceneGraph g;
+    const scene::NodeHandle a = g.CreateNode("a");
+    const scene::NodeHandle b = g.CreateNode("b");
+    g.UpdateWorldTransforms();
+
+    g.SetLocalTransform(a, EnX(5.0f));
+    g.SetLocalTransform(b, EnX(5.0f));
+    g.ResetMotion(a);
+    g.UpdateWorldTransforms();
+    CHECK(g.Get(a).prevWorldMatrix == g.Get(a).worldMatrix);
+    CHECK(g.Get(b).prevWorldMatrix[3].x == doctest::Approx(0.0f));
+
+    g.SetLocalTransform(b, EnX(9.0f));
+    g.ResetMotion();
+    g.UpdateWorldTransforms();
+    CHECK(g.Get(b).prevWorldMatrix == g.Get(b).worldMatrix);
+
+    g.ResetMotion(scene::NodeHandle{});   // handle invalido: no-op
+}
+
+TEST_CASE("SceneGraph: RenderItem lleva el world anterior") {
+    scene::SceneGraph g;
+    renderer::Model model = MakeEmptyModelSG();
+    const scene::NodeHandle h = g.CreateNode("conMalla");
+    g.AttachMesh(h, { &model, {} });
+    g.UpdateWorldTransforms();
+
+    g.SetLocalTransform(h, EnX(2.0f));
+    g.UpdateWorldTransforms();
+    REQUIRE(g.Renderables().size() == 1u);
+    CHECK(g.Renderables()[0].world[3].x     == doctest::Approx(2.0f));
+    CHECK(g.Renderables()[0].prevWorld[3].x == doctest::Approx(0.0f));
+}

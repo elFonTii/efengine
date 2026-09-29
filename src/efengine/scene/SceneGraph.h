@@ -17,6 +17,7 @@ namespace scene {
         glm::mat4                    world;
         const renderer::Model*       model;
         const renderer::MaterialMap* materials;
+        glm::mat4                    prevWorld {1.0f};
     };
 
     class SceneGraph {
@@ -63,7 +64,12 @@ namespace scene {
             bool IsAncestorOrSelf(NodeHandle maybeAncestor, NodeHandle of) const;
 
             // Transforms
+            // Una vez por frame renderizado: tambien avanza Node::prevWorldMatrix.
             void UpdateWorldTransforms();
+
+            // El proximo UpdateWorldTransforms deja prev == world (sin estela).
+            void ResetMotion(NodeHandle handle);
+            void ResetMotion();
 
             // World de un nodo resuelto AHORA, caminando solo su cadena de
             // padres. Publico porque el cliente tiene que resolver la camara
