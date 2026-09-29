@@ -22,5 +22,6 @@ namespace sandbox {
     void dibujarPanelLuces(EditorContext& ctx);
     void dibujarPanelDdgi(EditorContext& ctx);
     void dibujarPanelAo(EditorContext& ctx);
+    void dibujarPanelTemporal(EditorContext& ctx);
 
 }

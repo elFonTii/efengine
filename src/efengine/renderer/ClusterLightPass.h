@@ -29,11 +29,13 @@ namespace renderer {
             ClusterSettings&       settings()       { return m_settings; }
             const ClusterSettings& settings() const { return m_settings; }
             const ClusterGrid&     grid()     const { return m_grid; }
+            u32                    aabbRebuilds() const { return m_aabbRebuilds; }
 
         private:
             explicit ClusterLightPass(const Shader* cull) : m_cull(cull) {}
 
             const Shader*   m_cull = null;
+            u32             m_aabbRebuilds = 0u;
             ClusterSettings m_settings;
             ClusterGrid     m_grid;
             bool            m_hayGrilla = false;

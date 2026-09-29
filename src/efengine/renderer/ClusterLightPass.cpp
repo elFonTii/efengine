@@ -37,6 +37,7 @@ namespace renderer {
             m_listas.emplace(clusters * (grid.maxLightsPerCluster + 1u) * sizeof(u32));
         }
         if (cambioCajas) {
+            ++m_aabbRebuilds;
             const std::vector<ClusterAabb> cajas =
                 BuildClusterAabbs(grid, glm::inverse(proyeccion), ctx.width, ctx.height);
             m_aabbs->Update(cajas.data(), cajas.size() * sizeof(ClusterAabb));

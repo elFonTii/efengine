@@ -13,6 +13,7 @@ namespace sandbox {
             &dibujarPanelLuces,
             &dibujarPanelDdgi,
             &dibujarPanelAo,
+            &dibujarPanelTemporal,
         };
         return paneles;
     }

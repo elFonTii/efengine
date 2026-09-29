@@ -19,6 +19,7 @@ add_executable(sandbox
     panels/DdgiPanel.cpp
     panels/AoPanel.cpp
     panels/LightsPanel.cpp
+    panels/TemporalPanel.cpp
 )
 
 # Linkeamos contra el motor.
