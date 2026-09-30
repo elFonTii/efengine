@@ -8,9 +8,7 @@ out vec3 vNormal;
 
 #include "common/frame.glsl"
 
-layout(std140, binding = 2) uniform Object {
-    mat4 uModel;
-};
+#include "common/object.glsl"
 
 layout(std140, binding = 4) uniform PassParams {
     vec4 uProbeParams;   // x = probeIndex, y = modo

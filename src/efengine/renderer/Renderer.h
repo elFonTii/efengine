@@ -67,6 +67,10 @@ namespace renderer {
         // esto. Lo usa la captura de DDGI para dibujar las 6 caras de
         // cada probe con un solo draw.
         u32 instances = 1u;
+
+        // El world del frame anterior. null = el mismo que el actual. Solo lo
+        // pasa el prepass: es el unico que escribe velocidades.
+        const glm::mat4* prevModel = null;
     };
 
 
@@ -116,6 +120,7 @@ namespace renderer {
             // Sube la matriz de modelo al bloque Object (binding 2). Publico
             // porque ShadowPass tambien dibuja por objeto y necesita el mismo bloque.
             void SetObjectMatrix(const glm::mat4& model) const;
+            void SetObjectMatrix(const glm::mat4& model, const glm::mat4& prevModel) const;
 
             // Sube un bloque Frame arbitrario (binding 0). Publico porque la
             // captura de probes de DDGI lo re-sube seis veces por probe, con la

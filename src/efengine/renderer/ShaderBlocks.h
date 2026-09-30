@@ -95,8 +95,10 @@ namespace renderer {
         glm::vec4 reserved;        // x = shadowIndex (-1), y = flags (bit 0 castShadows)
     };
 
+    // prevModel solo lo lee el prepass (velocidades); el resto sube prev == model.
     struct alignas(16) ObjectBlock {
         glm::mat4 model;
+        glm::mat4 prevModel;
     };
 
     struct alignas(16) MaterialBlock {

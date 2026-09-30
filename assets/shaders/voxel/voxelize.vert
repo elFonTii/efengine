@@ -13,9 +13,7 @@ layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNormal;
 layout(location = 2) in vec2 aUV;
 
-layout(std140, binding = 2) uniform Object {
-    mat4 uModel;
-};
+#include "common/object.glsl"
 
 // El motor no tiene uniforms sueltos: todo dato de shader viaja por UBO.
 layout(std140, binding = 4) uniform PassParams {

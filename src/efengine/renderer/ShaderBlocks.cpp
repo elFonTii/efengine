@@ -63,7 +63,8 @@ namespace renderer {
     static_assert(offsetof(GpuLight, reserved)   == 64u, "GpuLight.reserved");
     static_assert(kMaxDirectionalLights == 4u, "LightsBlock: sincronizar con uDirDirection[4] de common/lights.glsl");
 
-    static_assert(sizeof(ObjectBlock) == 64u, "ObjectBlock: tamano std140 roto");
+    static_assert(sizeof(ObjectBlock) == 128u, "ObjectBlock: tamano std140 roto");
+    static_assert(offsetof(ObjectBlock, prevModel) == 64u, "ObjectBlock.prevModel");
 
     static_assert(sizeof(MaterialBlock) == 96u, "MaterialBlock: tamano std140 roto");
     static_assert(offsetof(MaterialBlock, albedoTint)   ==  0u, "MaterialBlock.albedoTint");

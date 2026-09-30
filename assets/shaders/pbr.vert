@@ -31,9 +31,7 @@ invariant gl_Position;
 
 #include "common/frame.glsl"
 
-layout(std140, binding = 2) uniform Object {
-    mat4 uModel;
-};
+#include "common/object.glsl"
 
 void main() {
     vFragPos = vec3(uModel * vec4(aPos, 1.0)); // de vec4 a vec3

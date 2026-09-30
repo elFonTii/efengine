@@ -164,7 +164,11 @@ namespace renderer {
     }
 
     void Renderer::SetObjectMatrix(const glm::mat4& model) const {
-        const ObjectBlock block { model };
+        SetObjectMatrix(model, model);
+    }
+
+    void Renderer::SetObjectMatrix(const glm::mat4& model, const glm::mat4& prevModel) const {
+        const ObjectBlock block { model, prevModel };
         m_objectUbo.Update(&block, sizeof(block));
     }
 
@@ -172,7 +176,7 @@ namespace renderer {
                           const DrawOptions& options) {
         // La matriz de modelo es del render item entero: se sube UNA vez, no una
         // por submesh como hacia el uModel viejo.
-        SetObjectMatrix(modelMatrix);
+        SetObjectMatrix(modelMatrix, options.prevModel != null ? *options.prevModel : modelMatrix);
 
         for (const Mesh& mesh : model.meshes()) {
             auto it = materials.find(mesh.materialName());

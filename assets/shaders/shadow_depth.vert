@@ -7,9 +7,7 @@ layout(std140, binding = 4) uniform PassParams {
     mat4 uLightSpaceMatrix;
 };
 
-layout(std140, binding = 2) uniform Object {
-    mat4 uModel;
-};
+#include "common/object.glsl"
 
 void main() {
     gl_Position = uLightSpaceMatrix * uModel * vec4(aPos, 1.0);
