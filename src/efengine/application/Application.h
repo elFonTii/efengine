@@ -17,6 +17,7 @@
 
 namespace efengine {
 namespace scene { class SceneGraph; class Camera; }
+namespace renderer { class TaaPass; }
 namespace application {
 
     // Bundle RAII de los subsistemas del motor. Expone accessors; el loop
@@ -85,6 +86,7 @@ namespace application {
             renderer::TemporalSettings m_temporal;
             renderer::FrameHistory     m_history;
             renderer::FrameView        m_lastView;
+            renderer::TaaPass*         m_taa = null;   // del pipeline; null si no se pudo crear
 
     };
 

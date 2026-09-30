@@ -26,6 +26,7 @@ namespace application {
     void RegisterSkyboxPass     (renderer::ScenePipeline&, const PassDeps&);
     void RegisterForwardPass    (renderer::ScenePipeline&, const PassDeps&);
     void RegisterDdgiDebugPass  (renderer::ScenePipeline&, const PassDeps&);
+    void RegisterTaaPass        (renderer::ScenePipeline&, const PassDeps&);
     void RegisterBloomPass      (renderer::ScenePipeline&, const PassDeps&);
     void RegisterTonemapPass    (renderer::ScenePipeline&, const PassDeps&);
     void RegisterFxaaPass       (renderer::ScenePipeline&, const PassDeps&);

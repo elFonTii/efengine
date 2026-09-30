@@ -6,6 +6,7 @@
 #include <efengine/application/PassDeps.h>
 #include <efengine/core/Log.h>
 #include <efengine/renderer/FrameContext.h>
+#include <efengine/renderer/TaaPass.h>
 #include <efengine/scene/SceneGraph.h>
 #include <efengine/scene/Camera.h>
 
@@ -44,6 +45,7 @@ namespace application {
         const PassDeps deps { m_renderer, m_resources, m_fullscreenQuad, m_sceneFB,
                               m_window.GetWidth(), m_window.GetHeight(), m_clearColor };
         BuildFramePipeline(m_pipeline, deps);
+        m_taa = m_pipeline.Find<renderer::TaaPass>();
 
         m_window.SetEventListener(&m_input);
         renderer::SetActiveProfiler(&m_profiler);
@@ -86,6 +88,8 @@ namespace application {
 
         scene.UpdateWorldTransforms();
 
+        // Al cambiar, el prev del frame anterior tiene otro jitter: no sirve.
+        if (renderer::SyncJitterWithTaa(m_temporal, m_taa != null && m_taa->enabled)) ResetTemporalHistory();
         m_lastView = renderer::MakeFrameView(camera, w, h, m_temporal, m_history);
         m_postTargets.BeginFrame(m_sceneFB.ColorTexture());
         renderer::FrameContext ctx { scene, camera, m_renderer, m_sceneFB, m_postTargets, w, h, m_lastView };

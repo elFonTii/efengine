@@ -22,7 +22,9 @@ namespace application {
     //   - DepthPrepass antes que Ao: el AO lee su depthNormal.
     //   - SceneTargetPass antes que SkyboxPass, y el skybox antes del forward.
     //   - DdgiDebugPass antes del post: dibuja sobre la imagen HDR.
-    //   - Bloom -> Tonemap -> FXAA -> Present: FXAA espera LDR; Present siempre ultimo.
+    //   - TaaPass despues de DdgiDebug: lo que se dibuja sobre el HDR tambien se acumula.
+    //   - Taa -> Bloom -> Tonemap -> Present: TAA resuelve en HDR antes de que el
+    //     bloom esparza la energia; Present siempre ultimo.
     void BuildFramePipeline(renderer::ScenePipeline& p, const PassDeps& d) {
         RegisterLightUploadPass(p, d);      // antes que todo: DDGI lee las luces de este frame
         RegisterCascadedShadowPass(p, d);   // las cascadas que usa pbr.frag
@@ -38,6 +40,7 @@ namespace application {
         RegisterSkyboxPass(p, d);
         RegisterForwardPass(p, d);
         RegisterDdgiDebugPass(p, d);     // necesita el DdgiPass ya registrado
+        RegisterTaaPass(p, d);
         RegisterBloomPass(p, d);
         RegisterTonemapPass(p, d);
         RegisterFxaaPass(p, d);
