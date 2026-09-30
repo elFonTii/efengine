@@ -40,12 +40,6 @@ namespace {
         return glm::clamp(k - 1.0f, 0.0f, 1.0f);
     }
 
-    renderer::MaterialMap todasLasCaras(const renderer::Material* m) {
-        renderer::MaterialMap mm;
-        for (const char* n : { "pared_xneg", "pared_xpos", "piso", "techo", "pared_zneg", "pared_zpos" }) mm[n] = m;
-        return mm;
-    }
-
     void direccional(EditorContext& ctx, const char* nombre, const glm::vec3& hacia,
                      const glm::vec3& color, f32 intensidad, bool primario) {
         const scene::NodeHandle h = ctx.scene.CreateChild(ctx.scene.Root(), nombre);
@@ -88,7 +82,7 @@ void BuildLightStressScene(EditorContext& ctx, const LightStressDesc& desc) {
 
     math::Transform tPiso;
     tPiso.position = glm::vec3(0.0f, -0.1f, 0.0f);
-    NodoConMalla(ctx, "piso", modeloPiso, tPiso, todasLasCaras(ctx.assets.MaterialAt(iPiso)));
+    NodoConMalla(ctx, "piso", modeloPiso, tPiso, MaterialEnTodasLasCaras(ctx.assets.MaterialAt(iPiso)));
 
     // Columnas cada 20 m en las dos variantes: la densidad de geometria no cambia
     // entre la escena de 100 m y la de 200 m.
@@ -98,7 +92,7 @@ void BuildLightStressScene(EditorContext& ctx, const LightStressDesc& desc) {
             math::Transform t;
             t.position = glm::vec3(static_cast<f32>(x) * 20.0f, 3.0f, static_cast<f32>(z) * 20.0f);
             const std::string nombre = "columna_" + std::to_string(x) + "_" + std::to_string(z);
-            NodoConMalla(ctx, nombre.c_str(), modeloColumna, t, todasLasCaras(ctx.assets.MaterialAt(iColumna)));
+            NodoConMalla(ctx, nombre.c_str(), modeloColumna, t, MaterialEnTodasLasCaras(ctx.assets.MaterialAt(iColumna)));
         }
     }
 

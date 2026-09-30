@@ -12,6 +12,7 @@ add_executable(sandbox
     LightStressScene.cpp
     TestScene.cpp
     ProbeScene.cpp
+    OscillatorBehavior.cpp
     SunGizmo.cpp
     ColliderGizmo.cpp
     panels/Panels.cpp

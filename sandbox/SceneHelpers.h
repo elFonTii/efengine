@@ -26,4 +26,7 @@ namespace sandbox {
                                              const efengine::math::Transform& t,
                                              efengine::renderer::MaterialMap materiales);
 
+    // Las 6 submallas de una caja de AgregarCaja con el mismo material.
+    efengine::renderer::MaterialMap MaterialEnTodasLasCaras(const efengine::renderer::Material* m);
+
 }

@@ -57,6 +57,12 @@ const renderer::Model* AgregarCaja(EditorContext& ctx, const renderer::BoxParams
     return ctx.assets.GeneratedAt(idx);
 }
 
+renderer::MaterialMap MaterialEnTodasLasCaras(const renderer::Material* m) {
+    renderer::MaterialMap mm;
+    for (const char* n : { "pared_xneg", "pared_xpos", "piso", "techo", "pared_zneg", "pared_zpos" }) mm[n] = m;
+    return mm;
+}
+
 scene::NodeHandle NodoConMalla(EditorContext& ctx, const char* nombre,
                                const renderer::Model* model,
                                const math::Transform& t,
