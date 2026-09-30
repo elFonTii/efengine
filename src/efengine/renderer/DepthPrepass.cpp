@@ -1,5 +1,6 @@
 #include "efengine/renderer/DepthPrepass.h"
 
+#include <efecom/RHI.h>
 #include <efengine/core/Log.h>
 #include <efengine/renderer/FrameContext.h>
 #include <efengine/renderer/Renderer.h>
@@ -25,7 +26,8 @@ namespace renderer {
     DepthPrepass::DepthPrepass(Renderer& renderer, Shader* shader, u32 width, u32 height,
                                Framebuffer& sceneFB)
         : m_renderer(renderer), m_shader(shader), m_sceneFB(&sceneFB)
-        , m_normalFb(width, height, sceneFB.depthTextureId()) {}
+        , m_normalFb(width, height, sceneFB.depthTextureId(),
+                     { efecom::TextureFormat::RGBA16F, efecom::TextureFormat::RG16F }) {}
 
     void DepthPrepass::Resize(u32 width, u32 height) {
         // El Resize de sceneFB ya corrio y recreo su depth: se lee el id ahora.
@@ -38,7 +40,8 @@ namespace renderer {
         // Alfa 0: viewZ == 0 es el centinela de "no hay geometria".
         m_renderer.Clear(0.0f, 0.0f, 0.0f, 0.0f);
 
-        const AoPrepassBlock bloque { ctx.view.view, ctx.view.projection };
+        const PrepassBlock bloque { ctx.view.view, ctx.view.projection,
+                                    ctx.view.viewProjNoJitter, ctx.view.prevViewProjNoJitter };
         m_ubo.Update(&bloque, sizeof(bloque));
         m_ubo.BindTo(kPassBinding);
 
@@ -47,13 +50,15 @@ namespace renderer {
             if (!item.model) continue;
             // Shader sin estado forzado: cada material conserva su doubleSided.
             DrawOptions opciones;
-            opciones.shader = m_shader;
+            opciones.shader    = m_shader;
+            opciones.prevModel = &item.prevWorld;
             m_renderer.Submit(*item.model, *item.materials, item.world, opciones);
         }
 
         ctx.depthReady  = true;
         ctx.depthNormal = &m_normalFb.ColorTexture();
         ctx.depth       = &ctx.sceneFB.depthTexture();
+        ctx.velocity    = &m_normalFb.ColorTexture(1u);
     }
 
 }

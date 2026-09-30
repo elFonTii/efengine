@@ -47,6 +47,7 @@ namespace renderer {
         // Los dos del DepthPrepass de ESTE frame; null si no corrio.
         const Texture* depthNormal = null;   // xyz = normal de vista, w = viewZ lineal
         const Texture* depth       = null;   // D32F de sceneFB
+        const Texture* velocity    = null;   // RG16F: uvActual - uvPrevia, sin jitter
     };
 
 }

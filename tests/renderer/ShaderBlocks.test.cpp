@@ -392,3 +392,11 @@ TEST_CASE("Layout std140: TaaBlock") {
     CHECK(offsetof(TaaBlock, screen)               == 144u);
     CHECK(offsetof(TaaBlock, params)               == 160u);
 }
+
+TEST_CASE("Layout std140: PrepassBlock") {
+    CHECK(sizeof(PrepassBlock) == 256u);
+    CHECK(offsetof(PrepassBlock, view)                 ==   0u);
+    CHECK(offsetof(PrepassBlock, projection)           ==  64u);
+    CHECK(offsetof(PrepassBlock, viewProjNoJitter)     == 128u);
+    CHECK(offsetof(PrepassBlock, prevViewProjNoJitter) == 192u);
+}

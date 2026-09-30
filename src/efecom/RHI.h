@@ -303,6 +303,10 @@ namespace efecom {
     void GetPresentExtent(u32& outWidth, u32& outHeight);
     void BindRenderTarget(u32 target, u32 width, u32 height);
     void FramebufferColorTexture(u32 framebuffer, u32 texture);
+    // Attachment de color 'index' (MRT). La sobrecarga sin indice es la 0.
+    void FramebufferColorTexture(u32 framebuffer, u32 index, u32 texture);
+    // Activa GL_COLOR_ATTACHMENT0..count-1 como draw buffers.
+    void FramebufferDrawBuffers(u32 framebuffer, u32 count);
     void FramebufferDepthTexture(u32 framebuffer, u32 texture);
 
     // Adjunta UNA capa de un array como el depth del FBO. Se vuelve a llamar

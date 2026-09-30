@@ -3,7 +3,11 @@
 #include <efengine/renderer/Texture.h>
 #include <efengine/renderer/RenderTarget.h>
 
+#include <efecom/RHI.h>
+
+#include <initializer_list>
 #include <optional>
+#include <vector>
 
 /* https://learnopengl.com/Advanced-OpenGL/Framebuffers */
 /* https://wikis.khronos.org/opengl/Framebuffer */
@@ -20,6 +24,10 @@ namespace renderer {
             // el nuevo y el orden de los resize en Application no es negociable.
             Framebuffer(u32 width, u32 height, u32 externalDepthTexture);
 
+            // Depth PRESTADO y varios colores (MRT). colors[0] es ColorTexture().
+            Framebuffer(u32 width, u32 height, u32 externalDepthTexture,
+                        std::initializer_list<efecom::TextureFormat> colors);
+
             ~Framebuffer();
             Framebuffer(const Framebuffer&)            = delete;
             Framebuffer& operator=(const Framebuffer&) = delete;
@@ -34,6 +42,8 @@ namespace renderer {
             void            Resize(u32 width, u32 height, u32 externalDepthTexture);
 
             const Texture&  ColorTexture() const;
+            const Texture&  ColorTexture(u32 index) const;
+            u32             colorCount() const { return static_cast<u32>(m_formats.size()); }
             u32             width() const;
             u32             height() const;
             u32             id() const { return m_id; }
@@ -45,7 +55,8 @@ namespace renderer {
             bool            ownsDepth() const { return m_ownedDepth.has_value(); }
 
         private:
-            Framebuffer(u32 width, u32 height, std::optional<Texture> ownedDepth, u32 depthId);
+            Framebuffer(u32 width, u32 height, std::optional<Texture> ownedDepth, u32 depthId,
+                        std::vector<efecom::TextureFormat> formats);
 
             u32                    m_id = 0;
             std::optional<Texture> m_ownedDepth;
@@ -53,6 +64,8 @@ namespace renderer {
             Texture                m_color;
             u32                    m_width  = 0;
             u32                    m_height = 0;
+            std::vector<efecom::TextureFormat> m_formats;
+            std::vector<Texture>               m_extraColors;
     };
 }
 }

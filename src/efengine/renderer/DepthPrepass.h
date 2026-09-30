@@ -15,7 +15,8 @@ namespace renderer {
 
     // Unico clear de depth del frame. Escribe la profundidad de sceneFB y el
     // depthNormal; el forward dibuja despues con GL_EQUAL. Corre antes de
-    // FrameUploadPass: sube su propio bloque de pase (AoPrepassBlock).
+    // FrameUploadPass: sube su propio bloque de pase (PrepassBlock). Tambien
+    // escribe la velocidad (MRT 1).
     class DepthPrepass : public IScenePass {
         public:
             static std::unique_ptr<DepthPrepass> Create(Renderer& renderer, Shader* depthNormal,
@@ -34,7 +35,7 @@ namespace renderer {
             Shader*       m_shader  = null;
             Framebuffer*  m_sceneFB = null;
             Framebuffer   m_normalFb;
-            UniformBuffer m_ubo { sizeof(AoPrepassBlock) };
+            UniformBuffer m_ubo { sizeof(PrepassBlock) };
     };
 
 }

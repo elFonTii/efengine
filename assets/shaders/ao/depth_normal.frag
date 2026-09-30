@@ -9,8 +9,12 @@
 in vec3 vViewNormal;
 in vec3 vViewPos;
 in vec2 vUV;
+in vec4 vClipCur;
+in vec4 vClipPrev;
 
-out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
+// uvActual - uvPrevia. Por fragmento: la division perspectiva no interpola lineal.
+layout(location = 1) out vec2 Velocity;
 
 // -- Recorte por opacidad -----------------------------------------------------
 // El bloque de material (binding 3) y la unidad 6 los sube Renderer::Submit en
@@ -60,4 +64,8 @@ void main() {
     // El fondo queda en 0 por el clear, y viewZ == 0 es el centinela de "aca no
     // hay geometria" (inalcanzable para un fragmento real: el near plane es > 0).
     FragColor = vec4(n, -vViewPos.z);
+
+    vec2 uvCur  = vClipCur.xy  / vClipCur.w  * 0.5 + 0.5;
+    vec2 uvPrev = vClipPrev.xy / vClipPrev.w * 0.5 + 0.5;
+    Velocity = uvCur - uvPrev;
 }

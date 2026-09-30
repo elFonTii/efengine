@@ -5,17 +5,19 @@ layout (location = 2) in vec2 aUV;
 
 #include "common/object.glsl"
 
-// PassParams propio (binding 4): este pase corre ANTES de BeginScene, asi que
-// el bloque Frame de la camara todavia no existe. Misma restriccion y misma
-// solucion que shadow_depth.vert.
-layout(std140, binding = 4) uniform AoPrepassParams {
+// PassParams propio (binding 4): este pase corre ANTES de BeginScene.
+layout(std140, binding = 4) uniform PrepassParams {
     mat4 uView;
     mat4 uProjection;
+    mat4 uViewProjNoJitter;
+    mat4 uPrevViewProjNoJitter;
 };
 
 out vec3 vViewNormal;
 out vec3 vViewPos;
 out vec2 vUV;
+out vec4 vClipCur;
+out vec4 vClipPrev;
 
 // Ver el comentario largo de pbr.vert: el forward dibuja con GL_EQUAL contra la
 // profundidad que deja este pase, y para eso los dos programas tienen que
@@ -30,6 +32,10 @@ void main() {
     // La inversa transpuesta para que la escala no uniforme no tuerza la normal.
     vViewNormal = mat3(transpose(inverse(modelView))) * aNormal;
     vUV         = aUV;
+
+    // Sin jitter las dos: la velocidad no tiene que temblar con el Halton.
+    vClipCur  = uViewProjNoJitter     * uModel     * vec4(aPos, 1.0);
+    vClipPrev = uPrevViewProjNoJitter * uPrevModel * vec4(aPos, 1.0);
 
     // EXACTAMENTE la expresion de pbr.vert, y no `uProjection * viewPos` que
     // seria lo natural teniendo viewPos ya calculado: esa agrupa las matrices

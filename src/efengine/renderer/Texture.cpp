@@ -99,12 +99,12 @@ namespace renderer {
         return Texture(id, (u32)width, (u32)height);
     }
 
-    Texture Texture::CreateColorAttachment(u32 width, u32 height) {
-        // Attachment HDR (pre-tonemapping)
+    Texture Texture::CreateColorAttachment(u32 width, u32 height, efecom::TextureFormat format) {
+        // Attachment de color; RGBA16F por defecto (HDR pre-tonemapping)
         efecom::Texture2DDesc desc;
         desc.width  = width;
         desc.height = height;
-        desc.format = efecom::TextureFormat::RGBA16F;
+        desc.format = format;
         desc.minFilter = efecom::TextureFilter::Linear;
         desc.magFilter = efecom::TextureFilter::Linear;
         desc.wrapS = efecom::TextureWrap::ClampToEdge;

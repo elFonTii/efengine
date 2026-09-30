@@ -619,6 +619,17 @@ namespace efecom {
         glNamedFramebufferTexture(framebuffer, GL_COLOR_ATTACHMENT0, texture, 0);
     }
 
+    void FramebufferColorTexture(u32 framebuffer, u32 index, u32 texture) {
+        glNamedFramebufferTexture(framebuffer, GL_COLOR_ATTACHMENT0 + index, texture, 0);
+    }
+
+    void FramebufferDrawBuffers(u32 framebuffer, u32 count) {
+        GLenum bufs[8];
+        const u32 n = count < 8u ? count : 8u;
+        for (u32 i = 0; i < n; ++i) bufs[i] = GL_COLOR_ATTACHMENT0 + i;
+        glNamedFramebufferDrawBuffers(framebuffer, (GLsizei)n, bufs);
+    }
+
     void FramebufferDepthTexture(u32 framebuffer, u32 texture) {
         glNamedFramebufferTexture(framebuffer, GL_DEPTH_ATTACHMENT, texture, 0);
     }

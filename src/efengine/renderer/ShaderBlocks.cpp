@@ -87,9 +87,10 @@ namespace renderer {
     static_assert(offsetof(DdgiBlock, params1)     == 96u, "DdgiBlock: offset de params1");
     static_assert(offsetof(DdgiBlock, params2)     == 112u, "DdgiBlock: offset de params2");
 
-    static_assert(sizeof(AoPrepassBlock) == 128u, "AoPrepassBlock: tamano std140 roto");
-    static_assert(offsetof(AoPrepassBlock, view)       ==  0u, "AoPrepassBlock.view");
-    static_assert(offsetof(AoPrepassBlock, projection) == 64u, "AoPrepassBlock.projection");
+    static_assert(sizeof(PrepassBlock) == 256u, "PrepassBlock: tamano std140 roto");
+    static_assert(offsetof(PrepassBlock, projection)           ==  64u, "PrepassBlock.projection");
+    static_assert(offsetof(PrepassBlock, viewProjNoJitter)     == 128u, "PrepassBlock.viewProjNoJitter");
+    static_assert(offsetof(PrepassBlock, prevViewProjNoJitter) == 192u, "PrepassBlock.prevViewProjNoJitter");
 
     static_assert(sizeof(AoPassBlock) == 128u, "AoPassBlock: tamano std140 roto");
     static_assert(offsetof(AoPassBlock, viewToWorld) ==   0u, "AoPassBlock.viewToWorld");

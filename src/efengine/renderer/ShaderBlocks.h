@@ -139,12 +139,13 @@ namespace renderer {
         glm::vec4  params2;       // maxDistance, backfaceFadeStart, backfaceFadeEnd, _
     };
 
-    // PassParams (binding 4) del prepass de profundidad+normales del AO. Corre
-    // ANTES de BeginScene, asi que no puede leer el bloque Frame — la misma
-    // restriccion y la misma solucion que ShadowPassBlock.
-    struct alignas(16) AoPrepassBlock {
+    // PassParams (binding 4) del DepthPrepass. Corre ANTES de BeginScene, asi
+    // que no puede leer el bloque Frame.
+    struct alignas(16) PrepassBlock {
         glm::mat4 view;
-        glm::mat4 projection;
+        glm::mat4 projection;             // con jitter: la que rasteriza
+        glm::mat4 viewProjNoJitter;       // velocidades
+        glm::mat4 prevViewProjNoJitter;
     };
 
     // PassParams (binding 4) de gtao.frag y denoise.frag.
