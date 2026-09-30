@@ -96,6 +96,11 @@ namespace renderer {
     static_assert(offsetof(AoPassBlock, params0)     ==  80u, "AoPassBlock.params0");
     static_assert(offsetof(AoPassBlock, params1)     ==  96u, "AoPassBlock.params1");
     static_assert(offsetof(AoPassBlock, counts)      == 112u, "AoPassBlock.counts");
+    static_assert(sizeof(TaaBlock) == 176u, "TaaBlock: tamano std140 roto");
+    static_assert(offsetof(TaaBlock, prevViewProjNoJitter) ==  64u, "TaaBlock.prevViewProjNoJitter");
+    static_assert(offsetof(TaaBlock, jitterUv)             == 128u, "TaaBlock.jitterUv");
+    static_assert(offsetof(TaaBlock, screen)               == 144u, "TaaBlock.screen");
+    static_assert(offsetof(TaaBlock, params)               == 160u, "TaaBlock.params");
 
 
     static_assert(sizeof(IndirectPassBlock) == 96u, "IndirectPassBlock: tamano std140 roto");

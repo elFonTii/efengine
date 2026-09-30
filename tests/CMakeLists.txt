@@ -14,6 +14,7 @@ add_executable(efengine_tests
     renderer/VertexLayout.test.cpp
     renderer/Vertex.test.cpp
     renderer/PostTargets.test.cpp
+    renderer/TaaMath.test.cpp
     renderer/ScenePipeline.test.cpp
     renderer/Cubemap.test.cpp
     renderer/ShadowMath.test.cpp

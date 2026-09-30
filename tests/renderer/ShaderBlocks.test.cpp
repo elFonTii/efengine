@@ -382,3 +382,12 @@ TEST_CASE("MakeFrameBlock: resolucion 0 no deja infinitos en screen") {
     CHECK(b.screen.z == doctest::Approx(0.0f));
     CHECK(b.screen.w == doctest::Approx(0.0f));
 }
+
+TEST_CASE("Layout std140: TaaBlock") {
+    CHECK(sizeof(TaaBlock) == 176u);
+    CHECK(offsetof(TaaBlock, invViewProjNoJitter)  ==   0u);
+    CHECK(offsetof(TaaBlock, prevViewProjNoJitter) ==  64u);
+    CHECK(offsetof(TaaBlock, jitterUv)             == 128u);
+    CHECK(offsetof(TaaBlock, screen)               == 144u);
+    CHECK(offsetof(TaaBlock, params)               == 160u);
+}

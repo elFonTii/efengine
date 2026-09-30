@@ -154,6 +154,15 @@ namespace renderer {
         glm::ivec4 counts;        // x=slices, y=steps, z=direccion del blur (0=H,1=V), w=debugView
     };
 
+    // PassParams (binding 4) de taa.frag.
+    struct alignas(16) TaaBlock {
+        glm::mat4 invViewProjNoJitter;
+        glm::mat4 prevViewProjNoJitter;
+        glm::vec4 jitterUv;   // xy: el jitter de este frame en UV
+        glm::vec4 screen;     // ancho, alto, 1/ancho, 1/alto
+        glm::vec4 params;     // x = alfa efectivo, y = ver velocidades
+    };
+
     // PassParams (binding 4) de ddgi/indirect.frag: el pase que resuelve la
     // indirecta difusa a media resolucion.
     //
