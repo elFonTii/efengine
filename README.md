@@ -14,6 +14,10 @@ Es un motor gráfico forward renderer en **C++17 / OpenGL 4.5 Core**,  construid
 - **Tests:** doctest + CTest
 
 ---
+### 2026-29-9
+Auto encuadre de probes, clasificación basada en normales y TAA (base para comenzar volumetricas)
+Restan ajustes
+<img width="1917" height="986" alt="image" src="https://github.com/user-attachments/assets/cb4f6742-1d02-45cc-b2ab-41b9718058fb" />
 
 ### 2026-18-9
 Sombras por cascadas, en  total 4
