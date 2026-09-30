@@ -248,6 +248,12 @@ float ShadowFactor(vec3 Ng, vec3 L) {
 
     if (uCascadeParams.x < 0.5) return 0.0;
 
+    // Una cara que le da la espalda al sol esta en sombra por definicion. El
+    // shadow map no lo sabe: en una pared de espesor cero su unico oclusor es
+    // ella misma, y el normal offset que la deberia esconder detras de su plano
+    // se sale por los bordes de la pieza y deja puntos de sol sueltos.
+    if (NdotL <= 0.0) return 1.0;
+
     float profundidad = ViewDepth();
     int   i = PickCascade(profundidad);
     if (i < 0) return 0.0;
