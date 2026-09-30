@@ -166,3 +166,28 @@ TEST_CASE("MakeFrameView: un frame 0x0 (minimizada) invalida la historia") {
     const FrameView v = MakeFrameView(cam, 1280, 720, TemporalSettings{}, h);
     CHECK(v.prevViewProjNoJitter == v.viewProjNoJitter);
 }
+
+TEST_CASE("MakeFrameView: historyValid es false en el frame que sigue a un reset") {
+    scene::Camera c = Camara();
+    TemporalSettings s;
+    FrameHistory h;
+    CHECK_FALSE(MakeFrameView(c, 1920u, 1080u, s, h).historyValid);
+    CHECK(MakeFrameView(c, 1920u, 1080u, s, h).historyValid);
+    h.valid = false;
+    CHECK_FALSE(MakeFrameView(c, 1920u, 1080u, s, h).historyValid);
+    CHECK(MakeFrameView(c, 1920u, 1080u, s, h).historyValid);
+}
+
+TEST_CASE("MakeStaticFrameView: nunca tiene historia") {
+    CHECK_FALSE(MakeStaticFrameView(glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f), 1u, 1u).historyValid);
+}
+
+TEST_CASE("SyncJitterWithTaa: el jitter sigue a TAA y avisa solo cuando cambia") {
+    TemporalSettings s;
+    CHECK(SyncJitterWithTaa(s, true));
+    CHECK(s.jitter);
+    CHECK_FALSE(SyncJitterWithTaa(s, true));
+    CHECK(SyncJitterWithTaa(s, false));
+    CHECK_FALSE(s.jitter);
+    CHECK_FALSE(SyncJitterWithTaa(s, false));
+}

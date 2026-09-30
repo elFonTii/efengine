@@ -23,6 +23,8 @@ namespace renderer {
         u32  height        = 0u;
         u32  frameIndex    = 0u;
         bool jitterEnabled = false;
+        // false en el primer frame tras un reset: prev* es el frame actual.
+        bool historyValid  = false;
     };
 
     struct TemporalSettings {
@@ -42,6 +44,10 @@ namespace renderer {
     f32       Halton(u32 index, u32 base);
     // En pixeles, dentro de [-0.5, 0.5]. Muestra (frameIndex % sequenceLength) + 1.
     glm::vec2 HaltonJitterPx(u32 frameIndex, u32 sequenceLength);
+
+    // El jitter sigue a TAA: sin resolve la imagen temblaria. true si cambio,
+    // y en ese caso la historia no sirve.
+    bool SyncJitterWithTaa(TemporalSettings& settings, bool taaEnabled);
 
     // Avanza history.
     FrameView MakeFrameView(const scene::Camera& camera, u32 width, u32 height,

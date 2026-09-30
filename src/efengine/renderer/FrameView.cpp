@@ -47,6 +47,7 @@ namespace renderer {
         v.invView          = glm::inverse(v.view);
         v.invProjection    = glm::inverse(v.projection);
 
+        v.historyValid = history.valid;
         if (history.valid) {
             v.prevViewProjNoJitter = history.viewProjNoJitter;
             v.prevJitterNdc        = history.jitterNdc;
@@ -82,6 +83,12 @@ namespace renderer {
         v.width                = width;
         v.height               = height;
         return v;
+    }
+
+    bool SyncJitterWithTaa(TemporalSettings& settings, bool taaEnabled) {
+        if (settings.jitter == taaEnabled) return false;
+        settings.jitter = taaEnabled;
+        return true;
     }
 
 }
