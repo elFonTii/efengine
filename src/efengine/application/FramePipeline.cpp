@@ -43,7 +43,6 @@ namespace application {
         RegisterTaaPass(p, d);
         RegisterBloomPass(p, d);
         RegisterTonemapPass(p, d);
-        RegisterFxaaPass(p, d);
         RegisterPresentPass(p, d);       // ultimo: deja bindeado el backbuffer para ImGui
     }
 

@@ -9,8 +9,7 @@ namespace renderer {
     class VertexArray;
     class Shader;
 
-    // HDR lineal -> LDR sRGB con la exposicion de la camara. FXAA corre despues:
-    // su estimador de contraste asume valores perceptuales.
+    // HDR lineal -> LDR sRGB con la exposicion de la camara.
     class TonemapPass : public IScenePass {
         public:
             TonemapPass(Renderer& renderer, VertexArray& fullscreenQuad, Shader* shader);

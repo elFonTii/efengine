@@ -12,7 +12,6 @@
 #include <efengine/core/Time.h>
 #include <efengine/gameplay/GameWorld.h>
 #include <efengine/renderer/BloomPass.h>
-#include <efengine/renderer/FxaaPass.h>
 #include <efengine/renderer/TonemapPass.h>
 #include <efengine/renderer/GpuProfiler.h>
 #include <efengine/renderer/ScenePipeline.h>
@@ -761,7 +760,7 @@ namespace {
         }
 
         // -- Post ---------------------------------------------------------------
-        // Bloom y FXAA corren sobre la imagen ya resuelta, asi que van despues de
+        // Bloom y tonemap corren sobre la imagen ya resuelta, asi que van despues de
         // todo lo que la produce. Nombres de campo en castellano como el resto
         // del panel: eran los unicos en ingles.
         if (ImGui::CollapsingHeader("Bloom")) {
@@ -779,13 +778,10 @@ namespace {
             ImGui::PopID();
         }
 
-        if (ImGui::CollapsingHeader("Tonemap y FXAA")) {
+        if (ImGui::CollapsingHeader("Tonemap")) {
             ImGui::PushID("Tonemap");
             if (renderer::TonemapPass* tm = ctx.app.GetPipeline().Find<renderer::TonemapPass>()) {
                 ImGui::Checkbox("Tonemap (apagado = HDR crudo)", &tm->enabled);
-            }
-            if (renderer::FxaaPass* fx = ctx.app.GetPipeline().Find<renderer::FxaaPass>()) {
-                ImGui::Checkbox("FXAA", &fx->enabled);
             }
             ImGui::PopID();
         }

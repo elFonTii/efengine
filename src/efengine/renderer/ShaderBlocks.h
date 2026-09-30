@@ -127,7 +127,7 @@ namespace renderer {
 
     // Constantes de DDGI del frame (binding 5). Bloque propio en vez de extender
     // FrameBlock: extender Frame obliga a tocar los cuatro shaders que lo
-    // declaran (skybox, tonemap, fxaa, shadow) sin que ninguno use el dato.
+    // declaran (skybox, tonemap, shadow) sin que ninguno use el dato.
     struct alignas(16) DdgiBlock {
         glm::vec4  gridOrigin;    // .xyz
         glm::vec4  gridSpacing;   // .xyz

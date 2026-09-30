@@ -29,7 +29,6 @@ namespace application {
     void RegisterTaaPass        (renderer::ScenePipeline&, const PassDeps&);
     void RegisterBloomPass      (renderer::ScenePipeline&, const PassDeps&);
     void RegisterTonemapPass    (renderer::ScenePipeline&, const PassDeps&);
-    void RegisterFxaaPass       (renderer::ScenePipeline&, const PassDeps&);
     void RegisterPresentPass    (renderer::ScenePipeline&, const PassDeps&);
 
     // Arma el frame. Ver el comentario de la definicion: ES el orden.
