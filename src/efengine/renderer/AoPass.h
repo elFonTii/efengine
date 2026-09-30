@@ -72,7 +72,8 @@ namespace renderer {
 
             // El trabajo real; lo llama Execute, que publica el contexto
             // despues -- afuera, porque esto tiene retornos tempranos.
-            void Render(const Texture& depthNormal, const glm::mat4& view, const glm::mat4& projection);
+            void Render(const Texture& depthNormal, const glm::mat4& view, const glm::mat4& projection,
+                        f32 noiseFrame);
 
             Renderer&    m_renderer;
             VertexArray& m_quad;

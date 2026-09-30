@@ -153,7 +153,7 @@ namespace renderer {
         glm::mat4  viewToWorld;   // inverse(view): emite el bent normal en world space
         glm::vec4  projInfo;      // xy = reconstruccion view-space, zw = 1/resolucion
         glm::vec4  params0;       // radius (m), thickness, intensity, maxScreenRadius (px)
-        glm::vec4  params1;       // projScale (px por metro a 1 m), escala vs full, _, _
+        glm::vec4  params1;       // projScale (px por metro a 1 m), escala vs full, frame del ruido, _
         glm::ivec4 counts;        // x=slices, y=steps, z=direccion del blur (0=H,1=V), w=debugView
     };
 

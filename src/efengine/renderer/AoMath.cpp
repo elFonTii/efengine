@@ -30,7 +30,7 @@ namespace renderer {
 
     AoPassBlock MakeAoPassBlock(const glm::mat4& view, const glm::mat4& projection,
                                 const AoSettings& settings, u32 width, u32 height,
-                                i32 blurDirection, i32 scale) {
+                                i32 blurDirection, i32 scale, f32 noiseFrame) {
         // Se sanea aca y no en el caller: este es el ultimo punto antes de que
         // los valores lleguen al shader, donde un cero se vuelve NaN silencioso.
         const AoSettings s = SanitizeAoSettings(settings);
@@ -53,7 +53,7 @@ namespace renderer {
         b.projInfo    = glm::vec4(info.x, info.y, invW, invH);
         b.params0     = glm::vec4(s.radius, s.thickness, s.intensity, s.maxScreenRadius);
         b.params1     = glm::vec4(AoProjScale(projection, height),
-                                  static_cast<f32>(esc), 0.0f, 0.0f);
+                                  static_cast<f32>(esc), noiseFrame, 0.0f);
         b.counts      = glm::ivec4(s.slices, s.steps, blurDirection,
                                    static_cast<i32>(s.debugView));
         return b;
@@ -88,6 +88,11 @@ namespace renderer {
                                static_cast<f32>(escala),
                                0.0f);
         return b;
+    }
+
+
+    f32 AoNoiseFrame(u32 frameIndex, bool temporal) {
+        return temporal ? static_cast<f32>(frameIndex % 64u) : 0.0f;
     }
 
 }

@@ -230,3 +230,19 @@ TEST_CASE("MakeAoPassBlock: sanea antes de subir") {
     CHECK(b.counts.x  >= 1);
     CHECK(b.params0.x == doctest::Approx(0.0f));
 }
+
+TEST_CASE("AoNoiseFrame: rota en ciclos de 64 con TAA y queda fijo sin TAA") {
+    using efengine::renderer::AoNoiseFrame;
+    CHECK(AoNoiseFrame(0u,   true) == doctest::Approx(0.0f));
+    CHECK(AoNoiseFrame(5u,   true) == doctest::Approx(5.0f));
+    CHECK(AoNoiseFrame(69u,  true) == doctest::Approx(AoNoiseFrame(5u, true)));
+    CHECK(AoNoiseFrame(123u, false) == doctest::Approx(0.0f));
+}
+
+TEST_CASE("MakeAoPassBlock: el frame del ruido llega a params1.z") {
+    AoSettings s;
+    const AoPassBlock b = MakeAoPassBlock(glm::mat4(1.0f), proyeccion(), s, 1920u, 1080u, 0, 1, 7.0f);
+    CHECK(b.params1.z == doctest::Approx(7.0f));
+    const AoPassBlock sinRuido = MakeAoPassBlock(glm::mat4(1.0f), proyeccion(), s, 1920u, 1080u, 0);
+    CHECK(sinRuido.params1.z == doctest::Approx(0.0f));
+}

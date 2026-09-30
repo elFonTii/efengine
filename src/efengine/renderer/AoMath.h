@@ -43,7 +43,11 @@ namespace renderer {
     // blurDirection: 0 = horizontal, 1 = vertical. gtao.frag lo ignora.
     AoPassBlock MakeAoPassBlock(const glm::mat4& view, const glm::mat4& projection,
                                 const AoSettings& settings, u32 width, u32 height,
-                                i32 blurDirection, i32 scale = 1);
+                                i32 blurDirection, i32 scale = 1, f32 noiseFrame = 0.0f);
+
+    // Offset de frame del IGN de gtao.frag. Sin acumulacion temporal tiene que
+    // ser fijo: un ruido que cambia por frame sin TAA es titileo.
+    f32 AoNoiseFrame(u32 frameIndex, bool temporal);
 
     // Apaga params.x si no hay textura, aunque settings.enabled sea true: es el
     // caso "no hay AoPass" (fallo de shader), donde pbr.frag tiene que caer al

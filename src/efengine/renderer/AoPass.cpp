@@ -101,13 +101,15 @@ namespace renderer {
     void AoPass::Execute(FrameContext& ctx) {
         m_hasResult = false;
         if (ctx.depthReady && ctx.depthNormal != null) {
-            Render(*ctx.depthNormal, ctx.view.view, ctx.view.projection);
+            Render(*ctx.depthNormal, ctx.view.view, ctx.view.projection,
+                   AoNoiseFrame(ctx.view.frameIndex, ctx.view.jitterEnabled));
             m_hasResult = true;
         }
         ctx.lighting.ao = Context(ctx.depthNormal);
     }
 
-    void AoPass::Render(const Texture& depthNormal, const glm::mat4& view, const glm::mat4& projection) {
+    void AoPass::Render(const Texture& depthNormal, const glm::mat4& view, const glm::mat4& projection,
+                        f32 noiseFrame) {
         // El checkbox de media resolucion se mueve a mitad de frame desde ImGui:
         // los targets se ajustan aca y no en el setter.
         EnsureTargetSize();
@@ -122,7 +124,7 @@ namespace renderer {
             // buffer. Con la del target, el radio en metros del panel se
             // duplicaria solo por bajar de resolucion.
             const AoPassBlock params = MakeAoPassBlock(view, projection, m_settings,
-                                                       m_fullWidth, m_fullHeight, 0, esc);
+                                                       m_fullWidth, m_fullHeight, 0, esc, noiseFrame);
             m_gtaoUbo.Update(&params, sizeof(params));
             m_gtaoUbo.BindTo(kPassBinding);
 

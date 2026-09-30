@@ -20,7 +20,7 @@ layout(std140, binding = 4) uniform AoPassParams {
     mat4  uViewToWorld;
     vec4  uProjInfo;    // xy = reconstruccion view-space, zw = 1/resolucion COMPLETA
     vec4  uParams0;     // radius, thickness, intensity, maxScreenRadius
-    vec4  uParams1;     // projScale, escala vs full, _, _
+    vec4  uParams1;     // projScale, escala vs full, frame del ruido, _
     ivec4 uCounts;      // x=slices, y=steps, z=dirBlur (sin uso aca), w=debugView
 };
 
@@ -47,9 +47,9 @@ vec3 ViewPos(vec2 uv, float viewZ) {
     return vec3(ndc * uProjInfo.xy, -1.0) * viewZ;
 }
 
-// Interleaved gradient noise. SOLO de gl_FragCoord, SIN componente de frame: no
-// hay acumulacion temporal en este pase, asi que un ruido que cambia por frame
-// PRODUCE el titileo en vez de disolverlo.
+// Interleaved gradient noise. El offset de frame (Jimenez 2014) es 0 sin TAA:
+// un ruido que cambia por frame sin acumulacion produce titileo; con TAA se
+// disuelve en la historia.
 float Ign(vec2 p) {
     return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
 }
@@ -94,7 +94,7 @@ void main() {
     float radioPx = min(uParams0.x * uParams1.x / viewZ, uParams0.w);
     if (radioPx < 1.0) { FragColor = vec4(nWorld, 1.0); return; }
 
-    float ruido  = Ign(gl_FragCoord.xy);
+    float ruido  = Ign(gl_FragCoord.xy + 5.588238 * uParams1.z);
     int   slices = uCounts.x;
     int   steps  = uCounts.y;
 
