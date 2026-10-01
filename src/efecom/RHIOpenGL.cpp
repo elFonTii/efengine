@@ -7,6 +7,7 @@
 
 #include <glad/gl.h>
 
+#include <cstdint>
 #include <cstdio>
 
 namespace efecom {
@@ -345,6 +346,30 @@ namespace efecom {
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, (GLuint)bindingIndex, (GLuint)buffer);
     }
 
+    void CopyBuffer(u32 src, u32 dst, usize srcOffset, usize dstOffset, usize size) {
+        glCopyNamedBufferSubData(src, dst, (GLintptr)srcOffset, (GLintptr)dstOffset, (GLsizeiptr)size);
+    }
+
+    void ReadBuffer(u32 buffer, usize offset, usize size, void* out) {
+        glGetNamedBufferSubData(buffer, (GLintptr)offset, (GLsizeiptr)size, out);
+    }
+
+    u64 CreateFence() {
+        GLsync s = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        return (u64)(uintptr_t)s;
+    }
+
+    bool FenceSignaled(u64 fence) {
+        if (fence == 0) return false;
+        GLint status = GL_UNSIGNALED;
+        glGetSynciv((GLsync)(uintptr_t)fence, GL_SYNC_STATUS, 1, nullptr, &status);
+        return status == GL_SIGNALED;
+    }
+
+    void DestroyFence(u64 fence) {
+        if (fence != 0) glDeleteSync((GLsync)(uintptr_t)fence);
+    }
+
     // ── Vertex arrays ──────────────────────────────────────────────────────
     u32 CreateVertexArray() {
         u32 id = 0;
@@ -576,11 +601,20 @@ namespace efecom {
         glDispatchCompute(groupsX, groupsY, groupsZ);
     }
 
+    void DispatchComputeIndirect(u32 buffer, usize offsetBytes) {
+        ++g_counters.dispatches;
+        glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, buffer);
+        glDispatchComputeIndirect((GLintptr)offsetBytes);
+        glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, 0);
+    }
+
     void IssueMemoryBarrier(Barrier bits) {
         GLbitfield glBits = 0;
         if ((u32)bits & (u32)Barrier::ShaderImageAccess) glBits |= GL_SHADER_IMAGE_ACCESS_BARRIER_BIT;
         if ((u32)bits & (u32)Barrier::TextureFetch)      glBits |= GL_TEXTURE_FETCH_BARRIER_BIT;
         if ((u32)bits & (u32)Barrier::ShaderStorage)     glBits |= GL_SHADER_STORAGE_BARRIER_BIT;
+        if ((u32)bits & (u32)Barrier::Command)           glBits |= GL_COMMAND_BARRIER_BIT;
+        if ((u32)bits & (u32)Barrier::BufferUpdate)      glBits |= GL_BUFFER_UPDATE_BARRIER_BIT;
         glMemoryBarrier(glBits);
     }
 

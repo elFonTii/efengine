@@ -169,6 +169,18 @@ namespace efecom {
     u32  CreateStorageBuffer(usize size);
     void BindStorageBuffer(u32 buffer, u32 bindingIndex);
 
+    // Para leer un SSBO escrito por un compute, antes IssueMemoryBarrier(Barrier::BufferUpdate).
+    void CopyBuffer(u32 src, u32 dst, usize srcOffset, usize dstOffset, usize size);
+
+    // Bloquea hasta que la GPU termino de escribir el buffer: usarla solo despues de que
+    // FenceSignaled confirmo que no hay nada en vuelo.
+    void ReadBuffer(u32 buffer, usize offset, usize size, void* out);
+
+    // 0 = sin fence. FenceSignaled no bloquea.
+    u64  CreateFence();
+    bool FenceSignaled(u64 fence);
+    void DestroyFence(u64 fence);
+
     // ── Vertex arrays ──────────────────────────────────────────────────────
     // Modelo de binding points (estilo DSA): el buffer se engancha a un
     // bindingIndex del VA y cada atributo (siempre floats) se asocia a él.
@@ -287,11 +299,15 @@ namespace efecom {
 
     // Compute
     void DispatchCompute(u32 groupsX, u32 groupsY, u32 groupsZ);
+    // La GPU lee (x, y, z) de `buffer` en `offsetBytes` (multiplo de 4).
+    void DispatchComputeIndirect(u32 buffer, usize offsetBytes);
 
     enum class Barrier : u32 {
         ShaderImageAccess = 1u << 0, // escrituras vía imageStore
         TextureFetch      = 1u << 1, // lecturas vía sampler
         ShaderStorage     = 1u << 2, // escrituras a SSBO desde un compute
+        Command           = 1u << 3, // argumentos indirectos escritos por un compute
+        BufferUpdate      = 1u << 4, // CopyBuffer/ReadBuffer de algo escrito por un compute
     };
     void IssueMemoryBarrier(Barrier bits);
 
