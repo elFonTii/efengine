@@ -68,10 +68,10 @@ using namespace efengine;
 
         // -- Update ------------------------------------------------------------
         ImGui::SeparatorText("Update");
-        int perFrame = static_cast<int>(s.probesPerFrame);
+        int perFrame = static_cast<int>(s.probeBudget);
         if (ImGui::SliderInt("Probes por frame", &perFrame, 0,
                              static_cast<int>(renderer::kMaxProbesPerFrame))) {
-            s.probesPerFrame = static_cast<u32>(perFrame);
+            s.probeBudget = static_cast<u32>(perFrame);
         }
         // Histeresis: cuanto del valor viejo se conserva. ESTO es el denoise
         // temporal de DDGI, no hace falta un denoiser aparte. Mas alto = mas
@@ -82,8 +82,8 @@ using namespace efengine;
         if (ImGui::Button("Reset")) pass.Reset();
 
         const u32 total = renderer::ProbeCount(s.grid);
-        const u32 framesPorBarrido = (s.probesPerFrame > 0u)
-                                   ? (total + s.probesPerFrame - 1u) / s.probesPerFrame
+        const u32 framesPorBarrido = (s.probeBudget > 0u)
+                                   ? (total + s.probeBudget - 1u) / s.probeBudget
                                    : 0u;
         ImGui::TextDisabled("cursor %u / %u   barridos %u", pass.cursor(), total, pass.sweepsDone());
         ImGui::TextDisabled("frames por barrido: %u", framesPorBarrido);
@@ -96,7 +96,7 @@ using namespace efengine;
         // el rango nunca pasa del total de probes.
         const u32 porFrame = s.freeze
                            ? 0u
-                           : std::min(s.probesPerFrame, renderer::kMaxProbesPerFrame);
+                           : std::min(s.probeBudget, renderer::kMaxProbesPerFrame);
         const u32 probesDelFrame = std::min(porFrame, total);
         const u32 rayosPorFrame  = 6u * renderer::kProbeFaceSize * renderer::kProbeFaceSize
                                  * probesDelFrame;
@@ -132,14 +132,8 @@ using namespace efengine;
         ImGui::SliderFloat("View bias", &s.viewBias, 0.0f, 1.0f, "%.3f m");
         ImGui::SliderFloat("Chebyshev", &s.chebyshevSharpness, 1.0f, 16.0f);
 
-        // El rango sale de la escena, no de un numero fijo: con un tope de 100 m
-        // fijo, abrir el panel con maxDistance en 200 lo clamparia en silencio y
-        // cambiaria el far plane de la captura sin que nadie toque nada.
-        const renderer::AABB& bounds = ctx.scene.WorldBounds();
-        const f32 topeDist = bounds.Valid() ? glm::max(4.0f * bounds.Radius(), 10.0f) : 200.0f;
-        // Es el far plane de la captura de probes: muy alto tira la precision
-        // del depth, muy bajo deja la captura vacia.
-        ImGui::SliderFloat("Distancia max", &s.maxDistance, 1.0f, topeDist, "%.1f m");
+        ImGui::TextDisabled("clamp de distancia: %.2f m (1,5 x diagonal de celda)",
+                            renderer::DistanceClamp(s.grid));
 
         // Alfa minimo para que el DDA cuente un voxel como solido. En 0 la
         // condicion se cumple en el aire y el rayo muere en el primer voxel.

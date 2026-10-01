@@ -173,7 +173,7 @@ TEST_CASE("MakeDdgiBlock: atlasLayout lleva columnas, filas y los dos tamanos de
 
 TEST_CASE("MakeDdgiBlock: updateRange lleva el rango del frame y el stride de captura") {
     DdgiSettings s;
-    s.probesPerFrame = 8u;
+    s.probeBudget = 8u;
 
     UpdateRange r;
     r.first = 24u;
@@ -229,23 +229,21 @@ TEST_CASE("MakeDdgiBlock: la grilla se sanea antes de empaquetar") {
     CHECK(b.gridSpacing.x > 0.0f);
 }
 
-TEST_CASE("MakeDdgiBlock: params2 lleva maxDistance y los dos umbrales de backface") {
+TEST_CASE("MakeDdgiBlock: params2 lleva el clamp de distancia y los dos umbrales de backface") {
     DdgiGrid grid;
     grid.origin  = glm::vec3(0.0f);
     grid.spacing = glm::vec3(1.0f);
     grid.counts  = glm::ivec3(2, 2, 2);
 
     DdgiSettings s;
-    s.maxDistance       = 12.5f;
     s.backfaceFadeStart = 0.2f;
     s.backfaceFadeEnd   = 0.4f;
 
     const DdgiBlock b = MakeDdgiBlock(grid, s, UpdateRange{}, true);
 
-    CHECK(b.params2.x == doctest::Approx(12.5f));
+    CHECK(b.params2.x == doctest::Approx(DistanceClamp(grid)));
     CHECK(b.params2.y == doctest::Approx(0.2f));
     CHECK(b.params2.z == doctest::Approx(0.4f));
-    // .w es el ablation test, apagado por default: negativo.
     CHECK(b.params2.w < 0.0f);
 }
 
@@ -401,4 +399,84 @@ TEST_CASE("Layout std140: PrepassBlock") {
     CHECK(offsetof(PrepassBlock, projection)           ==  64u);
     CHECK(offsetof(PrepassBlock, viewProjNoJitter)     == 128u);
     CHECK(offsetof(PrepassBlock, prevViewProjNoJitter) == 192u);
+}
+
+TEST_CASE("Layout std140: los offsets de DdgiUpdateBlock son los calculados a mano") {
+    CHECK(sizeof(DdgiUpdateBlock) == 144u);
+    CHECK(offsetof(DdgiUpdateBlock, rayRotation) ==   0u);
+    CHECK(offsetof(DdgiUpdateBlock, counts)      ==  64u);
+    CHECK(offsetof(DdgiUpdateBlock, hysteresis)  ==  80u);
+    CHECK(offsetof(DdgiUpdateBlock, relocation)  ==  96u);
+    CHECK(offsetof(DdgiUpdateBlock, voxelGrid)   == 112u);
+    CHECK(offsetof(DdgiUpdateBlock, voxelParams) == 128u);
+}
+
+TEST_CASE("kDdgiUpdateBinding no choca con los otros bloques") {
+    CHECK(kDdgiUpdateBinding == 9u);
+    CHECK(kDdgiUpdateBinding != kClusterBinding);
+}
+
+TEST_CASE("MakeDdgiUpdateBlock: rayos, presupuesto y K quedan dentro de rango") {
+    DdgiSettings s;
+    s.raysPerProbe          = 9999u;
+    s.probeBudget           = 9999u;
+    s.inactiveRecheckSweeps = 0u;
+    DdgiUpdateBlock b = MakeDdgiUpdateBlock(s, VoxelGridDesc{}, 0u);
+    CHECK(b.counts.x == kMaxRaysPerProbe);
+    CHECK(b.counts.y == kMaxProbesPerFrame);
+    CHECK(b.counts.z == 1u);
+
+    s.raysPerProbe = 1u;
+    CHECK(MakeDdgiUpdateBlock(s, VoxelGridDesc{}, 0u).counts.x == kMinRaysPerProbe);
+
+    s.raysPerProbe = 100u;   // no multiplo de 64: se respeta
+    CHECK(MakeDdgiUpdateBlock(s, VoxelGridDesc{}, 0u).counts.x == 100u);
+}
+
+TEST_CASE("MakeDdgiUpdateBlock: la rotacion es la del frame") {
+    const DdgiSettings s;
+    const DdgiUpdateBlock b = MakeDdgiUpdateBlock(s, VoxelGridDesc{}, 17u);
+    const glm::mat3 esperada = RandomRayRotation(17u);
+    for (int c = 0; c < 3; ++c) {
+        for (int f = 0; f < 3; ++f) CHECK(b.rayRotation[c][f] == doctest::Approx(esperada[c][f]));
+    }
+    CHECK(b.rayRotation[3][3] == doctest::Approx(1.0f));
+}
+
+TEST_CASE("MakeDdgiUpdateBlock: histeresis, umbrales y clamp de distancia") {
+    DdgiSettings s;
+    s.hysteresis          = 2.0f;
+    s.irradianceThreshold = 0.3f;
+    s.brightnessThreshold = -1.0f;
+    s.grid.spacing        = glm::vec3(2.0f);
+    const DdgiUpdateBlock b = MakeDdgiUpdateBlock(s, VoxelGridDesc{}, 0u);
+    CHECK(b.hysteresis.x == doctest::Approx(0.995f));
+    CHECK(b.hysteresis.y == doctest::Approx(0.3f));
+    CHECK(b.hysteresis.z == doctest::Approx(0.0f));
+    CHECK(b.hysteresis.w == doctest::Approx(DistanceClamp(s.grid)));
+}
+
+TEST_CASE("MakeDdgiUpdateBlock: reubicacion y grid de voxeles") {
+    DdgiSettings s;
+    s.minFrontfaceDistance = 0.75f;
+    s.relocationEnabled    = false;
+    s.backfaceFadeStart    = 0.5f;
+    s.backfaceFadeEnd      = 0.2f;   // invertido: se corrige como en MakeDdgiBlock
+    s.opacityThreshold     = 0.9f;
+
+    VoxelGridDesc v;
+    v.origin     = glm::vec3(-10.0f, 0.0f, 5.0f);
+    v.voxelSize  = 0.45f;
+    v.resolution = 256u;
+
+    const DdgiUpdateBlock b = MakeDdgiUpdateBlock(s, v, 0u);
+    CHECK(b.relocation.x == doctest::Approx(0.75f));
+    CHECK(b.relocation.y == doctest::Approx(0.0f));
+    CHECK(b.relocation.z == doctest::Approx(0.45f));
+    CHECK(b.relocation.w > 0.5f);
+    CHECK(b.voxelGrid.x == doctest::Approx(-10.0f));
+    CHECK(b.voxelGrid.z == doctest::Approx(5.0f));
+    CHECK(b.voxelGrid.w == doctest::Approx(256.0f));
+    CHECK(b.voxelParams.x == doctest::Approx(0.45f));
+    CHECK(b.voxelParams.y == doctest::Approx(0.7f));
 }

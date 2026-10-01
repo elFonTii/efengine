@@ -170,7 +170,7 @@ namespace renderer {
         b.updateRange = glm::ivec4(static_cast<i32>(range.first),
                                    static_cast<i32>(range.count),
                                    static_cast<i32>(kProbeFaceSize),
-                                   static_cast<i32>(settings.probesPerFrame));
+                                   static_cast<i32>(settings.probeBudget));
         b.params0 = glm::vec4(settings.hysteresis, settings.intensity,
                               settings.normalBias, settings.viewBias);
         // params1.z lleva el modo de debug de vista. Va aca y no en FrameBlock
@@ -184,7 +184,7 @@ namespace renderer {
         // >= 0 = el valor constante que pbr.frag devuelve en vez de samplear.
         // Dos campos (flag + valor) habrian obligado a crecer el bloque y a
         // tocar los cinco shaders que lo declaran para un instrumento de medida.
-        b.params2 = glm::vec4(settings.maxDistance,
+        b.params2 = glm::vec4(DistanceClamp(g),
                               settings.backfaceFadeStart,
                               // smoothstep con bordes iguales o invertidos no esta definido.
                               std::max(settings.backfaceFadeEnd, settings.backfaceFadeStart + 1.0e-3f),
@@ -238,6 +238,30 @@ namespace renderer {
         b.params = glm::vec4(std::max(settings.minFrontfaceDistance, 0.0f),
                              settings.relocationEnabled ? 1.0f : 0.0f,
                              std::max(voxelSize, 0.0f), 0.0f);
+        return b;
+    }
+
+    DdgiUpdateBlock MakeDdgiUpdateBlock(const DdgiSettings& s, const VoxelGridDesc& voxel,
+                                        u32 frameIndex) {
+        DdgiUpdateBlock b {};
+        b.rayRotation = glm::mat4(RandomRayRotation(frameIndex));
+        b.counts = glm::uvec4(std::clamp(s.raysPerProbe, kMinRaysPerProbe, kMaxRaysPerProbe),
+                              std::min(s.probeBudget, kMaxProbesPerFrame),
+                              std::max(s.inactiveRecheckSweeps, 1u),
+                              s.classificationEnabled ? 1u : 0u);
+        b.hysteresis = glm::vec4(std::clamp(s.hysteresis, 0.0f, 0.995f),
+                                 std::max(s.irradianceThreshold, 0.0f),
+                                 std::max(s.brightnessThreshold, 0.0f),
+                                 DistanceClamp(s.grid));
+        // Mismo arreglo que MakeDdgiBlock: smoothstep con bordes invertidos no esta definido,
+        // y schedule.comp usa este borde para decidir quien esta activa.
+        b.relocation = glm::vec4(std::max(s.minFrontfaceDistance, 0.0f),
+                                 s.relocationEnabled ? 1.0f : 0.0f,
+                                 std::max(voxel.voxelSize, 0.0f),
+                                 std::max(s.backfaceFadeEnd, s.backfaceFadeStart + 1.0e-3f));
+        b.voxelGrid   = glm::vec4(voxel.origin, static_cast<f32>(voxel.resolution));
+        b.voxelParams = glm::vec4(voxel.voxelSize,
+                                  std::clamp(s.opacityThreshold, 1.0e-3f, 0.7f), 0.0f, 0.0f);
         return b;
     }
 

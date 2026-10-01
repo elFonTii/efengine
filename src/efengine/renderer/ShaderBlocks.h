@@ -27,6 +27,7 @@ namespace renderer {
     inline constexpr u32 kAoBinding       = 6u;   // 1x por frame — solo lo declara pbr.frag
     inline constexpr u32 kCascadeBinding  = 7u;   // 1x por frame — solo lo declara pbr.frag
     inline constexpr u32 kClusterBinding  = 8u;   // 1x por frame — solo lo declaran pbr.frag y el cull
+    inline constexpr u32 kDdgiUpdateBinding = 9u; // 1x por frame — solo los shaders que actualizan probes
 
     // Binding de SSBO (espacio aparte de los de UBO): datos por probe de DDGI.
     inline constexpr u32 kProbeDataBinding = 0u;
@@ -136,7 +137,7 @@ namespace renderer {
         glm::ivec4 updateRange;   // x=firstProbe, y=count, z=faceSize, w=probesPerFrame
         glm::vec4  params0;       // hysteresis, intensity, normalBias, viewBias
         glm::vec4  params1;       // enabled, chebyshevSharpness, debugView, classificationEnabled
-        glm::vec4  params2;       // maxDistance, backfaceFadeStart, backfaceFadeEnd, _
+        glm::vec4  params2;       // distanceClamp, backfaceFadeStart, backfaceFadeEnd, ablation
     };
 
     // PassParams (binding 4) del DepthPrepass. Corre ANTES de BeginScene, asi
@@ -253,6 +254,17 @@ namespace renderer {
         glm::vec4 params;   // x = minFrontfaceDistance (m), y = relocationEnabled, z = voxelSize (m), w = libre
     };
 
+    // DdgiUpdate (binding 9) de ddgi/update.glsl. La rotacion va como mat4 para no pelear con
+    // el padding de mat3 en std140; el shader usa mat3(uRayRotation).
+    struct alignas(16) DdgiUpdateBlock {
+        glm::mat4  rayRotation;
+        glm::uvec4 counts;        // x = rayos por probe, y = presupuesto, z = K, w = clasificacion
+        glm::vec4  hysteresis;    // x = hMax, y = umbral de irradiancia, z = umbral de brillo, w = distanceClamp
+        glm::vec4  relocation;    // x = minFrontfaceDistance, y = reubicacion, z = voxelSize, w = backfaceFadeEnd
+        glm::vec4  voxelGrid;     // xyz = esquina minima del grid de voxeles, w = resolucion
+        glm::vec4  voxelParams;   // x = voxelSize, y = umbral de opacidad
+    };
+
     CascadeBlock MakeCascadeBlock(const CascadeContext& ctx);
     ClusterBlock MakeClusterBlock(const ClusterGrid& grid, u32 debugView);
 
@@ -263,10 +275,7 @@ namespace renderer {
     FrameBlock  MakeFrameBlock(const FrameView& view,
                                const ShadowContext& shadow, const IblContext& ibl);
 
-    // maxDistance SI viaja en el bloque (params2.x). Ademas del far plane de la
-    // captura, es el techo con el que blend_distance.comp recorta las distancias
-    // y con el que debug_probe.frag las normaliza: antes cada uno tenia su propia
-    // constante 4*spacing y el slider del panel no movia ninguna de las dos.
+    // params2.x es DistanceClamp(grid): el techo de las distancias del atlas de Chebyshev, no el largo del rayo.
     //
     // atlasValid apaga params1.x aunque settings.enabled este en true: es el caso
     // "no hay DdgiPass" (fallo de shader), donde pbr.frag tiene que caer a IBL
@@ -284,6 +293,9 @@ namespace renderer {
     // voxelSize es el paso al que llegan cuantizadas las distancias de la captura;
     // las reglas lo usan como banda muerta para no oscilar.
     ProbeUpdatePassBlock MakeProbeUpdatePassBlock(const DdgiSettings& settings, f32 voxelSize);
+
+    DdgiUpdateBlock MakeDdgiUpdateBlock(const DdgiSettings& settings, const VoxelGridDesc& voxel,
+                                        u32 frameIndex);
 
 }
 }

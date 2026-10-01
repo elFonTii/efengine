@@ -259,7 +259,7 @@ namespace renderer {
 
         const u32 perFrame = m_settings.freeze
                            ? 0u
-                           : std::min(m_settings.probesPerFrame, kMaxProbesPerFrame);
+                           : std::min(m_settings.probeBudget, kMaxProbesPerFrame);
 
         m_range = NextRange(m_cursor, perFrame, total);
         if (m_range.count == 0u) return;
