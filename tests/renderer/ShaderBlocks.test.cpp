@@ -171,7 +171,7 @@ TEST_CASE("MakeDdgiBlock: atlasLayout lleva columnas, filas y los dos tamanos de
     CHECK(b.atlasLayout.w == static_cast<i32>(kDistanceTile));
 }
 
-TEST_CASE("MakeDdgiBlock: updateRange lleva el rango del frame y el stride de captura") {
+TEST_CASE("MakeDdgiBlock: updateRange lleva el rango del frame") {
     DdgiSettings s;
     s.probeBudget = 8u;
 
@@ -183,7 +183,7 @@ TEST_CASE("MakeDdgiBlock: updateRange lleva el rango del frame y el stride de ca
 
     CHECK(b.updateRange.x == 24);
     CHECK(b.updateRange.y ==  8);
-    CHECK(b.updateRange.z == static_cast<i32>(kProbeFaceSize));
+    CHECK(b.updateRange.z == 0);
     CHECK(b.updateRange.w ==  8);   // probesPerFrame: el blend lo usa como stride
 }
 
@@ -313,39 +313,8 @@ TEST_CASE("MakeDdgiBlock: backfaceFadeEnd nunca queda en o debajo de start") {
     CHECK(MakeDdgiBlock(s.grid, s, UpdateRange{}, true).params2.z > 0.5f);
 }
 
-TEST_CASE("Layout std140: ProbeUpdatePassBlock es un vec4") {
-    CHECK(sizeof(ProbeUpdatePassBlock) == 16u);
-    CHECK(offsetof(ProbeUpdatePassBlock, params) == 0u);
-}
-
-TEST_CASE("MakeProbeUpdatePassBlock: distancia minima y flag de reubicacion") {
-    DdgiSettings s;
-    CHECK(s.relocationEnabled);
-    CHECK(s.minFrontfaceDistance == doctest::Approx(1.0f));
-
-    s.minFrontfaceDistance = 0.75f;
-    ProbeUpdatePassBlock b = MakeProbeUpdatePassBlock(s, 0.45f);
-    CHECK(b.params.x == doctest::Approx(0.75f));
-    CHECK(b.params.y == doctest::Approx(1.0f));
-    CHECK(b.params.z == doctest::Approx(0.45f));
-
-    s.relocationEnabled    = false;
-    s.minFrontfaceDistance = -2.0f;
-    b = MakeProbeUpdatePassBlock(s, -1.0f);
-    CHECK(b.params.x == doctest::Approx(0.0f));
-    CHECK(b.params.y == doctest::Approx(0.0f));
-    CHECK(b.params.z == doctest::Approx(0.0f));
-}
-
 TEST_CASE("kProbeDataBinding es el binding 0 de SSBO") {
     CHECK(kProbeDataBinding == 0u);
-}
-
-TEST_CASE("MakeTraceVoxelPassBlock: el umbral de opacidad no pasa de 0.7") {
-    const VoxelGridDesc desc {};
-    CHECK(MakeTraceVoxelPassBlock(desc, 0.5f).gridParams.z == doctest::Approx(0.5f));
-    CHECK(MakeTraceVoxelPassBlock(desc, 0.8f).gridParams.z == doctest::Approx(0.7f));
-    CHECK(MakeTraceVoxelPassBlock(desc, 0.0f).gridParams.z > 0.0f);
 }
 
 TEST_CASE("MakeFrameBlock: view y projection salen de la FrameView con jitter") {

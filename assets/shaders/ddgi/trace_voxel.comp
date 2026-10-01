@@ -1,53 +1,24 @@
 #version 450 core
-// Traza un rayo por texel del target de captura contra el grid de voxeles.
-// Reemplaza a ddgi/capture.vert+frag y a capture_sky.*.
-//
-// Un workgroup por (cara, probe): gl_WorkGroupID.x es la cara y .y el slot del
-// frame. El local_size ES la cara, asi que gl_LocalInvocationID.xy es el texel.
-//
-// La direccion de cada rayo sale de dirForFace(cara, uv), que es EXACTAMENTE la
-// misma funcion con la que blend_irradiance.comp reconstruye la direccion de ese
-// texel para integrarlo. Esa igualdad es todo el diseno: si las dos se separan,
-// la irradiancia se integra sobre direcciones que nadie trazo, y falla en brillo
-// sin que nada se rompa ruidosamente.
-layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+// Traza los R rayos de cada probe de la lista contra el grid de voxeles.
+// Workgroup = (grupo de 64 rayos, slot): gl_GlobalInvocationID.x es el rayo.
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
-layout(rgba16f, binding = 0) uniform image2D uCapture;
+layout(rgba16f, binding = 0) uniform image2D uRays;
 
 layout(binding = 2) uniform sampler3D uVoxelAlbedo;
 layout(binding = 3) uniform sampler3D uVoxelNormal;
 layout(binding = 4) uniform samplerCube uEnvironment;
 layout(binding = 5) uniform sampler3D uVoxelEmission;   // RGBM, ver voxel/emission.glsl
 
-// El mapa de sombra UNICO de DDGI, no las cascadas. pbr.frag selecciona cascada
-// por viewDepth -- distancia a la CAMARA -- y una sonda lejos de la camara cae
-// fuera de todas y filtraria luz en la GI. Se evaluo al disenar CSM y se
-// descarto; DDGI conserva su mapa propio como deuda tecnica declarada.
+// El mapa de sombra UNICO de DDGI, no las cascadas: pbr.frag elige cascada por
+// distancia a la CAMARA y una sonda lejos de la camara caeria fuera de todas.
 layout(binding = 8) uniform sampler2D uShadowMap;
 
-// El motor no tiene uniforms sueltos (ver Shader.h): todo dato de shader viaja
-// por UBO. Espeja TraceVoxelPassBlock de ShaderBlocks.h, que lleva los
-// static_assert de tamano y offsets.
-layout(std140, binding = 4) uniform TraceVoxelParams {
-    vec4 uGridOrigin;    // .xyz = esquina minima del grid
-    vec4 uGridParams;    // x=voxelSize (m), y=resolucion por eje,
-                         // z=umbral de opacidad, w=LIBRE
-                         //
-                         // .w quedo libre a proposito: la intensidad de IBL vive
-                         // en uIblParams.y del bloque Frame y se lee de ahi. Una
-                         // copia en este UBO seria una segunda fuente de verdad
-                         // que se desincroniza en cuanto alguien toque una sola.
-};
-
 #include "common/frame.glsl"
-
 #include "common/lights.glsl"
-
-// Trae tambien common/cubeface.glsl, de donde sale dirForFace.
 #include "ddgi/common.glsl"
+#include "ddgi/update.glsl"
 #include "voxel/emission.glsl"
-
-const float kFarDistance = 1.0e4;
 
 // voxelize.frag: alfa 1.0 = una cara, 0.75 = doble cara.
 const float kAlfaUnaCara     = 0.875;
@@ -62,12 +33,8 @@ vec3 OctDecodeNormal(vec2 e) {
     return normalize(n);
 }
 
-// Cuerpo calcado del ShadowFactor de la captura rasterizada que este pase
-// reemplazo (ddgi/capture.frag, borrado): los dos bias y el offset por
-// normal ya estan tuneados y una variante propia reintroduce acne en la GI sin
-// que se note hasta mucho despues. Las dos diferencias: el punto y la normal
-// llegan por parametro porque aca no hay varyings, y no hace el PCF 3x3 -- un
-// rayo pega en UN voxel, y el promedio espacial lo hace la integracion del blend.
+// Los bias y el offset por normal son los tuneados de la captura rasterizada. Sin PCF:
+// un rayo pega en UN voxel y el promedio espacial lo hace el blend.
 float SombraDelSol(vec3 mundo, vec3 N, vec3 L) {
     if (uShadowParams.x < 0.5) return 0.0;
 
@@ -84,21 +51,14 @@ float SombraDelSol(vec3 mundo, vec3 N, vec3 L) {
     return (proj.z - bias > texture(uShadowMap, proj.xy).r) ? 1.0 : 0.0;
 }
 
-// Entrada del rayo a la AABB del grid, por slab test. Devuelve t >= 0, o -1 si
-// el rayo no la toca dentro de maxDist.
-//
-// Sin esto, un probe que cae FUERA del grid no traza nada: el DDA arrancaria en
-// un voxel inexistente y abortaria en la primera iteracion, asi que el probe
-// veria cielo en las seis caras. Es el modo de falla que la simulacion en Node
-// reprodujo (68 de 18753 rayos con origen afuera) y el que este slab test
-// cierra: con el, ~155.000 rayos -- adentro y afuera -- coinciden con la
-// fuerza bruta.
+// Slab test contra la AABB del grid. Sin esto, un probe afuera del grid veria cielo
+// en todas las direcciones (reproducido en la simulacion del DDA).
 float EntradaAlGrid(vec3 o, vec3 d, float extension, float maxDist) {
     float t0 = 0.0;
     float t1 = maxDist;
     for (int i = 0; i < 3; ++i) {
-        float lo = uGridOrigin[i];
-        float hi = uGridOrigin[i] + extension;
+        float lo = uVoxelGrid[i];
+        float hi = uVoxelGrid[i] + extension;
         if (abs(d[i]) < 1e-8) {
             if (o[i] < lo || o[i] > hi) return -1.0;
             continue;
@@ -113,25 +73,20 @@ float EntradaAlGrid(vec3 o, vec3 d, float extension, float maxDist) {
 }
 
 void main() {
-    int face = int(gl_WorkGroupID.x);
     int slot = int(gl_WorkGroupID.y);
-    if (slot >= uDdgiRange.y) return;
+    if (slot >= DdgiSlotCount()) return;
+    int rayo = int(gl_GlobalInvocationID.x);
+    if (rayo >= DdgiRayCount()) return;
 
-    int total = uDdgiCounts.w;
-    int probe = (uDdgiRange.x + slot) % total;
+    int  probe  = DdgiSlotProbe(slot);
     vec3 origen = DdgiProbePosition(DdgiProbeCoords(probe));
+    vec3 dir    = DdgiRayDirection(rayo);
 
-    int faceSize = uDdgiRange.z;
-    ivec2 local  = ivec2(gl_LocalInvocationID.xy);
-    if (local.x >= faceSize || local.y >= faceSize) return;
-
-    vec2 uv  = (vec2(local) + 0.5) / float(faceSize) * 2.0 - 1.0;
-    vec3 dir = dirForFace(uint(face), uv);
-
-    float maxDist    = uDdgiParams2.x;
-    float voxelSize  = uGridParams.x;
-    int   resolucion = int(uGridParams.y);
-    float umbral     = uGridParams.z;
+    // El rayo corre hasta salir del grid: el clamp de Chebyshev vive en blend_distance.
+    float maxDist    = 1.0e30;
+    float voxelSize  = uVoxelParams.x;
+    int   resolucion = int(uVoxelGrid.w);
+    float umbral     = uVoxelParams.y;
 
     bool  hit     = false;
     float t       = 0.0;
@@ -140,33 +95,24 @@ void main() {
 
     float tEntrada = EntradaAlGrid(origen, dir, float(resolucion) * voxelSize, maxDist);
     if (tEntrada >= 0.0) {
-        // Un epsilon adentro: sobre la cara exacta el floor cae en el voxel de
-        // afuera por redondeo y la primera iteracion abortaria. Con el origen ya
-        // adentro tEntrada es 0 y esto no corre.
+        // Un epsilon adentro: sobre la cara exacta el floor cae en el voxel de afuera.
         float tIni    = (tEntrada > 0.0) ? tEntrada + voxelSize * 1e-4 : 0.0;
         vec3  arranca = origen + dir * tIni;
 
-        // -- DDA de Amanatides-Woo, el mismo que valido dda_sim.mjs --
-        //
-        // El clamp no es defensivo de mas: el slab test YA establecio que el
-        // rayo entra a la AABB, asi que el unico modo de que este floor caiga
-        // afuera es el error de fp32 sobre la cara. El epsilon de arriba da ~4x
-        // de margen hoy, pero ese margen se come si el grid queda lejos del
-        // origen del mundo, y el fallo es silencioso: el rayo se pierde entero.
-        v            = clamp(ivec3(floor((arranca - uGridOrigin.xyz) / voxelSize)),
+        // Amanatides-Woo. El clamp cubre el error de fp32 sobre la cara de entrada.
+        v            = clamp(ivec3(floor((arranca - uVoxelGrid.xyz) / voxelSize)),
                              ivec3(0), ivec3(resolucion - 1));
         ivec3 paso   = ivec3(sign(dir));
         vec3  tDelta = abs(vec3(voxelSize) / max(abs(dir), vec3(1e-8)));
         vec3  tMax;
         for (int i = 0; i < 3; ++i) {
-            float borde = uGridOrigin[i] + float(v[i] + (dir[i] > 0.0 ? 1 : 0)) * voxelSize;
+            float borde = uVoxelGrid[i] + float(v[i] + (dir[i] > 0.0 ? 1 : 0)) * voxelSize;
             tMax[i] = (abs(dir[i]) < 1e-8) ? 1e30 : (borde - arranca[i]) / dir[i];
         }
 
         float tLocal = 0.0;
 
-        // Cota dura de iteraciones: un rayo casi paralelo a un eje puede pisar
-        // muchos mas voxeles que la diagonal. 3*resolution es el peor caso real.
+        // Un rayo casi paralelo a un eje pisa hasta 3*resolucion voxeles.
         int maxPasos = 3 * resolucion;
         for (int i = 0; i < maxPasos; ++i) {
             if (any(lessThan(v, ivec3(0))) || any(greaterThanEqual(v, ivec3(resolucion)))) break;
@@ -183,10 +129,8 @@ void main() {
 
         t = tIni + tLocal;
 
-        // Origen adentro de un voxel solido: sin esto todos los rayos pegan en t = 0,
-        // empatan en la reubicacion y el probe salta hacia una direccion fija. Se
-        // trata como cara trasera a la distancia en que el rayo sale del solido, asi
-        // la regla 1 lo saca por la salida mas corta, sea el voxel de una o dos caras.
+        // Origen adentro de un solido: se trata como cara trasera a la distancia de salida,
+        // asi la regla 1 de la reubicacion lo saca por la salida mas corta.
         if (hit && tIni == 0.0 && tLocal == 0.0) {
             tSalida = 0.0;
             for (int i = 0; i < maxPasos; ++i) {
@@ -201,15 +145,10 @@ void main() {
         }
     }
 
-    // 6 caras en fila de faceSize, un slot por fila. Tiene que coincidir con
-    // CaptureTileRect(face, slot) de DdgiVolume.cpp, que manda la cara al eje X
-    // del atlas (ancho = 6*kProbeFaceSize) y el slot al eje Y
-    // (alto = kMaxProbesPerFrame*kProbeFaceSize). Invertirlos integraria las
-    // direcciones de otro probe: GI plausible pero mal.
-    ivec2 texel = ivec2(face * faceSize + local.x, slot * faceSize + local.y);
+    ivec2 texel = ivec2(rayo, slot);
 
     if (tSalida >= 0.0) {
-        imageStore(uCapture, texel, vec4(0.0, 0.0, 0.0, -max(tSalida, kDistanciaMinima)));
+        imageStore(uRays, texel, vec4(0.0, 0.0, 0.0, -max(tSalida, kDistanciaMinima)));
         return;
     }
 
@@ -221,30 +160,19 @@ void main() {
         vec3 albedo = voxel.rgb;
         vec3 N      = OctDecodeNormal(texelFetch(uVoxelNormal, v, 0).rg);
 
-        // Dorso de una cara simple: el probe esta adentro de algo. No ilumina.
+        // Dorso de una cara simple: el probe esta adentro de algo.
         if (voxel.a > kAlfaUnaCara && dot(N, dir) > 0.0) {
-            imageStore(uCapture, texel, vec4(0.0, 0.0, 0.0, -max(t, kDistanciaMinima)));
+            imageStore(uRays, texel, vec4(0.0, 0.0, 0.0, -max(t, kDistanciaMinima)));
             return;
         }
-        // Doble cara vista de atras: la normal mira al rayo.
         if (dot(N, dir) > 0.0) N = -N;
 
-        // Se evalua donde el rayo entro al voxel, medio voxel afuera por N. El
-        // centro queda hasta vs/2 debajo de la superficie y se autosombrea.
-        vec3 mundo  = origen + dir * t + N * (0.5 * voxelSize);
+        // Medio voxel afuera por N: el centro del voxel queda debajo de la superficie.
+        vec3 mundo = origen + dir * t + N * (0.5 * voxelSize);
 
-        // -- Luz directa, Lambert puro --
-        //
-        // El /kDdgiPI no es opcional y no es cosmetico: la captura es un
-        // contrato de RADIANCIA y el blend integra asumiendo eso. Sin el, la
-        // directa entra al atlas ~PI veces de mas, el rebote la relee y el lazo
-        // la amplifica hasta una GI sobre-brillante ESTABLE -- plausible, o sea
-        // el modo de falla caro. El rebote de mas abajo sigue yendo sin /PI por
-        // la razon de siempre (el atlas guarda radiancia
-        // media, asi que E = PI*L y el /PI del BRDF se cancela).
+        // El /kDdgiPI es el contrato de RADIANCIA de la captura: sin el, la directa entra
+        // PI veces de mas y el rebote la amplifica hasta una GI sobre-brillante estable.
         vec3 directa = vec3(0.0);
-        // Todas las locales y no solo las visibles: la sonda ve lo que la camara
-        // no. Sin sombra en este ciclo; el rango finito acota la fuga.
         for (uint i = 0u; i < uLightCounts.x; ++i) {
             GpuLight luz  = uLocalLights[i];
             vec3  Lvec    = luz.positionRange.xyz - mundo;
@@ -261,39 +189,26 @@ void main() {
             directa += (1.0 - s) * albedo / kDdgiPI * max(dot(N, L), 0.0) * uDirColor[i].rgb;
         }
 
-        // El rebote. NO aplicar aqui la
-        // intensidad de DDGI -- se aplica una sola vez, cuando pbr.frag
-        // samplea; aplicarla dos veces hace que la energia diverja frame a
-        // frame hasta saturar.
+        // La intensidad de DDGI NO va aca: se aplica una vez, en pbr.frag. Dos veces diverge.
         vec3 rebote = vec3(0.0);
         if (DdgiEnabled()) {
-            // "Hacia el probe" hace de V: el observador de este pase es el
-            // centro del probe. El guard es por el impacto que cae justo sobre
-            // el centro, donde normalize(0) daria NaN y el blend lo propagaria
-            // a todo el atlas.
             vec3  hacia = origen - mundo;
             float dProb = length(hacia);
             hacia       = (dProb > 1e-5) ? hacia / dProb : N;
 
-            rebote = albedo * SampleDdgiIrradiance(mundo, N, hacia)
-                   * DdgiVolumeFade(mundo);
+            rebote = albedo * SampleDdgiIrradiance(mundo, N, hacia) * DdgiVolumeFade(mundo);
         }
 
-        // La emision propia va sin /PI y sin sombra, como en la captura
-        // rasterizada: ya es radiancia saliente.
         vec3 emision = DecodeVoxelEmission(texelFetch(uVoxelEmission, v, 0));
 
         radiancia = directa + rebote + emision;
         distancia = t;
     } else {
-        // El rayo se escapo: ve cielo. La intensidad sale de uIblParams.y, la
-        // MISMA que usa pbr.frag, y sin IBL cargado (uIblParams.x) no se
-        // samplea el cubemap: su contenido no esta definido.
         radiancia = (uIblParams.x > 0.5)
                   ? texture(uEnvironment, dir).rgb * uIblParams.y
                   : vec3(0.0);
-        distancia = kFarDistance;
+        distancia = kDdgiSkyDistance;
     }
 
-    imageStore(uCapture, texel, vec4(radiancia, distancia));
+    imageStore(uRays, texel, vec4(radiancia, distancia));
 }

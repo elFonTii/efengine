@@ -20,12 +20,7 @@ void main() {
     vec2 oct   = OctEncode(dir);
 
     if (uProbeParams.y > 0.5) {
-        // Media de distancia, normalizada contra el MISMO techo que usa
-        // blend_distance.comp para recortarla: el far plane de la captura.
-        // Normalizar por un spacing, como decia el plan, satura en blanco
-        // todo lo que este a mas de una celda -- que en un interior es
-        // casi todo, y entonces el modo no
-        // distingue "lejos" de "roto".
+        // Normalizada contra el clamp de distancia (params2.x).
         vec2  atlasSize = vec2(textureSize(uDdgiDistance, 0));
         float media = texture(uDdgiDistance,
                               DdgiTileUV(probe, oct, uDdgiAtlas.w,

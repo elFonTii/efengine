@@ -8,7 +8,6 @@
 #include <efengine/renderer/Renderer.h>
 #include <efengine/renderer/Shader.h>
 #include <efengine/renderer/Cubemap.h>
-#include <efengine/renderer/CubeFaces.h>
 #include <efengine/renderer/ShaderBlocks.h>
 #include <efengine/renderer/VertexArray.h>
 #include <efengine/renderer/VoxelMath.h>
@@ -25,34 +24,11 @@ namespace efengine {
 namespace renderer {
 
     namespace {
-        // El target de captura se aloca al maximo una sola vez: 6 caras de
-        // kProbeFaceSize en fila por kMaxProbesPerFrame slots apilados. Mover el
-        // slider de probes por frame nunca realoca.
-        constexpr u32 kCaptureWidth  = 6u * kProbeFaceSize;                 // 96
-        constexpr u32 kCaptureHeight = kMaxProbesPerFrame * kProbeFaceSize; // 512
-
-        // Los dos blends recorren la captura cara por cara con un cache de
-        // shared memory dimensionado a kDdgiFaceTexels (una constante de
-        // ddgi/common.glsl). Si kProbeFaceSize crece por encima de eso, el
-        // min() del shader trunca el bucle y la integral se calcula sobre menos
-        // direcciones de las que la captura tiene: la irradiancia queda sesgada
-        // hacia las primeras caras SIN QUE NADA FALLE. Este assert es la unica
-        // defensa, porque el shader no puede assertar.
-        constexpr u32 kShaderFaceTexels = 256u;
-        static_assert(kProbeFaceSize * kProbeFaceSize <= kShaderFaceTexels,
-                      "kProbeFaceSize crecio: subir kDdgiFaceTexels en "
-                      "assets/shaders/ddgi/common.glsl y revisar que el cache de "
-                      "los blends siga entrando en 32 KB de shared memory");
-
-        // trace_voxel.comp declara local_size 16x16 y usa gl_LocalInvocationID
-        // como el texel de la cara. Si kProbeFaceSize crece, el workgroup deja
-        // de cubrir la cara y se pierden los texels de mas EN SILENCIO (el
-        // shader ni siquiera los descarta: nunca se despachan). GLSL no puede
-        // leer esta constante, asi que el assert es la unica atadura.
-        constexpr u32 kTraceLocalSize = 16u;
-        static_assert(kProbeFaceSize == kTraceLocalSize,
-                      "kProbeFaceSize cambio: sincronizar el local_size de "
-                      "assets/shaders/ddgi/trace_voxel.comp");
+        // GLSL no ve las constantes de C++: estos asserts son la unica atadura.
+        static_assert(kMaxRaysPerProbe == 256u,
+                      "sincronizar kDdgiMaxRays en assets/shaders/ddgi/update.glsl");
+        static_assert(kRayGroupSize == 64u,
+                      "sincronizar local_size_x de trace_voxel.comp y kDdgiRayGroup de ddgi/update.glsl");
     }
 
     std::unique_ptr<DdgiPass> DdgiPass::Create(Renderer& renderer, VertexArray& fullscreenQuad,
@@ -68,10 +44,8 @@ namespace renderer {
         const glm::ivec2 irrSize  = IrradianceAtlasSize(grid);
         const glm::ivec2 distSize = DistanceAtlasSize(grid);
 
-        // Storage y no color attachment: la captura ya no se rasteriza, la
-        // escribe trace_voxel.comp por imageStore.
-        Texture capture = Texture::CreateStorage2D(kCaptureWidth, kCaptureHeight,
-                                                   efecom::TextureFormat::RGBA16F);
+        Texture rays = Texture::CreateStorage2D(kMaxRaysPerProbe, kMaxProbesPerFrame,
+                                                efecom::TextureFormat::RGBA16F);
         Texture irradiance = Texture::CreateStorage2D(static_cast<u32>(irrSize.x),
                                                       static_cast<u32>(irrSize.y),
                                                       efecom::TextureFormat::RGBA16F);
@@ -85,9 +59,9 @@ namespace renderer {
         StorageBuffer probeData(ProbeDataBytes(grid));
         ClearProbeData(probeData, ProbeCount(grid));
 
-        EF_LOG_INFO("DdgiPass: %u probes, atlas irradiancia %dx%d, distancia %dx%d, captura %ux%u",
+        EF_LOG_INFO("DdgiPass: %u probes, atlas irradiancia %dx%d, distancia %dx%d, buffer de rayos %ux%u",
                     ProbeCount(grid), irrSize.x, irrSize.y, distSize.x, distSize.y,
-                    kCaptureWidth, kCaptureHeight);
+                    kMaxRaysPerProbe, kMaxProbesPerFrame);
 
         std::unique_ptr<VoxelizePass> voxelize = VoxelizePass::Create(renderer, shaders.voxelize);
         if (voxelize == null) {
@@ -97,61 +71,21 @@ namespace renderer {
 
         // El ctor es privado: make_unique no lo alcanza.
         return std::unique_ptr<DdgiPass>(
-            new DdgiPass(renderer, fullscreenQuad, shaders, std::move(capture),
+            new DdgiPass(renderer, fullscreenQuad, shaders, std::move(rays),
                          std::move(irradiance), std::move(distance), std::move(probeData),
                          std::move(voxelize)));
     }
 
     DdgiPass::DdgiPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
-                       Texture capture, Texture irradiance, Texture distance,
+                       Texture rays, Texture irradiance, Texture distance,
                        StorageBuffer probeData, std::unique_ptr<VoxelizePass> voxelize)
         : m_renderer(renderer), m_quad(fullscreenQuad), m_shaders(shaders)
-        , m_capture(std::move(capture)), m_irradiance(std::move(irradiance))
+        , m_rays(std::move(rays)), m_irradiance(std::move(irradiance))
         , m_distance(std::move(distance)), m_probeData(std::move(probeData))
         , m_voxelize(std::move(voxelize))
         , m_atlasGrid(SanitizeGrid(DdgiGrid{})) {}
 
     DdgiPass::~DdgiPass() = default;
-
-    DdgiPass::DdgiPass(DdgiPass&& o) noexcept
-        : m_renderer(o.m_renderer), m_quad(o.m_quad), m_shaders(o.m_shaders)
-        , m_capture(std::move(o.m_capture)), m_irradiance(std::move(o.m_irradiance))
-        , m_distance(std::move(o.m_distance)), m_probeData(std::move(o.m_probeData))
-        , m_grid(std::move(o.m_grid))
-        , m_voxelize(std::move(o.m_voxelize))
-        , m_gridValido(std::exchange(o.m_gridValido, false))
-        , m_gridGeneracion(o.m_gridGeneracion)
-        , m_traceUbo(std::move(o.m_traceUbo))
-        , m_probeUpdateUbo(std::move(o.m_probeUpdateUbo))
-        , m_settings(o.m_settings), m_atlasGrid(o.m_atlasGrid), m_range(o.m_range)
-        , m_cursor(o.m_cursor), m_sweepsDone(o.m_sweepsDone)
-        , m_blendedOnce(o.m_blendedOnce), m_lastMs(o.m_lastMs) {}
-
-    // Las dos referencias (renderer, quad) no se reasignan: son las mismas para
-    // todo el proceso, y una referencia no se puede rebindear igual.
-    DdgiPass& DdgiPass::operator=(DdgiPass&& o) noexcept {
-        if (this != &o) {
-            m_shaders     = o.m_shaders;
-            m_capture     = std::move(o.m_capture);
-            m_irradiance  = std::move(o.m_irradiance);
-            m_distance    = std::move(o.m_distance);
-            m_probeData   = std::move(o.m_probeData);
-            m_grid        = std::move(o.m_grid);
-            m_voxelize    = std::move(o.m_voxelize);
-            m_gridValido  = std::exchange(o.m_gridValido, false);
-            m_gridGeneracion = o.m_gridGeneracion;
-            m_traceUbo    = std::move(o.m_traceUbo);
-            m_probeUpdateUbo = std::move(o.m_probeUpdateUbo);
-            m_settings    = o.m_settings;
-            m_atlasGrid   = o.m_atlasGrid;
-            m_range       = o.m_range;
-            m_cursor      = o.m_cursor;
-            m_sweepsDone  = o.m_sweepsDone;
-            m_blendedOnce = o.m_blendedOnce;
-            m_lastMs      = o.m_lastMs;
-        }
-        return *this;
-    }
 
     void DdgiPass::ClearAtlas(const Texture& atlas) {
         // El storage inmutable arranca con contenido INDEFINIDO, y un mix con
@@ -246,9 +180,6 @@ namespace renderer {
                           const IblContext& ibl, const Cubemap* env) {
         const ScopedMs medicion { &m_lastMs };
 
-        // El grid es el insumo de la captura: sin el no hay nada que trazar.
-        // Se hornea cuando la escena ya tiene geometria y de nuevo al cargar
-        // otra (Clear sube la generacion); fuera de eso, el boton del panel.
         const bool otraEscena = m_gridGeneracion != scene.Generation();
         if ((!m_gridValido || otraEscena) && scene.WorldBounds().Valid()) Voxelize(scene);
 
@@ -264,114 +195,70 @@ namespace renderer {
         m_range = NextRange(m_cursor, perFrame, total);
         if (m_range.count == 0u) return;
 
-        // Un barrido completo cuando el cursor envuelve.
         if (m_range.nextCursor <= m_cursor && m_cursor != 0u) m_sweepsDone += 1u;
         m_cursor = m_range.nextCursor;
 
-        // El shadow map a su unidad fija (la misma 8 que usa BeginScene). Hay que
-        // bindearlo aca porque este pase corre ANTES de BeginScene, que es quien
-        // normalmente lo hace: sin esto, la primera captura sombrearia contra una
-        // unidad sin contenido y saldria todo en sombra.
+        // Este pase corre antes de BeginScene, que es quien normalmente bindea el shadow
+        // map y los atlas: sin esto el trazado samplea unidades vacias y da negro.
         if (shadow.map != null) shadow.map->Bind(8);
-
-        // Los dos atlas a sus unidades, por la MISMA razon que el shadow map de
-        // arriba: este pase corre antes de BeginScene, que es quien normalmente
-        // los bindea. Sin esto, el rebote de trace_voxel.comp samplea unidades sin
-        // contenido y da negro sin que nada falle ruidosamente.
         m_irradiance.Bind(kIrradianceAtlasUnit);
         m_distance.Bind(kDistanceAtlasUnit);
-        // trace_voxel.comp lee el offset de cada probe; BeginScene todavia no corrio.
         m_probeData.BindTo(kProbeDataBinding);
 
-        // El bloque que va a leer la CAPTURA. No alcanza con el que se sube mas
-        // abajo para el blend: ese lleva atlasValid en true siempre, y aca hace
-        // falta lo contrario. En el primer frame el atlas todavia es el negro
-        // del clear, asi que atlasValid = m_blendedOnce apaga DdgiEnabled() y el
-        // rebote vale cero en vez de realimentar basura.
+        // atlasValid = m_blendedOnce: en el primer frame el atlas es el negro del clear y
+        // el rebote tiene que valer cero.
         m_renderer.SetDdgiBlock(MakeDdgiBlock(m_atlasGrid, m_settings, m_range, m_blendedOnce));
+
+        const DdgiUpdateBlock update =
+            MakeDdgiUpdateBlock(m_settings, m_grid.desc(), static_cast<u32>(m_frame++));
+        m_updateUbo.Update(&update, sizeof(update));
+        m_updateUbo.BindTo(kDdgiUpdateBinding);
 
         {
             EF_PROFILE_SCOPE("DDGI captura");
-
-            // Sin grid no hay nada que trazar. m_blendedOnce sigue en false, asi
-            // que Context() no entrega los atlas y pbr.frag cae a IBL puro.
             if (!m_gridValido) return;
 
-            // El trazado lee uLightSpaceMatrix, uShadowParams y uIblParams de
-            // este bloque para sombrear el impacto y para el cielo. Ya no hay
-            // proyeccion de captura: las direcciones salen de dirForFace.
-            //
-            // El ibl que llega aca es el del frame, y tiene que serlo: el rayo
-            // que se escapa lee la intensidad de uIblParams.y, y con un bloque
-            // vacio el cielo de la captura sale negro.
+            // El trazado sombrea con uLightSpaceMatrix/uShadowParams y lee el cielo con
+            // uIblParams: hace falta el bloque del frame, no uno vacio.
             m_renderer.SetFrameBlock(MakeFrameBlock(
                 MakeStaticFrameView(glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f), 1u, 1u),
                 shadow, ibl));
 
-            const TraceVoxelPassBlock bloque =
-                MakeTraceVoxelPassBlock(m_grid.desc(), m_settings.opacityThreshold);
-            m_traceUbo.Update(&bloque, sizeof(bloque));
-            m_traceUbo.BindTo(kPassBinding);
-
-            m_capture.BindImage(0, 0, efecom::ImageAccess::WriteOnly,
-                                efecom::TextureFormat::RGBA16F);
-            // Las unidades de los sampler de trace_voxel.comp: 2/3/5 voxeles, 4 cielo.
+            m_rays.BindImage(0, 0, efecom::ImageAccess::WriteOnly, efecom::TextureFormat::RGBA16F);
             m_grid.BindForSample(2u, 3u, 5u);
             if (env != null) env->Bind(4u);
 
             m_shaders.trace->Bind();
-            // Seis caras por los probes del frame; el workgroup ES la cara.
-            efecom::DispatchCompute(kCubeFaceCount, m_range.count, 1u);
+            efecom::DispatchCompute((update.counts.x + kRayGroupSize - 1u) / kRayGroupSize,
+                                    m_range.count, 1u);
 
-            // La captura ahora se escribe por imageStore y los blends la leen
-            // por sampler: sin este barrier leen una captura a medio escribir y
-            // dan ruido o negro SIN que nada falle ruidosamente.
             efecom::IssueMemoryBarrier(efecom::Barrier::ShaderImageAccess
                                      | efecom::Barrier::TextureFetch);
         }
 
         {
             EF_PROFILE_SCOPE("DDGI probes");
-
-            // El barrier de la captura ya ordena imageStore -> sampler.
-            const ProbeUpdatePassBlock pu =
-                MakeProbeUpdatePassBlock(m_settings, m_grid.desc().voxelSize);
-            m_probeUpdateUbo.Update(&pu, sizeof(pu));
-            m_probeUpdateUbo.BindTo(kPassBinding);
-
             m_shaders.probeUpdate->Bind();
-            m_capture.Bind(0);
+            m_rays.Bind(0);
             efecom::DispatchCompute(m_range.count, 1u, 1u);
         }
 
-        // El blend. El barrier de arriba es el que ordena captura -> blend; el
-        // de mas abajo ordena blend -> sampleo de pbr.frag.
-        const bool primerBarrido = (m_sweepsDone == 0u);
-
-        // Hasta completar el primer barrido se fuerza hysteresis 0: la primera
-        // escritura de cada probe SOBREESCRIBE en vez de mezclar. Sin esto, el
-        // negro del clear inicial tardaria cientos de frames en salir con
-        // hysteresis 0.97.
+        // Hasta completar el primer barrido, hysteresis 0: la primera escritura de cada
+        // probe sobreescribe el negro del clear.
         DdgiSettings blendSettings = m_settings;
-        if (primerBarrido) blendSettings.hysteresis = 0.0f;
-
-        const DdgiBlock block = MakeDdgiBlock(m_atlasGrid, blendSettings, m_range, true);
-        m_renderer.SetDdgiBlock(block);
+        if (m_sweepsDone == 0u) blendSettings.hysteresis = 0.0f;
+        m_renderer.SetDdgiBlock(MakeDdgiBlock(m_atlasGrid, blendSettings, m_range, true));
 
         {
             EF_PROFILE_SCOPE("DDGI blend");
 
             m_shaders.blendIrradiance->Bind();
-            m_capture.Bind(0);
+            m_rays.Bind(0);
             m_irradiance.BindImage(0, 0, efecom::ImageAccess::ReadWrite,
                                    efecom::TextureFormat::RGBA16F);
             efecom::DispatchCompute(m_range.count, 1u, 1u);
 
-            // El segundo blend comparte el DdgiBlock que ya se subio: no hay que
-            // re-subirlo. Escribe otra imagen, asi que tampoco necesita barrier
-            // entre los dos dispatches.
             m_shaders.blendDistance->Bind();
-            m_capture.Bind(0);
             m_distance.BindImage(0, 0, efecom::ImageAccess::ReadWrite,
                                  efecom::TextureFormat::RG16F);
             efecom::DispatchCompute(m_range.count, 1u, 1u);

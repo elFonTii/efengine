@@ -27,8 +27,8 @@ namespace renderer {
     class Cubemap;
     class VertexArray;
 
-    // Dueno de los dos atlas de probes y del target de captura. Orquesta la
-    // captura round-robin y los dos blends.
+    // Dueno de los dos atlas de probes y del buffer de rayos. Orquesta el trazado, la
+    // reubicacion y los dos blends.
     //
     // Create devuelve nullopt si falta cualquier shader (calcado de
     // Environment::Create): sin DdgiPass, Application pasa un DdgiContext vacio
@@ -56,8 +56,6 @@ namespace renderer {
             ~DdgiPass();
             DdgiPass(const DdgiPass&)            = delete;
             DdgiPass& operator=(const DdgiPass&) = delete;
-            DdgiPass(DdgiPass&& other) noexcept;
-            DdgiPass& operator=(DdgiPass&& other) noexcept;
 
             // Captura los probes del frame y los integra al atlas. Corre DESPUES
             // del ShadowPass (necesita su depth y su matriz) y ANTES del
@@ -71,7 +69,7 @@ namespace renderer {
             DdgiSettings&       settings()       { return m_settings; }
             const DdgiSettings& settings() const { return m_settings; }
 
-            const Texture& captureTarget()   const { return m_capture; }
+            const Texture& rayBuffer()       const { return m_rays; }
             const Texture& irradianceAtlas() const { return m_irradiance; }
             const Texture& distanceAtlas()   const { return m_distance; }
             const StorageBuffer& probeData() const { return m_probeData; }
@@ -105,7 +103,7 @@ namespace renderer {
 
         private:
             DdgiPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
-                     Texture capture, Texture irradiance, Texture distance, StorageBuffer probeData,
+                     Texture rays, Texture irradiance, Texture distance, StorageBuffer probeData,
                      std::unique_ptr<VoxelizePass> voxelize);
 
             // El trabajo real. Lo llama Execute, que publica el contexto
@@ -129,7 +127,7 @@ namespace renderer {
             VertexArray& m_quad;   // sin uso en el pase; ver el comentario de Create
             Shaders      m_shaders;
 
-            Texture m_capture;      // 96x512 RGBA16F: rgb = radiancia, a = distancia
+            Texture m_rays;         // kMaxRaysPerProbe x kMaxProbesPerFrame RGBA16F: fila = slot, columna = rayo
             Texture m_irradiance;   // atlas octaedrico RGBA16F
             Texture m_distance;     // atlas de momentos RG16F
             StorageBuffer m_probeData;   // un vec4 por probe: offset.xyz, fraccion de backfaces
@@ -141,8 +139,7 @@ namespace renderer {
             bool                          m_gridValido = false;
             u64                           m_gridGeneracion = 0;   // SceneGraph::Generation() del horneado
 
-            UniformBuffer m_traceUbo { sizeof(TraceVoxelPassBlock) };
-            UniformBuffer m_probeUpdateUbo { sizeof(ProbeUpdatePassBlock) };
+            UniformBuffer m_updateUbo { sizeof(DdgiUpdateBlock) };
 
             DdgiSettings m_settings;
             DdgiGrid     m_atlasGrid;      // la grilla con la que se alocaron los atlas
@@ -151,6 +148,7 @@ namespace renderer {
             u32          m_sweepsDone     = 0u;
             bool         m_blendedOnce    = false;   // gate de atlasValid
             f32          m_lastMs         = 0.0f;
+            u64          m_frame          = 0u;      // semilla de la rotacion de los rayos
     };
 
 }

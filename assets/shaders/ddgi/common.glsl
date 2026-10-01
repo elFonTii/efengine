@@ -16,10 +16,10 @@ layout(std140, binding = 5) uniform Ddgi {
     vec4  uDdgiSpacing;     // .xyz
     ivec4 uDdgiCounts;      // .xyz = probes por eje, .w = total
     ivec4 uDdgiAtlas;       // x=cols, y=rows, z=irrTile, w=distTile
-    ivec4 uDdgiRange;       // x=firstProbe, y=count, z=faceSize, w=probesPerFrame
+    ivec4 uDdgiRange;       // x=firstProbe, y=count, z=reservado, w=probeBudget
     vec4  uDdgiParams0;     // hysteresis, intensity, normalBias, viewBias
     vec4  uDdgiParams1;     // enabled, chebyshevSharpness, debugView, classificationEnabled
-    vec4  uDdgiParams2;     // maxDistance, backfaceFadeStart, backfaceFadeEnd, _
+    vec4  uDdgiParams2;     // distanceClamp, backfaceFadeStart, backfaceFadeEnd, ablation
 };
 
 layout(binding = 12) uniform sampler2D uDdgiIrradiance;
@@ -37,17 +37,6 @@ layout(std430, binding = 0) readonly buffer DdgiProbeData {
 
 const int   kDdgiBorder = 1;
 const float kDdgiPI     = 3.14159265359;
-
-// Texels de UNA cara del target de captura. Tiene que coincidir con
-// kProbeFaceSize^2 de DdgiVolume.h; hay un static_assert en DdgiPass.cpp que lo
-// ata. Lo usan los dos blends para dimensionar el cache de shared memory con el
-// que recorren la captura cara por cara.
-//
-// Por cara y no las seis juntas: seis caras serian 1536 entradas, y con los dos
-// arrays que el blend necesita eso pasa de los 32 KB que el spec de GL garantiza
-// por workgroup. Una cara son 256 entradas, 8 KB, y entra en cualquier
-// implementacion.
-const int kDdgiFaceTexels = 256;
 
 bool DdgiEnabled() { return uDdgiParams1.x > 0.5; }
 

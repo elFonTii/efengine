@@ -34,9 +34,9 @@ namespace renderer {
 
             const char* Name() const override { return "DdgiDebug"; }
 
-            // Dibuja el target de captura en la esquina inferior izquierda del
-            // render target actual. showDistance vuelca el alfa en vez del rgb.
-            void DrawCaptureBlit(const Texture& captureTarget, bool showDistance);
+            // Dibuja el buffer de rayos en la esquina inferior izquierda del render target
+            // actual, recortado a los rayos y probes en uso. showDistance vuelca el alfa.
+            void DrawRayBlit(const Texture& rays, bool showDistance, u32 rayCount, u32 probeCount);
 
             // Un draw por probe. Solo se llama con debugProbes activo: son
             // ProbeCount() draws, y no hay draw instanciado en el RHI (agregarlo

@@ -19,6 +19,8 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
+
 namespace efengine {
 namespace renderer {
 
@@ -31,18 +33,21 @@ namespace renderer {
         EF_ASSERT(m_probe != null, "DdgiDebugPass: shader de esfera de probe nulo");
     }
 
-    void DdgiDebugPass::DrawCaptureBlit(const Texture& captureTarget, bool showDistance) {
+    void DdgiDebugPass::DrawRayBlit(const Texture& rays, bool showDistance, u32 rayCount,
+                                    u32 probeCount) {
         // Sin depth: el recuadro va encima de todo. El discard del shader recorta
         // el resto del quad.
         efecom::ApplyPipelineState(FullscreenState());
 
         const PostParamsBlock params {
-            glm::vec4(0.25f, showDistance ? 1.0f : 0.0f, 0.0f, 0.0f) };
+            glm::vec4(0.3f, showDistance ? 1.0f : 0.0f,
+                      static_cast<f32>(rayCount)   / static_cast<f32>(kMaxRaysPerProbe),
+                      static_cast<f32>(probeCount) / static_cast<f32>(kMaxProbesPerFrame)) };
         m_paramsUbo.Update(&params, sizeof(params));
         m_paramsUbo.BindTo(kPassBinding);
 
         m_blit->Bind();
-        captureTarget.Bind(0);
+        rays.Bind(0);
         m_renderer.Draw(m_quad, *m_blit);
     }
 
@@ -92,7 +97,9 @@ namespace renderer {
         // Modo 3 = el mismo volcado pero mirando el alfa: sin esto la distancia
         // capturada no es verificable desde el panel.
         if (ds.debugMode >= 2u) {
-            DrawCaptureBlit(m_ddgi->captureTarget(), ds.debugMode == 3u);
+            const u32 rayos  = std::clamp(ds.raysPerProbe, kMinRaysPerProbe, kMaxRaysPerProbe);
+            const u32 probes = std::min(std::min(ds.probeBudget, kMaxProbesPerFrame), ProbeCount(ds.grid));
+            DrawRayBlit(m_ddgi->rayBuffer(), ds.debugMode == 3u, rayos, probes);
         } else if (m_sphere != null) {
             DrawProbes(ds.grid, ds, *m_sphere);
         }

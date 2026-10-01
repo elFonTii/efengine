@@ -73,6 +73,12 @@ using namespace efengine;
                              static_cast<int>(renderer::kMaxProbesPerFrame))) {
             s.probeBudget = static_cast<u32>(perFrame);
         }
+        int rayos = static_cast<int>(s.raysPerProbe);
+        if (ImGui::SliderInt("Rayos por probe", &rayos,
+                             static_cast<int>(renderer::kMinRaysPerProbe),
+                             static_cast<int>(renderer::kMaxRaysPerProbe))) {
+            s.raysPerProbe = static_cast<u32>(rayos);
+        }
         // Histeresis: cuanto del valor viejo se conserva. ESTO es el denoise
         // temporal de DDGI, no hace falta un denoiser aparte. Mas alto = mas
         // estable y mas lento en reaccionar.
@@ -91,18 +97,12 @@ using namespace efengine;
         // para detectar que el round-robin se fue de escala, no como profiler.
         ImGui::TextDisabled("pase (CPU): %.3f ms", pass.lastMs());
 
-        // Rayos y no draws: la captura ya no rasteriza la escena, traza contra
-        // el grid. Espeja el conteo que hace el pase: freeze corta el barrido, y
-        // el rango nunca pasa del total de probes.
-        const u32 porFrame = s.freeze
-                           ? 0u
-                           : std::min(s.probeBudget, renderer::kMaxProbesPerFrame);
+        const u32 porFrame = s.freeze ? 0u : std::min(s.probeBudget, renderer::kMaxProbesPerFrame);
         const u32 probesDelFrame = std::min(porFrame, total);
-        const u32 rayosPorFrame  = 6u * renderer::kProbeFaceSize * renderer::kProbeFaceSize
-                                 * probesDelFrame;
-        ImGui::TextDisabled("rayos por frame: %u (%u probes x 6 caras x %ux%u)",
-                            rayosPorFrame, probesDelFrame,
-                            renderer::kProbeFaceSize, renderer::kProbeFaceSize);
+        const u32 rayosPorProbe  = std::clamp(s.raysPerProbe, renderer::kMinRaysPerProbe,
+                                              renderer::kMaxRaysPerProbe);
+        ImGui::TextDisabled("rayos por frame: %u (%u probes x %u rayos)",
+                            probesDelFrame * rayosPorProbe, probesDelFrame, rayosPorProbe);
 
         // -- Voxeles -----------------------------------------------------------
         ImGui::SeparatorText("Voxeles");
@@ -241,8 +241,8 @@ using namespace efengine;
 
         ImGui::SeparatorText("Volcado");
         ImGui::Checkbox("Mostrar probes", &s.debugProbes);
-        const char* modos[] = { "Irradiancia", "Media de distancia", "Target de captura",
-                                "Target de captura (distancia)" };
+        const char* modos[] = { "Irradiancia", "Media de distancia", "Buffer de rayos",
+                                "Buffer de rayos (distancia)" };
         int modo = static_cast<int>(s.debugMode);
         if (ImGui::Combo("Modo", &modo, modos, 4)) s.debugMode = static_cast<u32>(modo);
         ImGui::SliderFloat("Radio de esfera", &s.debugRadius, 0.02f, 0.5f, "%.3f m");

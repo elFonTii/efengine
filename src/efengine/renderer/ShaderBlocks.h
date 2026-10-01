@@ -134,7 +134,7 @@ namespace renderer {
         glm::vec4  gridSpacing;   // .xyz
         glm::ivec4 gridCounts;    // .xyz = probes por eje, .w = total
         glm::ivec4 atlasLayout;   // x=cols, y=rows, z=irrTile(8), w=distTile(16)
-        glm::ivec4 updateRange;   // x=firstProbe, y=count, z=faceSize, w=probesPerFrame
+        glm::ivec4 updateRange;   // x=firstProbe, y=count, z=reservado, w=probeBudget
         glm::vec4  params0;       // hysteresis, intensity, normalBias, viewBias
         glm::vec4  params1;       // enabled, chebyshevSharpness, debugView, classificationEnabled
         glm::vec4  params2;       // distanceClamp, backfaceFadeStart, backfaceFadeEnd, ablation
@@ -232,28 +232,6 @@ namespace renderer {
         glm::vec4 gridParams;   // x = voxelSize (m), y = resolucion por eje
     };
 
-    // PassParams (binding 4) de ddgi/trace_voxel.comp. Mismo motivo que
-    // VoxelizePassBlock: sin uniforms sueltos, el encuadre del grid y los dos
-    // escalares del trazado viajan por el bloque de pase.
-    //
-    // resolucion y umbral comparten el vec4 de gridParams en vez de tener uno
-    // propio: std140 le da 16 bytes a cualquier escalar suelto, asi que tres
-    // floats sueltos costarian 48 bytes y un layout que hay que recordar.
-    //
-    // La intensidad de IBL NO esta aca aunque el shader la use: vive en
-    // FrameBlock::iblParams.y, que es de donde la lee tambien pbr.frag. Una
-    // copia en este bloque seria una segunda fuente de verdad.
-    struct alignas(16) TraceVoxelPassBlock {
-        glm::vec4 gridOrigin;   // .xyz = esquina minima del grid, .w sin uso
-        glm::vec4 gridParams;   // x = voxelSize (m), y = resolucion por eje,
-                                // z = umbral de opacidad, w = libre
-    };
-
-    // PassParams (binding 4) de ddgi/probe_update.comp.
-    struct alignas(16) ProbeUpdatePassBlock {
-        glm::vec4 params;   // x = minFrontfaceDistance (m), y = relocationEnabled, z = voxelSize (m), w = libre
-    };
-
     // DdgiUpdate (binding 9) de ddgi/update.glsl. La rotacion va como mat4 para no pelear con
     // el padding de mat3 en std140; el shader usa mat3(uRayRotation).
     struct alignas(16) DdgiUpdateBlock {
@@ -282,17 +260,6 @@ namespace renderer {
     // puro en vez de samplear una unidad de textura sin contenido.
     DdgiBlock MakeDdgiBlock(const DdgiGrid& grid, const DdgiSettings& settings,
                             UpdateRange range, bool atlasValid);
-
-    // opacityThreshold viaja por parametro y no sale de VoxelGridDesc porque es
-    // del trazado, no del encuadre: el mismo grid se puede trazar con otro
-    // umbral sin revoxelizar.
-    TraceVoxelPassBlock MakeTraceVoxelPassBlock(const VoxelGridDesc& desc,
-                                                f32 opacityThreshold);
-
-    // minFrontfaceDistance y voxelSize se recortan a >= 0: negativas invertirian las reglas.
-    // voxelSize es el paso al que llegan cuantizadas las distancias de la captura;
-    // las reglas lo usan como banda muerta para no oscilar.
-    ProbeUpdatePassBlock MakeProbeUpdatePassBlock(const DdgiSettings& settings, f32 voxelSize);
 
     DdgiUpdateBlock MakeDdgiUpdateBlock(const DdgiSettings& settings, const VoxelGridDesc& voxel,
                                         u32 frameIndex);

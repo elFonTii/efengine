@@ -47,11 +47,9 @@ namespace renderer {
     static_assert(offsetof(VoxelizePassBlock, gridOrigin) == 64u, "VoxelizePassBlock.gridOrigin");
     static_assert(offsetof(VoxelizePassBlock, gridParams) == 80u, "VoxelizePassBlock.gridParams");
 
-    static_assert(sizeof(TraceVoxelPassBlock) == 32u, "TraceVoxelPassBlock: tamano std140 roto");
-    static_assert(offsetof(TraceVoxelPassBlock, gridOrigin) ==  0u, "TraceVoxelPassBlock.gridOrigin");
-    static_assert(offsetof(TraceVoxelPassBlock, gridParams) == 16u, "TraceVoxelPassBlock.gridParams");
-
-    static_assert(sizeof(ProbeUpdatePassBlock) == 16u, "ProbeUpdatePassBlock: tamano std140 roto");
+    static_assert(sizeof(DdgiUpdateBlock) == 144u, "DdgiUpdateBlock: tamano std140 roto");
+    static_assert(offsetof(DdgiUpdateBlock, counts)      ==  64u, "DdgiUpdateBlock.counts");
+    static_assert(offsetof(DdgiUpdateBlock, voxelParams) == 128u, "DdgiUpdateBlock.voxelParams");
 
     static_assert(sizeof(LightsBlock) == 144u, "LightsBlock: tamano std140 roto");
     static_assert(offsetof(LightsBlock, dirDirection) ==   0u, "LightsBlock.dirDirection");
@@ -169,7 +167,7 @@ namespace renderer {
                                    static_cast<i32>(kDistanceTile));
         b.updateRange = glm::ivec4(static_cast<i32>(range.first),
                                    static_cast<i32>(range.count),
-                                   static_cast<i32>(kProbeFaceSize),
+                                   0,
                                    static_cast<i32>(settings.probeBudget));
         b.params0 = glm::vec4(settings.hysteresis, settings.intensity,
                               settings.normalBias, settings.viewBias);
@@ -217,27 +215,6 @@ namespace renderer {
 
         b.params = glm::vec4(static_cast<f32>(count), ctx.blendRatio,
                              ctx.debugView ? 1.0f : 0.0f, 0.0f);
-        return b;
-    }
-
-    TraceVoxelPassBlock MakeTraceVoxelPassBlock(const VoxelGridDesc& desc,
-                                                f32 opacityThreshold) {
-        TraceVoxelPassBlock b {};
-        b.gridOrigin = glm::vec4(desc.origin, 0.0f);
-        // Con umbral 0 el DDA pega contra el primer voxel del grid siempre
-        // (alpha >= 0 es cierto hasta en el aire) y la GI queda arruinada sin
-        // que nada falle ruidosamente. Arriba de 0.75 los voxeles de doble cara
-        // se vuelven aire: el tope es 0.7.
-        b.gridParams = glm::vec4(desc.voxelSize, static_cast<f32>(desc.resolution),
-                                 std::clamp(opacityThreshold, 1.0e-3f, 0.7f), 0.0f);
-        return b;
-    }
-
-    ProbeUpdatePassBlock MakeProbeUpdatePassBlock(const DdgiSettings& settings, f32 voxelSize) {
-        ProbeUpdatePassBlock b {};
-        b.params = glm::vec4(std::max(settings.minFrontfaceDistance, 0.0f),
-                             settings.relocationEnabled ? 1.0f : 0.0f,
-                             std::max(voxelSize, 0.0f), 0.0f);
         return b;
     }
 

@@ -1,6 +1,5 @@
 #pragma once
 #include <efengine/core/Types.h>
-#include <efengine/renderer/Bounds.h>
 
 #include <glm/glm.hpp>
 
@@ -8,14 +7,8 @@ namespace efengine {
 namespace renderer {
 
     // -- Constantes del volumen ---------------------------------------------
-    // El target de captura se aloca UNA vez al maximo y se usa el sub-rango del
-    // frame: mover el slider de probes por frame nunca realoca nada.
-    inline constexpr u32 kMaxProbesPerFrame = 32u;
-
-    // Resolucion de cada cara de la captura. 6 caras de 16x16 = 1536 direcciones
-    // por probe, contra los 64-256 rayos del paper. El costo escala con
-    // geometria, no con rayos.
-    inline constexpr u32 kProbeFaceSize = 16u;
+    // Filas del buffer de rayos: el tope de probes que un frame puede actualizar.
+    inline constexpr u32 kMaxProbesPerFrame = 512u;
 
     // Tiles octaedricos, sin el borde. El de irradiancia es chico porque una
     // senal difusa no tiene alta frecuencia; el de distancia necesita mas
@@ -103,34 +96,6 @@ namespace renderer {
 
     // Round-robin contiguo con wrap. El shader hace (first + slot) % total.
     UpdateRange NextRange(u32 cursor, u32 perFrame, u32 total);
-
-    // La AABB de mundo de los centros de probe de 'range', expandida por
-    // maxDistance en los tres ejes. Es EXACTAMENTE lo que el lote puede ver:
-    // seis frustums de 90 grados con far = d cubren el cubo de semilado d, asi
-    // que la union sobre el lote es esta caja y no una aproximacion.
-    //
-    // Invalida (AABB::Empty()) si count es cero -- con freeze no hay nada que
-    // dibujar, y una caja invalida no solapa con nada.
-    AABB BatchBounds(const DdgiGrid& grid, UpdateRange range, f32 maxDistance);
-
-    // -- Tiles del target de captura ----------------------------------------
-    // El target de captura es un atlas 2D: 6 caras en fila por kMaxProbesPerFrame
-    // slots apilados, cada celda de kProbeFaceSize. La captura instanciada dibuja
-    // TODAS las celdas del frame con un solo draw por objeto, asi que cada
-    // instancia tiene que saber a que rectangulo del atlas mandar su geometria.
-    //
-    // Devuelve ese rectangulo como una escala y un offset en NDC: xy escala el
-    // clip de la vista y zw lo corre. Aplicado como (clip.xy * escala + offset *
-    // clip.w), lleva el cubo canonico de la vista exactamente sobre la celda.
-    //
-    // Funcion pura y con test propio porque es geometria de indices: un signo
-    // cambiado espeja el tile, y en un atlas de radiancia eso no se ve como un
-    // error -- se ve como un probe que integro luz de otro lado.
-    glm::vec4 CaptureTileRect(u32 face, u32 slot);
-
-    // Cuantas vistas emite un frame que actualiza `probes` probes: una por cara
-    // de cada uno. Es el conteo de instancias del draw.
-    inline u32 CaptureTileCount(u32 probes) { return probes * 6u; }
 
 }
 }

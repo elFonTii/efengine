@@ -29,7 +29,7 @@ namespace renderer {
                         glm::ivec3(10, 16, 18) };
 
         // -- Update --
-        u32  probeBudget           = 14u;                // tope por frame, se clampea a kMaxProbesPerFrame
+        u32  probeBudget           = 128u;               // tope por frame, se clampea a kMaxProbesPerFrame
         u32  raysPerProbe          = kMaxRaysPerProbe;   // [kMinRaysPerProbe, kMaxRaysPerProbe]
         u32  inactiveRecheckSweeps = 8u;                 // una inactiva se revisa cada tantos barridos
         bool freeze                = false;              // congela la actualizacion; el sampleo sigue
