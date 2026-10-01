@@ -214,15 +214,15 @@ vec3 SampleDdgiIrradiance(vec3 worldPos, vec3 N, vec3 bentN, vec3 V) {
         // Peso trilineal. Con el clamp de arriba, un probe repetido en el borde
         // suma su peso dos veces, que es el comportamiento que queremos: la
         // extrapolacion fuera del volumen se aplana en vez de irse al infinito.
-        vec3  tri = mix(1.0 - frac, frac, vec3(offset));
-        float w   = tri.x * tri.y * tri.z;
-        w *= DdgiProbeWeight(DdgiProbeIndex(coords));
+        vec3  tri      = mix(1.0 - frac, frac, vec3(offset));
+        float clasif   = DdgiProbeWeight(DdgiProbeIndex(coords));
+        if (clasif <= 0.0) continue;
 
         // Rechazo suave de backface: un probe que esta "detras" de la superficie
         // no puede iluminarla. Suave y no binario para que no aparezcan
         // discontinuidades donde el signo cambia.
-        vec3 dirAlProbe = normalize(probePos - p);
-        w *= pow(max(dot(dirAlProbe, N) * 0.5 + 0.5, 0.0), 2.0) + 0.2;
+        vec3  dirAlProbe = normalize(probePos - p);
+        float w = pow(max(dot(dirAlProbe, N) * 0.5 + 0.5, 0.0), 2.0) + 0.2;
 
         // Chebyshev: probabilidad de visibilidad desde este probe.
         vec3  dir  = p - probePos;
@@ -241,11 +241,14 @@ vec3 SampleDdgiIrradiance(vec3 worldPos, vec3 N, vec3 bentN, vec3 V) {
                 float varianza = max(media2 - media * media, 0.0);
                 float delta    = dist - media;
                 float cheb     = varianza / (varianza + delta * delta);
-                w *= pow(max(cheb, 0.0), uDdgiParams1.y);
+                // Piso de 0.05 como RTXGI: sin el, donde Chebyshev descarta los
+                // 8 probes la suma de pesos da 0 y el punto sale negro.
+                w *= max(0.05, pow(max(cheb, 0.0), uDdgiParams1.y));
             }
         }
 
-        if (w < 0.0001) continue;
+        w  = max(w, 1e-6);
+        w *= tri.x * tri.y * tri.z * clasif;
 
         vec3 irr = texture(uDdgiIrradiance,
                            DdgiTileUV(DdgiProbeIndex(coords), OctEncode(bentN),
@@ -256,7 +259,7 @@ vec3 SampleDdgiIrradiance(vec3 worldPos, vec3 N, vec3 bentN, vec3 V) {
         sumaPesos += w;
     }
 
-    if (sumaPesos <= 0.0) return vec3(0.0);   // los 8 probes rechazados
+    if (sumaPesos <= 0.0) return vec3(0.0);   // los 8 probes inactivos
     return suma / sumaPesos;
 }
 
