@@ -98,21 +98,6 @@ namespace renderer {
         return AtlasTileCount(grid) * static_cast<i32>(kDistanceTileBordered);
     }
 
-    UpdateRange NextRange(u32 cursor, u32 perFrame, u32 total) {
-        UpdateRange r;
-        if (total == 0u || perFrame == 0u) {
-            r.first      = (total == 0u) ? 0u : cursor % total;
-            r.count      = 0u;
-            r.nextCursor = (total == 0u) ? 0u : cursor % total;
-            return r;
-        }
-
-        r.first = cursor % total;
-        r.count      = std::min(perFrame, total - r.first);
-        r.nextCursor = (r.first + r.count) % total;
-        return r;
-    }
-
     usize ProbeStateBytes(const DdgiGrid& grid) {
         return static_cast<usize>(ProbeCount(grid)) * sizeof(glm::uvec4);
     }

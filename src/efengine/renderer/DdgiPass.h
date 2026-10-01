@@ -41,6 +41,7 @@ namespace renderer {
                 Shader* blendIrradiance = null;
                 Shader* blendDistance   = null;
                 Shader* probeUpdate     = null;   // ddgi/probe_update.comp
+                Shader* schedule        = null;   // ddgi/schedule.comp
             };
 
             // fullscreenQuad ya no lo usa NADA adentro del pase: desde que la
@@ -74,8 +75,6 @@ namespace renderer {
             const Texture& distanceAtlas()   const { return m_distance; }
             const StorageBuffer& probeData() const { return m_probeData; }
 
-            u32  sweepsDone() const { return m_sweepsDone; }
-            u32  cursor()     const { return m_cursor; }
             f32  lastMs()     const { return m_lastMs; }
 
             // Rehornea el grid con la escena. Lo llama la primera carga y el
@@ -104,7 +103,8 @@ namespace renderer {
         private:
             DdgiPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
                      Texture rays, Texture irradiance, Texture distance, StorageBuffer probeData,
-                     StorageBuffer probeState, std::unique_ptr<VoxelizePass> voxelize);
+                     StorageBuffer probeState, StorageBuffer schedule,
+                     std::unique_ptr<VoxelizePass> voxelize);
 
             // El trabajo real. Lo llama Execute, que publica el contexto
             // despues -- afuera, porque esto tiene retornos tempranos.
@@ -126,6 +126,8 @@ namespace renderer {
             // Edad 0 y estado "sin dato": la proxima escritura de cada probe sobreescribe.
             static void ClearProbeState(const StorageBuffer& buffer, u32 probes);
 
+            static void ClearSchedule(const StorageBuffer& buffer);
+
             Renderer&    m_renderer;
             VertexArray& m_quad;   // sin uso en el pase; ver el comentario de Create
             Shaders      m_shaders;
@@ -135,6 +137,7 @@ namespace renderer {
             Texture m_distance;     // atlas de momentos RG16F
             StorageBuffer m_probeData;   // un vec4 por probe: offset.xyz, fraccion de backfaces
             StorageBuffer m_probeState;  // un uvec4 por probe: edad, estado
+            StorageBuffer m_schedule;    // cursor, barrido, argumentos indirectos y lista del frame
 
             // El proxy contra el que traza la captura. Lo llena m_voxelize, que
             // NO corre por frame.
@@ -147,9 +150,6 @@ namespace renderer {
 
             DdgiSettings m_settings;
             DdgiGrid     m_atlasGrid;      // la grilla con la que se alocaron los atlas
-            UpdateRange  m_range          {};
-            u32          m_cursor         = 0u;
-            u32          m_sweepsDone     = 0u;
             bool         m_blendedOnce    = false;   // gate de atlasValid
             f32          m_lastMs         = 0.0f;
             u64          m_frame          = 0u;      // semilla de la rotacion de los rayos

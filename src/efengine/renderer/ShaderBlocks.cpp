@@ -150,7 +150,7 @@ namespace renderer {
     }
 
     DdgiBlock MakeDdgiBlock(const DdgiGrid& grid, const DdgiSettings& settings,
-                            UpdateRange range, bool atlasValid) {
+                            bool atlasValid) {
         // Se sanea aca y no en el caller: este es el ultimo punto antes de que
         // los valores lleguen al shader, donde un cero se vuelve NaN silencioso.
         const DdgiGrid g = SanitizeGrid(grid);
@@ -165,10 +165,7 @@ namespace renderer {
         b.atlasLayout = glm::ivec4(tiles.x, tiles.y,
                                    static_cast<i32>(kIrradianceTile),
                                    static_cast<i32>(kDistanceTile));
-        b.updateRange = glm::ivec4(static_cast<i32>(range.first),
-                                   static_cast<i32>(range.count),
-                                   0,
-                                   static_cast<i32>(settings.probeBudget));
+        b.updateRange = glm::ivec4(0);
         b.params0 = glm::vec4(0.0f, settings.intensity, settings.normalBias, settings.viewBias);
         // params1.z lleva el modo de debug de vista. Va aca y no en FrameBlock
         // por lo que explica el comentario de DdgiBlock en el header: extender

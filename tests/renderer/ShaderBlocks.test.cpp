@@ -148,7 +148,7 @@ TEST_CASE("MakeDdgiBlock: copia la grilla y calcula el total de probes") {
     s.grid.spacing = glm::vec3(1.5f);
     s.grid.counts  = glm::ivec3(8, 4, 8);
 
-    const DdgiBlock b = MakeDdgiBlock(s.grid, s, UpdateRange{}, true);
+    const DdgiBlock b = MakeDdgiBlock(s.grid, s, true);
 
     CHECK(b.gridOrigin.x  == doctest::Approx(-6.0f));
     CHECK(b.gridOrigin.y  == doctest::Approx( 0.2f));
@@ -163,7 +163,7 @@ TEST_CASE("MakeDdgiBlock: atlasLayout lleva columnas, filas y los dos tamanos de
     DdgiSettings s;
     s.grid.counts = glm::ivec3(8, 4, 8);
 
-    const DdgiBlock b = MakeDdgiBlock(s.grid, s, UpdateRange{}, true);
+    const DdgiBlock b = MakeDdgiBlock(s.grid, s, true);
 
     CHECK(b.atlasLayout.x == 32);   // countX * countY
     CHECK(b.atlasLayout.y ==  8);   // countZ
@@ -171,20 +171,9 @@ TEST_CASE("MakeDdgiBlock: atlasLayout lleva columnas, filas y los dos tamanos de
     CHECK(b.atlasLayout.w == static_cast<i32>(kDistanceTile));
 }
 
-TEST_CASE("MakeDdgiBlock: updateRange lleva el rango del frame") {
-    DdgiSettings s;
-    s.probeBudget = 8u;
-
-    UpdateRange r;
-    r.first = 24u;
-    r.count = 8u;
-
-    const DdgiBlock b = MakeDdgiBlock(s.grid, s, r, true);
-
-    CHECK(b.updateRange.x == 24);
-    CHECK(b.updateRange.y ==  8);
-    CHECK(b.updateRange.z == 0);
-    CHECK(b.updateRange.w ==  8);   // probesPerFrame: el blend lo usa como stride
+TEST_CASE("MakeDdgiBlock: updateRange queda reservado en cero") {
+    const DdgiSettings s;
+    CHECK(MakeDdgiBlock(s.grid, s, true).updateRange == glm::ivec4(0));
 }
 
 TEST_CASE("MakeDdgiBlock: params0.x queda reservado; intensidad y los dos bias") {
@@ -194,7 +183,7 @@ TEST_CASE("MakeDdgiBlock: params0.x queda reservado; intensidad y los dos bias")
     s.normalBias = 0.3f;
     s.viewBias   = 0.05f;
 
-    const DdgiBlock b = MakeDdgiBlock(s.grid, s, UpdateRange{}, true);
+    const DdgiBlock b = MakeDdgiBlock(s.grid, s, true);
 
     CHECK(b.params0.x == doctest::Approx(0.0f));   // la histeresis vive en DdgiUpdateBlock
     CHECK(b.params0.y == doctest::Approx(1.5f));
@@ -217,14 +206,14 @@ TEST_CASE("MakeDdgiBlock: params1.x es 1 solo con enabled y atlas valido") {
     s.enabled = true;
     s.chebyshevSharpness = 4.0f;
 
-    CHECK(MakeDdgiBlock(s.grid, s, UpdateRange{}, true).params1.x  == doctest::Approx(1.0f));
-    CHECK(MakeDdgiBlock(s.grid, s, UpdateRange{}, true).params1.y  == doctest::Approx(4.0f));
+    CHECK(MakeDdgiBlock(s.grid, s, true).params1.x  == doctest::Approx(1.0f));
+    CHECK(MakeDdgiBlock(s.grid, s, true).params1.y  == doctest::Approx(4.0f));
 
     // Sin atlas: el shader tiene que caer a IBL puro, no samplear una unidad vacia.
-    CHECK(MakeDdgiBlock(s.grid, s, UpdateRange{}, false).params1.x == doctest::Approx(0.0f));
+    CHECK(MakeDdgiBlock(s.grid, s, false).params1.x == doctest::Approx(0.0f));
 
     s.enabled = false;
-    CHECK(MakeDdgiBlock(s.grid, s, UpdateRange{}, true).params1.x  == doctest::Approx(0.0f));
+    CHECK(MakeDdgiBlock(s.grid, s, true).params1.x  == doctest::Approx(0.0f));
 }
 
 TEST_CASE("MakeDdgiBlock: la grilla se sanea antes de empaquetar") {
@@ -233,7 +222,7 @@ TEST_CASE("MakeDdgiBlock: la grilla se sanea antes de empaquetar") {
     s.grid.counts  = glm::ivec3(0, 4, 8);
     s.grid.spacing = glm::vec3(0.0f, 1.5f, 1.5f);
 
-    const DdgiBlock b = MakeDdgiBlock(s.grid, s, UpdateRange{}, true);
+    const DdgiBlock b = MakeDdgiBlock(s.grid, s, true);
 
     CHECK(b.gridCounts.x == 1);
     CHECK(b.gridSpacing.x > 0.0f);
@@ -249,7 +238,7 @@ TEST_CASE("MakeDdgiBlock: params2 lleva el clamp de distancia y los dos umbrales
     s.backfaceFadeStart = 0.2f;
     s.backfaceFadeEnd   = 0.4f;
 
-    const DdgiBlock b = MakeDdgiBlock(grid, s, UpdateRange{}, true);
+    const DdgiBlock b = MakeDdgiBlock(grid, s, true);
 
     CHECK(b.params2.x == doctest::Approx(DistanceClamp(grid)));
     CHECK(b.params2.y == doctest::Approx(0.2f));
@@ -267,17 +256,17 @@ TEST_CASE("MakeDdgiBlock: params2.w codifica el ablation en un solo float") {
     // Apagado: negativo. El shader lo lee como "samplea el volumen".
     s.ablateSample = false;
     s.ablateIrradiance = 0.25f;
-    CHECK(MakeDdgiBlock(grid, s, UpdateRange{}, true).params2.w < 0.0f);
+    CHECK(MakeDdgiBlock(grid, s, true).params2.w < 0.0f);
 
     // Encendido: el valor constante, que tiene que ser >= 0 para que el
     // predicado del shader (>= 0.0) no lo confunda con "apagado".
     s.ablateSample = true;
-    CHECK(MakeDdgiBlock(grid, s, UpdateRange{}, true).params2.w == doctest::Approx(0.25f));
+    CHECK(MakeDdgiBlock(grid, s, true).params2.w == doctest::Approx(0.25f));
 
     // Un valor negativo escrito a mano se recorta a 0: si se colara, apagaria
     // el ablation en silencio justo cuando se lo acaba de encender.
     s.ablateIrradiance = -3.0f;
-    CHECK(MakeDdgiBlock(grid, s, UpdateRange{}, true).params2.w == doctest::Approx(0.0f));
+    CHECK(MakeDdgiBlock(grid, s, true).params2.w == doctest::Approx(0.0f));
 }
 
 TEST_CASE("DdgiSettings: el ablation arranca apagado y no altera la imagen") {
@@ -305,22 +294,22 @@ TEST_CASE("Layout std140: DdgiBlock sigue siendo multiplo de 16 con params2") {
 TEST_CASE("MakeDdgiBlock: params1.w lleva el flag de clasificacion") {
     DdgiSettings s;
     CHECK(s.classificationEnabled);
-    CHECK(MakeDdgiBlock(s.grid, s, UpdateRange{}, true).params1.w == doctest::Approx(1.0f));
+    CHECK(MakeDdgiBlock(s.grid, s, true).params1.w == doctest::Approx(1.0f));
 
     s.classificationEnabled = false;
-    CHECK(MakeDdgiBlock(s.grid, s, UpdateRange{}, true).params1.w == doctest::Approx(0.0f));
+    CHECK(MakeDdgiBlock(s.grid, s, true).params1.w == doctest::Approx(0.0f));
 }
 
 TEST_CASE("MakeDdgiBlock: backfaceFadeEnd nunca queda en o debajo de start") {
     DdgiSettings s;
     s.backfaceFadeStart = 0.5f;
     s.backfaceFadeEnd   = 0.2f;
-    const DdgiBlock b = MakeDdgiBlock(s.grid, s, UpdateRange{}, true);
+    const DdgiBlock b = MakeDdgiBlock(s.grid, s, true);
     CHECK(b.params2.y == doctest::Approx(0.5f));
     CHECK(b.params2.z > b.params2.y);
 
     s.backfaceFadeEnd = 0.5f;
-    CHECK(MakeDdgiBlock(s.grid, s, UpdateRange{}, true).params2.z > 0.5f);
+    CHECK(MakeDdgiBlock(s.grid, s, true).params2.z > 0.5f);
 }
 
 TEST_CASE("kProbeDataBinding es el binding 0 de SSBO") {
@@ -458,4 +447,15 @@ TEST_CASE("MakeDdgiUpdateBlock: reubicacion y grid de voxeles") {
     CHECK(b.voxelGrid.w == doctest::Approx(256.0f));
     CHECK(b.voxelParams.x == doctest::Approx(0.45f));
     CHECK(b.voxelParams.y == doctest::Approx(0.7f));
+}
+
+TEST_CASE("Layout del SSBO de planificacion: argumentos indirectos y lista") {
+    CHECK(kScheduleBinding == 6u);
+    CHECK(kScheduleTraceArgsOffset == 16u);
+    CHECK(kScheduleProbeArgsOffset == 32u);
+    CHECK(kScheduleListOffset      == 48u);
+    // glDispatchComputeIndirect pide offsets multiplos de 4.
+    CHECK(kScheduleTraceArgsOffset % 4u == 0u);
+    CHECK(kScheduleProbeArgsOffset % 4u == 0u);
+    CHECK(kScheduleBytes == 48u + 4u * kMaxProbesPerFrame);
 }

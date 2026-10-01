@@ -51,5 +51,21 @@ float DdgiEffectiveHysteresis(uint edad) {
     return min(uUpdateHyst.x, float(edad - 1u) / float(edad));
 }
 
-int DdgiSlotCount()         { return uDdgiRange.y; }
-int DdgiSlotProbe(int slot) { return (uDdgiRange.x + slot) % uDdgiCounts.w; }
+// Cursor y barrido persisten entre frames; la lista y los argumentos indirectos los
+// rearma schedule.comp cada frame. Espeja las constantes kSchedule* de ShaderBlocks.h.
+#ifdef DDGI_SCHEDULE_WRITABLE
+layout(std430, binding = 6) buffer DdgiSchedule {
+#else
+layout(std430, binding = 6) readonly buffer DdgiSchedule {
+#endif
+    uint  uSchedCursor;
+    uint  uSchedSweep;
+    uint  uSchedCount;
+    uint  uSchedPad;
+    uvec4 uDispatchTrace;   // offset 16: (grupos de rayos, probes, 1)
+    uvec4 uDispatchProbe;   // offset 32: (probes, 1, 1)
+    uint  uSchedList[];     // offset 48
+};
+
+int DdgiSlotCount()         { return int(uSchedCount); }
+int DdgiSlotProbe(int slot) { return int(uSchedList[slot]); }

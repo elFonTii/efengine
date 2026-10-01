@@ -46,9 +46,6 @@ namespace renderer {
         glm::ivec3 counts  {  8, 4, 8 };             // probes por eje
     };
 
-    // Rango de probes a actualizar este frame. count siempre es min(perFrame, total).
-    struct UpdateRange { u32 first = 0u; u32 count = 0u; u32 nextCursor = 0u; };
-
     // -- Funciones puras ----------------------------------------------------
 
     // Clampea counts a [1, kMaxProbesPerAxis] y spacing a un minimo positivo.
@@ -93,9 +90,6 @@ namespace renderer {
     // Tamano en texels de cada atlas, tiles CON borde.
     glm::ivec2 IrradianceAtlasSize(const DdgiGrid& grid);
     glm::ivec2 DistanceAtlasSize(const DdgiGrid& grid);
-
-    // Round-robin contiguo con wrap. El shader hace (first + slot) % total.
-    UpdateRange NextRange(u32 cursor, u32 perFrame, u32 total);
 
 }
 }

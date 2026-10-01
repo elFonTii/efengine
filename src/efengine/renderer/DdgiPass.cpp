@@ -35,7 +35,7 @@ namespace renderer {
                                                const Shaders& shaders) {
         if (shaders.trace == null || shaders.voxelize == null
             || shaders.blendIrradiance == null || shaders.blendDistance == null
-            || shaders.probeUpdate == null) {
+            || shaders.probeUpdate == null || shaders.schedule == null) {
             EF_LOG_ERROR("DdgiPass::Create: falta algun shader de DDGI");
             return null;
         }
@@ -62,6 +62,9 @@ namespace renderer {
         StorageBuffer probeState(ProbeStateBytes(grid));
         ClearProbeState(probeState, ProbeCount(grid));
 
+        StorageBuffer schedule(kScheduleBytes);
+        ClearSchedule(schedule);
+
         EF_LOG_INFO("DdgiPass: %u probes, atlas irradiancia %dx%d, distancia %dx%d, buffer de rayos %ux%u",
                     ProbeCount(grid), irrSize.x, irrSize.y, distSize.x, distSize.y,
                     kMaxRaysPerProbe, kMaxProbesPerFrame);
@@ -76,17 +79,19 @@ namespace renderer {
         return std::unique_ptr<DdgiPass>(
             new DdgiPass(renderer, fullscreenQuad, shaders, std::move(rays),
                          std::move(irradiance), std::move(distance), std::move(probeData), std::move(probeState),
+                         std::move(schedule),
                          std::move(voxelize)));
     }
 
     DdgiPass::DdgiPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
                        Texture rays, Texture irradiance, Texture distance,
-                       StorageBuffer probeData, StorageBuffer probeState,
+                       StorageBuffer probeData, StorageBuffer probeState, StorageBuffer schedule,
                        std::unique_ptr<VoxelizePass> voxelize)
         : m_renderer(renderer), m_quad(fullscreenQuad), m_shaders(shaders)
         , m_rays(std::move(rays)), m_irradiance(std::move(irradiance))
         , m_distance(std::move(distance)), m_probeData(std::move(probeData))
         , m_probeState(std::move(probeState))
+        , m_schedule(std::move(schedule))
         , m_voxelize(std::move(voxelize))
         , m_atlasGrid(SanitizeGrid(DdgiGrid{})) {}
 
@@ -118,14 +123,18 @@ namespace renderer {
         buffer.Update(ceros.data(), ceros.size() * sizeof(glm::uvec4));
     }
 
+    void DdgiPass::ClearSchedule(const StorageBuffer& buffer) {
+        const std::vector<u32> ceros(kScheduleBytes / sizeof(u32), 0u);
+        buffer.Update(ceros.data(), kScheduleBytes);
+    }
+
     void DdgiPass::Reset() {
-        m_cursor      = 0u;
-        m_sweepsDone  = 0u;
         m_blendedOnce = false;
         ClearAtlas(m_irradiance);
         ClearAtlas(m_distance);
         ClearProbeData(m_probeData, ProbeCount(m_atlasGrid));
         ClearProbeState(m_probeState, ProbeCount(m_atlasGrid));
+        ClearSchedule(m_schedule);
     }
 
     void DdgiPass::EnsureAtlasSize() {
@@ -159,8 +168,7 @@ namespace renderer {
         ClearProbeState(m_probeState, ProbeCount(want));
 
         m_atlasGrid   = want;
-        m_cursor      = 0u;
-        m_sweepsDone  = 0u;
+        ClearSchedule(m_schedule);
         m_blendedOnce = false;
 
         EF_LOG_INFO("DdgiPass: grilla a %dx%dx%d, atlas realocados",
@@ -201,18 +209,9 @@ namespace renderer {
 
         EnsureAtlasSize();
 
-        const u32 total = ProbeCount(m_atlasGrid);
-        if (total == 0u) return;
-
-        const u32 perFrame = m_settings.freeze
-                           ? 0u
-                           : std::min(m_settings.probeBudget, kMaxProbesPerFrame);
-
-        m_range = NextRange(m_cursor, perFrame, total);
-        if (m_range.count == 0u) return;
-
-        if (m_range.nextCursor <= m_cursor && m_cursor != 0u) m_sweepsDone += 1u;
-        m_cursor = m_range.nextCursor;
+        if (ProbeCount(m_atlasGrid) == 0u) return;
+        // Sin grid no hay nada que trazar: m_blendedOnce sigue en false y pbr.frag cae a IBL.
+        if (m_settings.freeze || m_settings.probeBudget == 0u || !m_gridValido) return;
 
         // Este pase corre antes de BeginScene, que es quien normalmente bindea el shadow
         // map y los atlas: sin esto el trazado samplea unidades vacias y da negro.
@@ -221,10 +220,11 @@ namespace renderer {
         m_distance.Bind(kDistanceAtlasUnit);
         m_probeData.BindTo(kProbeDataBinding);
         m_probeState.BindTo(kProbeStateBinding);
+        m_schedule.BindTo(kScheduleBinding);
 
         // atlasValid = m_blendedOnce: en el primer frame el atlas es el negro del clear y
         // el rebote tiene que valer cero.
-        m_renderer.SetDdgiBlock(MakeDdgiBlock(m_atlasGrid, m_settings, m_range, m_blendedOnce));
+        m_renderer.SetDdgiBlock(MakeDdgiBlock(m_atlasGrid, m_settings, m_blendedOnce));
 
         const DdgiUpdateBlock update =
             MakeDdgiUpdateBlock(m_settings, m_grid.desc(), static_cast<u32>(m_frame++));
@@ -232,8 +232,16 @@ namespace renderer {
         m_updateUbo.BindTo(kDdgiUpdateBinding);
 
         {
+            EF_PROFILE_SCOPE("DDGI planificacion");
+            m_shaders.schedule->Bind();
+            efecom::DispatchCompute(1u, 1u, 1u);
+            // La lista se lee como SSBO y los argumentos como comando indirecto.
+            efecom::IssueMemoryBarrier(efecom::Barrier::ShaderStorage
+                                     | efecom::Barrier::Command);
+        }
+
+        {
             EF_PROFILE_SCOPE("DDGI captura");
-            if (!m_gridValido) return;
 
             // El trazado sombrea con uLightSpaceMatrix/uShadowParams y lee el cielo con
             // uIblParams: hace falta el bloque del frame, no uno vacio.
@@ -246,8 +254,7 @@ namespace renderer {
             if (env != null) env->Bind(4u);
 
             m_shaders.trace->Bind();
-            efecom::DispatchCompute((update.counts.x + kRayGroupSize - 1u) / kRayGroupSize,
-                                    m_range.count, 1u);
+            efecom::DispatchComputeIndirect(m_schedule.id(), kScheduleTraceArgsOffset);
 
             efecom::IssueMemoryBarrier(efecom::Barrier::ShaderImageAccess
                                      | efecom::Barrier::TextureFetch);
@@ -257,8 +264,7 @@ namespace renderer {
             EF_PROFILE_SCOPE("DDGI probes");
             m_shaders.probeUpdate->Bind();
             m_rays.Bind(0);
-            efecom::DispatchCompute(m_range.count, 1u, 1u);
-            // Los blends leen la edad recien escrita.
+            efecom::DispatchComputeIndirect(m_schedule.id(), kScheduleProbeArgsOffset);
             efecom::IssueMemoryBarrier(efecom::Barrier::ShaderStorage);
         }
 
@@ -269,12 +275,12 @@ namespace renderer {
             m_rays.Bind(0);
             m_irradiance.BindImage(0, 0, efecom::ImageAccess::ReadWrite,
                                    efecom::TextureFormat::RGBA16F);
-            efecom::DispatchCompute(m_range.count, 1u, 1u);
+            efecom::DispatchComputeIndirect(m_schedule.id(), kScheduleProbeArgsOffset);
 
             m_shaders.blendDistance->Bind();
             m_distance.BindImage(0, 0, efecom::ImageAccess::ReadWrite,
                                  efecom::TextureFormat::RG16F);
-            efecom::DispatchCompute(m_range.count, 1u, 1u);
+            efecom::DispatchComputeIndirect(m_schedule.id(), kScheduleProbeArgsOffset);
 
             efecom::IssueMemoryBarrier(efecom::Barrier::ShaderImageAccess
                                      | efecom::Barrier::TextureFetch
@@ -295,7 +301,6 @@ namespace renderer {
             ctx.probeData       = &m_probeData;
             ctx.settings        = &m_settings;
         }
-        ctx.range = m_range;
         return ctx;
     }
 

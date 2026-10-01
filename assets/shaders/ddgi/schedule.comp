@@ -1,0 +1,81 @@
+#version 450 core
+// Arma la lista de probes del frame. Recorre la grilla desde el cursor y elige las
+// activas, mas las inactivas a las que les toca revision (una de cada K barridos,
+// repartidas por indice), hasta llenar el presupuesto o dar la vuelta completa.
+// Escribe tambien los argumentos de los dispatch indirectos del resto del pase.
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+#define DDGI_SCHEDULE_WRITABLE
+#include "ddgi/common.glsl"
+#include "ddgi/update.glsl"
+
+const uint kHilos = 256u;
+
+shared uint sElegidas;
+shared uint sUltima;          // posicion relativa al cursor de la ultima elegida, + 1
+shared uint sScan[kHilos];
+
+// Inactiva = peso de sampleo 0: saltearla no cambia la imagen.
+bool Activa(uint probe) {
+    if (uUpdateCounts.w == 0u) return true;
+    return uDdgiProbeData[probe].w < uUpdateReloc.w;
+}
+
+void main() {
+    uint tid     = gl_LocalInvocationIndex;
+    uint total   = uint(uDdgiCounts.w);
+    uint budget  = uUpdateCounts.y;
+    uint k       = max(uUpdateCounts.z, 1u);
+    uint cursor  = uSchedCursor % total;
+    uint barrido = uSchedSweep;
+
+    if (tid == 0u) { sElegidas = 0u; sUltima = 0u; }
+
+    for (uint base = 0u; base < total; base += kHilos) {
+        barrier();
+        // sElegidas se lee despues del barrier: el break es uniforme.
+        if (sElegidas >= budget) break;
+
+        uint rel  = base + tid;
+        uint cand = 0u;
+        if (rel < total) {
+            uint pos       = cursor + rel;
+            uint probe     = pos % total;
+            uint deEsePaso = barrido + pos / total;
+            cand = (Activa(probe) || probe % k == deEsePaso % k) ? 1u : 0u;
+        }
+
+        // Prefix sum inclusivo (Hillis-Steele) de las candidatas del bloque.
+        sScan[tid] = cand;
+        barrier();
+        for (uint paso = 1u; paso < kHilos; paso <<= 1u) {
+            uint v = (tid >= paso) ? sScan[tid - paso] : 0u;
+            barrier();
+            sScan[tid] += v;
+            barrier();
+        }
+
+        uint slot = sElegidas + sScan[tid] - cand;
+        if (cand == 1u && slot < budget) {
+            uSchedList[slot] = (cursor + rel) % total;
+            atomicMax(sUltima, rel + 1u);
+        }
+        barrier();
+        if (tid == 0u) sElegidas = min(sElegidas + sScan[kHilos - 1u], budget);
+    }
+    barrier();
+
+    if (tid != 0u) return;
+
+    uint count  = sElegidas;
+    // Lista llena: el proximo frame sigue despues de la ultima elegida. Si no se lleno,
+    // se dio la vuelta entera y ninguna probe aparece dos veces.
+    uint avance = (count >= budget) ? sUltima : total;
+    uint pos    = cursor + avance;
+
+    uSchedCursor   = pos % total;
+    uSchedSweep    = barrido + pos / total;
+    uSchedCount    = count;
+    uDispatchTrace = uvec4((uUpdateCounts.x + kDdgiRayGroup - 1u) / kDdgiRayGroup, count, 1u, 0u);
+    uDispatchProbe = uvec4(count, 1u, 1u, 0u);
+}

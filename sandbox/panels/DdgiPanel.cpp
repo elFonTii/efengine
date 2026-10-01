@@ -79,6 +79,10 @@ using namespace efengine;
                              static_cast<int>(renderer::kMaxRaysPerProbe))) {
             s.raysPerProbe = static_cast<u32>(rayos);
         }
+        int revision = static_cast<int>(s.inactiveRecheckSweeps);
+        if (ImGui::SliderInt("Revisar inactivas cada", &revision, 1, 64, "%d barridos")) {
+            s.inactiveRecheckSweeps = static_cast<u32>(revision);
+        }
         // Tope de la histeresis: cada probe sube hasta aca como promedio progresivo.
         ImGui::SliderFloat("Histeresis max", &s.hysteresis, 0.0f, 0.995f, "%.3f");
         ImGui::SliderFloat("Umbral de cambio", &s.irradianceThreshold, 0.0f, 1.0f, "%.2f");
@@ -88,11 +92,6 @@ using namespace efengine;
         if (ImGui::Button("Reset")) pass.Reset();
 
         const u32 total = renderer::ProbeCount(s.grid);
-        const u32 framesPorBarrido = (s.probeBudget > 0u)
-                                   ? (total + s.probeBudget - 1u) / s.probeBudget
-                                   : 0u;
-        ImGui::TextDisabled("cursor %u / %u   barridos %u", pass.cursor(), total, pass.sweepsDone());
-        ImGui::TextDisabled("frames por barrido: %u", framesPorBarrido);
         // Tiempo de CPU emitiendo las llamadas, no de GPU ejecutandolas: sirve
         // para detectar que el round-robin se fue de escala, no como profiler.
         ImGui::TextDisabled("pase (CPU): %.3f ms", pass.lastMs());

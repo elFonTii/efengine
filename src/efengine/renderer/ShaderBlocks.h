@@ -33,6 +33,13 @@ namespace renderer {
     inline constexpr u32 kProbeDataBinding = 0u;
     // Estado por probe de DDGI (edad, activa/inactiva). Solo los pases de actualizacion.
     inline constexpr u32 kProbeStateBinding = 5u;
+    // Planificacion de DDGI: cursor, barrido, argumentos indirectos y la lista de probes
+    // del frame. Espeja DdgiSchedule de ddgi/update.glsl (std430).
+    inline constexpr u32   kScheduleBinding         = 6u;
+    inline constexpr usize kScheduleTraceArgsOffset = 16u;
+    inline constexpr usize kScheduleProbeArgsOffset = 32u;
+    inline constexpr usize kScheduleListOffset      = 48u;
+    inline constexpr usize kScheduleBytes = kScheduleListOffset + sizeof(u32) * kMaxProbesPerFrame;
 
     // SSBO de las luces. Espacio de indices aparte de los UBO.
     inline constexpr u32 kLocalLightsBinding   = 1u;   // GpuLight[]
@@ -136,7 +143,7 @@ namespace renderer {
         glm::vec4  gridSpacing;   // .xyz
         glm::ivec4 gridCounts;    // .xyz = probes por eje, .w = total
         glm::ivec4 atlasLayout;   // x=cols, y=rows, z=irrTile(8), w=distTile(16)
-        glm::ivec4 updateRange;   // x=firstProbe, y=count, z=reservado, w=probeBudget
+        glm::ivec4 updateRange;   // reservado
         glm::vec4  params0;       // reservado, intensity, normalBias, viewBias
         glm::vec4  params1;       // enabled, chebyshevSharpness, debugView, classificationEnabled
         glm::vec4  params2;       // distanceClamp, backfaceFadeStart, backfaceFadeEnd, ablation
@@ -261,7 +268,7 @@ namespace renderer {
     // "no hay DdgiPass" (fallo de shader), donde pbr.frag tiene que caer a IBL
     // puro en vez de samplear una unidad de textura sin contenido.
     DdgiBlock MakeDdgiBlock(const DdgiGrid& grid, const DdgiSettings& settings,
-                            UpdateRange range, bool atlasValid);
+                            bool atlasValid);
 
     DdgiUpdateBlock MakeDdgiUpdateBlock(const DdgiSettings& settings, const VoxelGridDesc& voxel,
                                         u32 frameIndex);

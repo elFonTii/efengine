@@ -128,10 +128,9 @@ namespace renderer {
             // si corriera despues, pisaria la camara.
             void SetFrameBlock(const FrameBlock& block) const;
 
-            // Sube un bloque Ddgi arbitrario (binding 5). Publico porque los
-            // blends de DDGI corren antes de BeginScene y necesitan el bloque con
-            // SU updateRange y su hysteresis forzada del primer barrido, que no
-            // son los que el frame le va a dar despues a pbr.frag.
+            // Sube un bloque Ddgi arbitrario (binding 5). Publico porque la actualizacion de
+            // DDGI corre antes de BeginScene y necesita el bloque con atlasValid del frame
+            // anterior, que no es el que el frame le va a dar despues a pbr.frag.
             void SetDdgiBlock(const DdgiBlock& block) const;
 
             // Re-sube el bloque de binding 6 (AO + upsample) y bindea el par de

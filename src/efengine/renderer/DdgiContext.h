@@ -1,6 +1,5 @@
 #pragma once
 #include <efengine/core/Types.h>
-#include <efengine/renderer/DdgiVolume.h>
 
 namespace efengine {
 namespace renderer {
@@ -20,7 +19,6 @@ namespace renderer {
         const Texture*      distanceAtlas   = null;
         const StorageBuffer* probeData      = null;   // offset + fraccion de backfaces por probe
         const DdgiSettings* settings        = null;
-        UpdateRange         range           {};
     };
 
 }

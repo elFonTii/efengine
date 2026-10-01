@@ -25,6 +25,8 @@ namespace application {
                               "assets/shaders/ddgi/blend_distance.comp");
         shaders.probeUpdate = d.resources.GetComputeShader("ddgi_probe_update",
                               "assets/shaders/ddgi/probe_update.comp");
+        shaders.schedule = d.resources.GetComputeShader("ddgi_schedule",
+                              "assets/shaders/ddgi/schedule.comp");
 
         // Si falta cualquier shader, el pase no se registra y el frame sigue
         // con IBL puro: un fallo de carga no rompe el render.

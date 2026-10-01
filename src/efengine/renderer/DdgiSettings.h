@@ -32,7 +32,7 @@ namespace renderer {
         u32  probeBudget           = 128u;               // tope por frame, se clampea a kMaxProbesPerFrame
         u32  raysPerProbe          = kMaxRaysPerProbe;   // [kMinRaysPerProbe, kMaxRaysPerProbe]
         u32  inactiveRecheckSweeps = 8u;                 // una inactiva se revisa cada tantos barridos
-        bool freeze                = false;              // congela la actualizacion; el sampleo sigue
+        bool freeze                = false;              // congela la actualizacion (no corre la planificacion); el sampleo sigue
 
         // Tope de la histeresis (RTXGI: 0,97). Cada probe arranca en 0 despues de un reset y
         // sube como promedio progresivo (n-1)/n hasta este valor: el tope decide cuanto

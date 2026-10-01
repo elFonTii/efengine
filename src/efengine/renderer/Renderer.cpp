@@ -118,7 +118,7 @@ namespace renderer {
 
         const DdgiSettings defaults {};
         const DdgiSettings& ds = atlasValid ? *ddgi.settings : defaults;
-        const DdgiBlock ddgiBlock = MakeDdgiBlock(ds.grid, ds, ddgi.range, atlasValid);
+        const DdgiBlock ddgiBlock = MakeDdgiBlock(ds.grid, ds, atlasValid);
         m_ddgiUbo.Update(&ddgiBlock, sizeof(ddgiBlock));
 
         // El AO a su unidad fija. Si no hay textura, MakeAoBlock apaga el bloque
