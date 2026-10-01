@@ -2,10 +2,24 @@
 
 #include <efengine/core/Assert.h>
 
+#include <glm/gtc/constants.hpp>
+#include <glm/gtc/quaternion.hpp>
+
 #include <algorithm>
+#include <cmath>
 
 namespace efengine {
 namespace renderer {
+
+    namespace {
+        u32 Pcg(u32 v) {
+            const u32 state = v * 747796405u + 2891336453u;
+            const u32 word  = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+            return (word >> 22u) ^ word;
+        }
+
+        f32 ToUnit(u32 h) { return static_cast<f32>(h >> 8u) * (1.0f / 16777216.0f); }
+    }
 
     DdgiGrid SanitizeGrid(const DdgiGrid& grid) {
         DdgiGrid out = grid;
@@ -143,6 +157,48 @@ namespace renderer {
                          (x1 + x0) * 0.5f, (y1 + y0) * 0.5f);
     }
 
-}
-}
+    usize ProbeStateBytes(const DdgiGrid& grid) {
+        return static_cast<usize>(ProbeCount(grid)) * sizeof(glm::uvec4);
+    }
 
+    f32 DistanceClamp(const DdgiGrid& grid) {
+        return 1.5f * glm::length(SanitizeGrid(grid).spacing);
+    }
+
+    glm::vec3 FibonacciDirection(u32 i, u32 count) {
+        EF_ASSERT(count > 0u, "FibonacciDirection: count cero");
+        constexpr f32 kB = 0.618033988749895f;   // proporcion aurea - 1
+        const f32 fi       = static_cast<f32>(i);
+        const f32 x        = fi * kB;
+        const f32 phi      = 2.0f * glm::pi<f32>() * (x - std::floor(x));
+        const f32 cosTheta = 1.0f - (2.0f * fi + 1.0f) / static_cast<f32>(count);
+        const f32 sinTheta = std::sqrt(std::max(0.0f, 1.0f - cosTheta * cosTheta));
+        return glm::vec3(std::cos(phi) * sinTheta, std::sin(phi) * sinTheta, cosTheta);
+    }
+
+    glm::mat3 RandomRayRotation(u32 seed) {
+        const u32 h1 = Pcg(seed);
+        const u32 h2 = Pcg(h1);
+        const u32 h3 = Pcg(h2);
+        const f32 u1 = ToUnit(h1);
+        const f32 u2 = ToUnit(h2);
+        const f32 u3 = ToUnit(h3);
+
+        const f32 a     = std::sqrt(1.0f - u1);
+        const f32 b     = std::sqrt(u1);
+        const f32 dosPi = 2.0f * glm::pi<f32>();
+        const glm::quat q(b * std::cos(dosPi * u3),    // w
+                          a * std::sin(dosPi * u2),
+                          a * std::cos(dosPi * u2),
+                          b * std::sin(dosPi * u3));
+        return glm::mat3_cast(q);
+    }
+
+    f32 EffectiveHysteresis(u32 age, f32 hMax) {
+        if (age < 2u) return 0.0f;
+        const f32 progresivo = static_cast<f32>(age - 1u) / static_cast<f32>(age);
+        return std::min(std::clamp(hMax, 0.0f, 1.0f), progresivo);
+    }
+
+}
+}

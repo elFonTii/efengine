@@ -31,6 +31,14 @@ namespace renderer {
     inline constexpr u32 kIrradianceTileBordered = kIrradianceTile + 2u * kTileBorder;  // 10
     inline constexpr u32 kDistanceTileBordered   = kDistanceTile   + 2u * kTileBorder;  // 18
 
+    // 256 es el valor de RTXGI y el tamano del cache de rayos en shared memory de los
+    // blends (kDdgiMaxRays en ddgi/update.glsl).
+    inline constexpr u32 kMaxRaysPerProbe = 256u;
+    inline constexpr u32 kMinRaysPerProbe = 64u;
+
+    // local_size_x de ddgi/trace_voxel.comp.
+    inline constexpr u32 kRayGroupSize = 64u;
+
     // Tope de probes. 32x32x32 = 32768 probes serian ~26 MB de atlas y 6*32768
     // draws de escena por barrido: absurdo, pero el clamp existe para que un
     // slider mal arrastrado no intente alocar gigabytes.
@@ -59,6 +67,23 @@ namespace renderer {
 
     // Bytes del SSBO de datos por probe: un vec4 (offset.xyz, fraccion de backfaces).
     usize ProbeDataBytes(const DdgiGrid& grid);
+
+    // Un uvec4 por probe: edad, estado y dos libres.
+    usize ProbeStateBytes(const DdgiGrid& grid);
+
+    // Techo de las distancias del atlas de Chebyshev: 1,5 x la diagonal de una celda, como
+    // RTXGI. El rayo es mas largo; esto solo acota lo que se integra.
+    f32 DistanceClamp(const DdgiGrid& grid);
+
+    // Espejo C++ de DdgiSphericalFibonacci (ddgi/update.glsl), para los tests.
+    glm::vec3 FibonacciDirection(u32 i, u32 count);
+
+    // Rotacion uniforme (Shoemake sobre un hash PCG), determinista por semilla.
+    glm::mat3 RandomRayRotation(u32 seed);
+
+    // 0 en las dos primeras escrituras despues de un reset (la primera puede venir de rayos
+    // trazados desde la posicion vieja); despues promedio progresivo (n-1)/n con tope hMax.
+    f32 EffectiveHysteresis(u32 age, f32 hMax);
 
     // index = x + countX * (y + countY * z), y su inversa.
     glm::ivec3 ProbeCoords(const DdgiGrid& grid, u32 index);

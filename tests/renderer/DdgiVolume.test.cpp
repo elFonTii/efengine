@@ -405,3 +405,81 @@ TEST_CASE("DdgiVolume: ProbeDataBytes es un vec4 por probe") {
     g.counts = glm::ivec3(0, 4, 8);
     CHECK(ProbeDataBytes(g) == 0u);
 }
+
+TEST_CASE("FibonacciDirection: direcciones unitarias y sin sesgo de hemisferio") {
+    for (u32 n : { 64u, 128u, 256u }) {
+        glm::vec3 suma(0.0f);
+        for (u32 i = 0u; i < n; ++i) {
+            const glm::vec3 d = FibonacciDirection(i, n);
+            CHECK(glm::length(d) == doctest::Approx(1.0f).epsilon(1e-5));
+            suma += d;
+        }
+        CHECK(glm::length(suma) / static_cast<f32>(n) < 0.02f);
+    }
+}
+
+TEST_CASE("FibonacciDirection: la espiral va de +z a -z") {
+    CHECK(FibonacciDirection(0u, 256u).z   >  0.99f);
+    CHECK(FibonacciDirection(255u, 256u).z < -0.99f);
+}
+
+TEST_CASE("RandomRayRotation: ortonormal y sin reflexion") {
+    for (u32 seed : { 0u, 1u, 7u, 123456u, 0xFFFFFFFFu }) {
+        const glm::mat3 r = RandomRayRotation(seed);
+        const glm::mat3 i = glm::transpose(r) * r;
+        for (int c = 0; c < 3; ++c) {
+            for (int f = 0; f < 3; ++f) {
+                CHECK(i[c][f] == doctest::Approx(c == f ? 1.0f : 0.0f).epsilon(1e-5));
+            }
+        }
+        CHECK(glm::determinant(r) == doctest::Approx(1.0f).epsilon(1e-5));
+    }
+}
+
+TEST_CASE("RandomRayRotation: determinista por semilla") {
+    CHECK(RandomRayRotation(42u) == RandomRayRotation(42u));
+    const glm::vec3 z(0.0f, 0.0f, 1.0f);
+    CHECK(glm::length(RandomRayRotation(42u) * z - RandomRayRotation(43u) * z) > 1e-3f);
+}
+
+TEST_CASE("RandomRayRotation: sobre muchas semillas no favorece ninguna direccion") {
+    glm::vec3 suma(0.0f);
+    for (u32 s = 0u; s < 4096u; ++s) suma += RandomRayRotation(s) * glm::vec3(0.0f, 0.0f, 1.0f);
+    CHECK(glm::length(suma) / 4096.0f < 0.05f);
+}
+
+TEST_CASE("DistanceClamp: 1,5 veces la diagonal de la celda") {
+    DdgiGrid g;
+    g.spacing = glm::vec3(1.0f, 2.0f, 2.0f);
+    CHECK(DistanceClamp(g) == doctest::Approx(4.5f));
+}
+
+TEST_CASE("DistanceClamp: un spacing en cero no da cero") {
+    DdgiGrid g;
+    g.spacing = glm::vec3(0.0f);
+    CHECK(DistanceClamp(g) > 0.0f);
+}
+
+TEST_CASE("EffectiveHysteresis: las dos primeras escrituras sobreescriben") {
+    CHECK(EffectiveHysteresis(0u, 0.97f) == 0.0f);
+    CHECK(EffectiveHysteresis(1u, 0.97f) == 0.0f);
+}
+
+TEST_CASE("EffectiveHysteresis: promedio progresivo hasta el tope") {
+    CHECK(EffectiveHysteresis(2u, 0.97f)    == doctest::Approx(0.5f));
+    CHECK(EffectiveHysteresis(3u, 0.97f)    == doctest::Approx(2.0f / 3.0f));
+    CHECK(EffectiveHysteresis(4u, 0.97f)    == doctest::Approx(0.75f));
+    CHECK(EffectiveHysteresis(255u, 0.97f)  == doctest::Approx(0.97f));
+    CHECK(EffectiveHysteresis(1000u, 0.97f) == doctest::Approx(0.97f));
+}
+
+TEST_CASE("EffectiveHysteresis: hMax fuera de [0,1] se clampea") {
+    CHECK(EffectiveHysteresis(100u, 2.0f)  == doctest::Approx(0.99f));
+    CHECK(EffectiveHysteresis(100u, -1.0f) == 0.0f);
+}
+
+TEST_CASE("DdgiVolume: ProbeStateBytes es un uvec4 por probe") {
+    DdgiGrid g;
+    g.counts = glm::ivec3(2, 3, 4);
+    CHECK(ProbeStateBytes(g) == 24u * 16u);
+}
