@@ -233,10 +233,11 @@ namespace renderer {
         return b;
     }
 
-    ProbeUpdatePassBlock MakeProbeUpdatePassBlock(const DdgiSettings& settings) {
+    ProbeUpdatePassBlock MakeProbeUpdatePassBlock(const DdgiSettings& settings, f32 voxelSize) {
         ProbeUpdatePassBlock b {};
         b.params = glm::vec4(std::max(settings.minFrontfaceDistance, 0.0f),
-                             settings.relocationEnabled ? 1.0f : 0.0f, 0.0f, 0.0f);
+                             settings.relocationEnabled ? 1.0f : 0.0f,
+                             std::max(voxelSize, 0.0f), 0.0f);
         return b;
     }
 

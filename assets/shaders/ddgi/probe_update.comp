@@ -2,12 +2,16 @@
 // Clasifica y reubica los probes del barrido leyendo la captura recien trazada.
 // Reglas de ProbeRelocationCS.hlsl (RTXGI), validadas en
 // docs/superpowers/sims/2026-09-26-reubicacion_sim.mjs: cambiar alla primero.
+// Dos ajustes por trazar contra voxeles: las distancias llegan cuantizadas al
+// tamano de voxel (banda muerta entre las reglas 2 y 3, y cruce de un voxel en la
+// regla 1), y el cielo empata a maxDist (la mas lejana se desempata hacia el lado
+// opuesto a la mas cercana, no por indice).
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
 layout(binding = 0) uniform sampler2D uCapture;
 
 layout(std140, binding = 4) uniform ProbeUpdateParams {
-    vec4 uProbeUpdate;   // x = minFrontfaceDistance (m), y = relocationEnabled, zw = libres
+    vec4 uProbeUpdate;   // x = minFrontfaceDistance (m), y = relocationEnabled, z = voxelSize (m), w = libre
 };
 
 #define DDGI_PROBE_DATA_WRITABLE
@@ -21,12 +25,21 @@ shared uint  sBackfaces;
 shared float sTrasD[kHilos];  shared int sTrasI[kHilos];    // cara trasera mas cercana
 shared float sCercaD[kHilos]; shared int sCercaI[kHilos];   // cara delantera mas cercana
 shared float sLejosD[kHilos]; shared int sLejosI[kHilos];   // cara delantera mas lejana
+shared float sLejosC[kHilos];                               // su coseno con la mas cercana
 
 // A igual distancia gana el indice menor: el resultado no depende del orden de los hilos.
 bool Gana(float d, int i, float dRef, int iRef, bool menor) {
     if (i < 0)    return false;
     if (iRef < 0) return true;
     if (d != dRef) return menor ? (d < dRef) : (d > dRef);
+    return i < iRef;
+}
+
+bool GanaLejos(float d, float c, int i, float dRef, float cRef, int iRef) {
+    if (i < 0)    return false;
+    if (iRef < 0) return true;
+    if (d != dRef) return d > dRef;
+    if (c != cRef) return c < cRef;
     return i < iRef;
 }
 
@@ -37,42 +50,44 @@ vec3 DireccionDeTexel(int i, int faceSize) {
     return dirForFace(uint(i / porCara), uv);
 }
 
+float LeerCaptura(int i, int slot, int faceSize) {
+    int porCara = faceSize * faceSize;
+    int r       = i % porCara;
+    return texelFetch(uCapture, ivec2((i / porCara) * faceSize + r % faceSize,
+                                      slot * faceSize + r / faceSize), 0).a;
+}
+
 void main() {
     int slot = int(gl_WorkGroupID.x);
     if (slot >= uDdgiRange.y) return;   // uniforme en el workgroup
 
     int   probe    = (uDdgiRange.x + slot) % uDdgiCounts.w;
     int   faceSize = uDdgiRange.z;
-    int   porCara  = faceSize * faceSize;
-    int   nTexels  = 6 * porCara;
+    int   nTexels  = 6 * faceSize * faceSize;
     uint  tid      = gl_LocalInvocationIndex;
     float maxDist  = uDdgiParams2.x;
 
     if (tid == 0u) sBackfaces = 0u;
     barrier();
 
-    float trasD = 1.0e30, cercaD = 1.0e30, lejosD = -1.0;
-    int   trasI = -1,     cercaI = -1,     lejosI = -1;
+    float trasD = 1.0e30, cercaD = 1.0e30;
+    int   trasI = -1,     cercaI = -1;
     uint  traseras = 0u;
 
     for (int i = int(tid); i < nTexels; i += int(kHilos)) {
-        int r   = i % porCara;
-        float a = texelFetch(uCapture, ivec2((i / porCara) * faceSize + r % faceSize,
-                                             slot * faceSize + r / faceSize), 0).a;
+        float a = LeerCaptura(i, slot, faceSize);
         if (a < 0.0) {
             traseras += 1u;
             if (Gana(-a, i, trasD, trasI, true)) { trasD = -a; trasI = i; }
         } else {
             float d = (a >= kCielo) ? maxDist : min(a, maxDist);
-            if (Gana(d, i, cercaD, cercaI, true))  { cercaD = d; cercaI = i; }
-            if (Gana(d, i, lejosD, lejosI, false)) { lejosD = d; lejosI = i; }
+            if (Gana(d, i, cercaD, cercaI, true)) { cercaD = d; cercaI = i; }
         }
     }
 
     atomicAdd(sBackfaces, traseras);
     sTrasD[tid]  = trasD;  sTrasI[tid]  = trasI;
     sCercaD[tid] = cercaD; sCercaI[tid] = cercaI;
-    sLejosD[tid] = lejosD; sLejosI[tid] = lejosI;
     barrier();
 
     for (uint paso = kHilos / 2u; paso > 0u; paso >>= 1u) {
@@ -84,8 +99,32 @@ void main() {
             if (Gana(sCercaD[o], sCercaI[o], sCercaD[tid], sCercaI[tid], true)) {
                 sCercaD[tid] = sCercaD[o]; sCercaI[tid] = sCercaI[o];
             }
-            if (Gana(sLejosD[o], sLejosI[o], sLejosD[tid], sLejosI[tid], false)) {
-                sLejosD[tid] = sLejosD[o]; sLejosI[tid] = sLejosI[o];
+        }
+        barrier();
+    }
+
+    // Segunda pasada: necesita la mas cercana ya resuelta para desempatar.
+    vec3 dirCerca = (sCercaI[0] >= 0) ? DireccionDeTexel(sCercaI[0], faceSize) : vec3(0.0);
+
+    float lejosD = -1.0, lejosC = 2.0;
+    int   lejosI = -1;
+    for (int i = int(tid); i < nTexels; i += int(kHilos)) {
+        float a = LeerCaptura(i, slot, faceSize);
+        if (a < 0.0) continue;
+        float d = (a >= kCielo) ? maxDist : min(a, maxDist);
+        float c = dot(DireccionDeTexel(i, faceSize), dirCerca);
+        if (GanaLejos(d, c, i, lejosD, lejosC, lejosI)) { lejosD = d; lejosC = c; lejosI = i; }
+    }
+
+    sLejosD[tid] = lejosD; sLejosC[tid] = lejosC; sLejosI[tid] = lejosI;
+    barrier();
+
+    for (uint paso = kHilos / 2u; paso > 0u; paso >>= 1u) {
+        if (tid < paso) {
+            uint o = tid + paso;
+            if (GanaLejos(sLejosD[o], sLejosC[o], sLejosI[o],
+                          sLejosD[tid], sLejosC[tid], sLejosI[tid])) {
+                sLejosD[tid] = sLejosD[o]; sLejosC[tid] = sLejosC[o]; sLejosI[tid] = sLejosI[o];
             }
         }
         barrier();
@@ -97,23 +136,28 @@ void main() {
     vec3  offset   = uDdgiProbeData[probe].xyz;
     vec3  nuevo    = offset;
     float minFront = uProbeUpdate.x;
+    float voxel    = uProbeUpdate.z;
 
     if (uProbeUpdate.y < 0.5) {
         nuevo = vec3(0.0);
     } else {
         if (fraccion > uDdgiParams2.y && sTrasI[0] >= 0) {
-            // 1. Adentro de algo: atravesar la cara trasera mas cercana.
-            nuevo = offset + DireccionDeTexel(sTrasI[0], faceSize) * (sTrasD[0] + minFront * 0.5);
+            // 1. Adentro de algo: atravesar la cara trasera mas cercana. La distancia
+            //    es a la ENTRADA del voxel; el voxel extra garantiza pasar la superficie.
+            nuevo = offset + DireccionDeTexel(sTrasI[0], faceSize)
+                           * (sTrasD[0] + voxel + minFront * 0.5);
         } else if (sCercaI[0] >= 0 && sCercaD[0] < minFront) {
             // 2. Pegado a una superficie: hacia la delantera mas lejana, si eso no
             //    lo acerca tambien a la mas cercana.
-            vec3 cerca = DireccionDeTexel(sCercaI[0], faceSize);
             vec3 lejos = DireccionDeTexel(sLejosI[0], faceSize);
-            if (dot(cerca, lejos) <= 0.0) nuevo = offset + lejos * min(sLejosD[0], 1.0);
-        } else if (sCercaI[0] >= 0 && sCercaD[0] > minFront) {
-            // 3. Libre de sobra: volver hacia la posicion de grilla.
+            if (dot(dirCerca, lejos) <= 0.0) nuevo = offset + lejos * min(sLejosD[0], 1.0);
+        } else if (sCercaI[0] >= 0 && sCercaD[0] > minFront + voxel) {
+            // 3. Libre de sobra: volver hacia la posicion de grilla. Un voxel de banda
+            //    muerta con la regla 2: sin ella la cuantizacion cruza el umbral y oscila.
             float largo = length(offset);
-            if (largo > 1.0e-6) nuevo = offset - (offset / largo) * min(sCercaD[0] - minFront, largo);
+            if (largo > 1.0e-6) {
+                nuevo = offset - (offset / largo) * min(sCercaD[0] - minFront - voxel, largo);
+            }
         }
         vec3 enCeldas = nuevo / uDdgiSpacing.xyz;
         if (dot(enCeldas, enCeldas) >= kCotaCelda) nuevo = offset;

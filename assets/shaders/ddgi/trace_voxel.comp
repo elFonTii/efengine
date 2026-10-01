@@ -133,9 +133,10 @@ void main() {
     int   resolucion = int(uGridParams.y);
     float umbral     = uGridParams.z;
 
-    bool  hit = false;
-    float t   = 0.0;
-    ivec3 v   = ivec3(0);
+    bool  hit     = false;
+    float t       = 0.0;
+    ivec3 v       = ivec3(0);
+    float tSalida = -1.0;   // >= 0: el probe arranco adentro de un voxel solido
 
     float tEntrada = EntradaAlGrid(origen, dir, float(resolucion) * voxelSize, maxDist);
     if (tEntrada >= 0.0) {
@@ -181,6 +182,23 @@ void main() {
         }
 
         t = tIni + tLocal;
+
+        // Origen adentro de un voxel solido: sin esto todos los rayos pegan en t = 0,
+        // empatan en la reubicacion y el probe salta hacia una direccion fija. Se
+        // trata como cara trasera a la distancia en que el rayo sale del solido, asi
+        // la regla 1 lo saca por la salida mas corta, sea el voxel de una o dos caras.
+        if (hit && tIni == 0.0 && tLocal == 0.0) {
+            tSalida = 0.0;
+            for (int i = 0; i < maxPasos; ++i) {
+                int eje = (tMax.x < tMax.y) ? ((tMax.x < tMax.z) ? 0 : 2)
+                                            : ((tMax.y < tMax.z) ? 1 : 2);
+                tSalida    = tMax[eje];
+                v[eje]    += paso[eje];
+                tMax[eje] += tDelta[eje];
+                if (any(lessThan(v, ivec3(0))) || any(greaterThanEqual(v, ivec3(resolucion)))) break;
+                if (texelFetch(uVoxelAlbedo, v, 0).a < umbral) break;
+            }
+        }
     }
 
     // 6 caras en fila de faceSize, un slot por fila. Tiene que coincidir con
@@ -189,6 +207,11 @@ void main() {
     // (alto = kMaxProbesPerFrame*kProbeFaceSize). Invertirlos integraria las
     // direcciones de otro probe: GI plausible pero mal.
     ivec2 texel = ivec2(face * faceSize + local.x, slot * faceSize + local.y);
+
+    if (tSalida >= 0.0) {
+        imageStore(uCapture, texel, vec4(0.0, 0.0, 0.0, -max(tSalida, kDistanciaMinima)));
+        return;
+    }
 
     vec3  radiancia;
     float distancia;

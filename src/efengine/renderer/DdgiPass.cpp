@@ -334,7 +334,8 @@ namespace renderer {
             EF_PROFILE_SCOPE("DDGI probes");
 
             // El barrier de la captura ya ordena imageStore -> sampler.
-            const ProbeUpdatePassBlock pu = MakeProbeUpdatePassBlock(m_settings);
+            const ProbeUpdatePassBlock pu =
+                MakeProbeUpdatePassBlock(m_settings, m_grid.desc().voxelSize);
             m_probeUpdateUbo.Update(&pu, sizeof(pu));
             m_probeUpdateUbo.BindTo(kPassBinding);
 

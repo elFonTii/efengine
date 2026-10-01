@@ -326,15 +326,17 @@ TEST_CASE("MakeProbeUpdatePassBlock: distancia minima y flag de reubicacion") {
     CHECK(s.minFrontfaceDistance == doctest::Approx(1.0f));
 
     s.minFrontfaceDistance = 0.75f;
-    ProbeUpdatePassBlock b = MakeProbeUpdatePassBlock(s);
+    ProbeUpdatePassBlock b = MakeProbeUpdatePassBlock(s, 0.45f);
     CHECK(b.params.x == doctest::Approx(0.75f));
     CHECK(b.params.y == doctest::Approx(1.0f));
+    CHECK(b.params.z == doctest::Approx(0.45f));
 
     s.relocationEnabled    = false;
     s.minFrontfaceDistance = -2.0f;
-    b = MakeProbeUpdatePassBlock(s);
+    b = MakeProbeUpdatePassBlock(s, -1.0f);
     CHECK(b.params.x == doctest::Approx(0.0f));
     CHECK(b.params.y == doctest::Approx(0.0f));
+    CHECK(b.params.z == doctest::Approx(0.0f));
 }
 
 TEST_CASE("kProbeDataBinding es el binding 0 de SSBO") {

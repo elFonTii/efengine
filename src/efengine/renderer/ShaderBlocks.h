@@ -250,7 +250,7 @@ namespace renderer {
 
     // PassParams (binding 4) de ddgi/probe_update.comp.
     struct alignas(16) ProbeUpdatePassBlock {
-        glm::vec4 params;   // x = minFrontfaceDistance (m), y = relocationEnabled, zw = libres
+        glm::vec4 params;   // x = minFrontfaceDistance (m), y = relocationEnabled, z = voxelSize (m), w = libre
     };
 
     CascadeBlock MakeCascadeBlock(const CascadeContext& ctx);
@@ -280,8 +280,10 @@ namespace renderer {
     TraceVoxelPassBlock MakeTraceVoxelPassBlock(const VoxelGridDesc& desc,
                                                 f32 opacityThreshold);
 
-    // minFrontfaceDistance se recorta a >= 0: negativa invertiria las reglas.
-    ProbeUpdatePassBlock MakeProbeUpdatePassBlock(const DdgiSettings& settings);
+    // minFrontfaceDistance y voxelSize se recortan a >= 0: negativas invertirian las reglas.
+    // voxelSize es el paso al que llegan cuantizadas las distancias de la captura;
+    // las reglas lo usan como banda muerta para no oscilar.
+    ProbeUpdatePassBlock MakeProbeUpdatePassBlock(const DdgiSettings& settings, f32 voxelSize);
 
 }
 }
