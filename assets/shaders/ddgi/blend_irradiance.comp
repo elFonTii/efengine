@@ -56,6 +56,19 @@ void main() {
 
     ivec2 dst    = DdgiTileOrigin(probe, bordered) + local;
     vec3  previo = imageLoad(uIrradianceAtlas, dst).rgb;
-    float h      = uDdgiParams0.x;
-    imageStore(uIrradianceAtlas, dst, vec4(mix(capturado, previo, h), 1.0));
+    float h      = DdgiEffectiveHysteresis(uDdgiProbeState[probe].x);
+
+    // Cambio grande (RTXGI), comparado en espacio perceptual porque el atlas es HDR
+    // lineal: un salto de iluminacion baja la histeresis de este texel, y un salto de
+    // brillo enorme se toma de a un cuarto para no meter fireflies.
+    if (h > 0.0) {
+        vec3 d = abs(pow(max(capturado, vec3(0.0)), vec3(0.2))
+                   - pow(max(previo,    vec3(0.0)), vec3(0.2)));
+        if (max(d.r, max(d.g, d.b)) > uUpdateHyst.y) h = max(0.0, h - 0.75);
+        vec3 delta = capturado - previo;
+        if (length(delta) > uUpdateHyst.z) capturado = previo + delta * 0.25;
+    }
+
+    vec3 resultado = mix(capturado, previo, h);
+    imageStore(uIrradianceAtlas, dst, vec4(resultado, 1.0));
 }

@@ -17,7 +17,7 @@ layout(std140, binding = 5) uniform Ddgi {
     ivec4 uDdgiCounts;      // .xyz = probes por eje, .w = total
     ivec4 uDdgiAtlas;       // x=cols, y=rows, z=irrTile, w=distTile
     ivec4 uDdgiRange;       // x=firstProbe, y=count, z=reservado, w=probeBudget
-    vec4  uDdgiParams0;     // hysteresis, intensity, normalBias, viewBias
+    vec4  uDdgiParams0;     // reservado, intensity, normalBias, viewBias
     vec4  uDdgiParams1;     // enabled, chebyshevSharpness, debugView, classificationEnabled
     vec4  uDdgiParams2;     // distanceClamp, backfaceFadeStart, backfaceFadeEnd, ablation
 };

@@ -59,6 +59,9 @@ namespace renderer {
         StorageBuffer probeData(ProbeDataBytes(grid));
         ClearProbeData(probeData, ProbeCount(grid));
 
+        StorageBuffer probeState(ProbeStateBytes(grid));
+        ClearProbeState(probeState, ProbeCount(grid));
+
         EF_LOG_INFO("DdgiPass: %u probes, atlas irradiancia %dx%d, distancia %dx%d, buffer de rayos %ux%u",
                     ProbeCount(grid), irrSize.x, irrSize.y, distSize.x, distSize.y,
                     kMaxRaysPerProbe, kMaxProbesPerFrame);
@@ -72,16 +75,18 @@ namespace renderer {
         // El ctor es privado: make_unique no lo alcanza.
         return std::unique_ptr<DdgiPass>(
             new DdgiPass(renderer, fullscreenQuad, shaders, std::move(rays),
-                         std::move(irradiance), std::move(distance), std::move(probeData),
+                         std::move(irradiance), std::move(distance), std::move(probeData), std::move(probeState),
                          std::move(voxelize)));
     }
 
     DdgiPass::DdgiPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
                        Texture rays, Texture irradiance, Texture distance,
-                       StorageBuffer probeData, std::unique_ptr<VoxelizePass> voxelize)
+                       StorageBuffer probeData, StorageBuffer probeState,
+                       std::unique_ptr<VoxelizePass> voxelize)
         : m_renderer(renderer), m_quad(fullscreenQuad), m_shaders(shaders)
         , m_rays(std::move(rays)), m_irradiance(std::move(irradiance))
         , m_distance(std::move(distance)), m_probeData(std::move(probeData))
+        , m_probeState(std::move(probeState))
         , m_voxelize(std::move(voxelize))
         , m_atlasGrid(SanitizeGrid(DdgiGrid{})) {}
 
@@ -108,6 +113,11 @@ namespace renderer {
         buffer.Update(ceros.data(), ceros.size() * sizeof(glm::vec4));
     }
 
+    void DdgiPass::ClearProbeState(const StorageBuffer& buffer, u32 probes) {
+        const std::vector<glm::uvec4> ceros(probes, glm::uvec4(0u));
+        buffer.Update(ceros.data(), ceros.size() * sizeof(glm::uvec4));
+    }
+
     void DdgiPass::Reset() {
         m_cursor      = 0u;
         m_sweepsDone  = 0u;
@@ -115,6 +125,7 @@ namespace renderer {
         ClearAtlas(m_irradiance);
         ClearAtlas(m_distance);
         ClearProbeData(m_probeData, ProbeCount(m_atlasGrid));
+        ClearProbeState(m_probeState, ProbeCount(m_atlasGrid));
     }
 
     void DdgiPass::EnsureAtlasSize() {
@@ -124,7 +135,10 @@ namespace renderer {
             const bool seMovio = want.origin != m_atlasGrid.origin
                               || want.spacing != m_atlasGrid.spacing;
             m_atlasGrid = want;
-            if (seMovio) ClearProbeData(m_probeData, ProbeCount(m_atlasGrid));
+            if (seMovio) {
+                ClearProbeData(m_probeData, ProbeCount(m_atlasGrid));
+                ClearProbeState(m_probeState, ProbeCount(m_atlasGrid));
+            }
             return;
         }
 
@@ -141,6 +155,8 @@ namespace renderer {
         ClearAtlas(m_distance);
         m_probeData = StorageBuffer(ProbeDataBytes(want));
         ClearProbeData(m_probeData, ProbeCount(want));
+        m_probeState = StorageBuffer(ProbeStateBytes(want));
+        ClearProbeState(m_probeState, ProbeCount(want));
 
         m_atlasGrid   = want;
         m_cursor      = 0u;
@@ -204,6 +220,7 @@ namespace renderer {
         m_irradiance.Bind(kIrradianceAtlasUnit);
         m_distance.Bind(kDistanceAtlasUnit);
         m_probeData.BindTo(kProbeDataBinding);
+        m_probeState.BindTo(kProbeStateBinding);
 
         // atlasValid = m_blendedOnce: en el primer frame el atlas es el negro del clear y
         // el rebote tiene que valer cero.
@@ -241,13 +258,9 @@ namespace renderer {
             m_shaders.probeUpdate->Bind();
             m_rays.Bind(0);
             efecom::DispatchCompute(m_range.count, 1u, 1u);
+            // Los blends leen la edad recien escrita.
+            efecom::IssueMemoryBarrier(efecom::Barrier::ShaderStorage);
         }
-
-        // Hasta completar el primer barrido, hysteresis 0: la primera escritura de cada
-        // probe sobreescribe el negro del clear.
-        DdgiSettings blendSettings = m_settings;
-        if (m_sweepsDone == 0u) blendSettings.hysteresis = 0.0f;
-        m_renderer.SetDdgiBlock(MakeDdgiBlock(m_atlasGrid, blendSettings, m_range, true));
 
         {
             EF_PROFILE_SCOPE("DDGI blend");

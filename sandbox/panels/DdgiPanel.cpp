@@ -79,10 +79,10 @@ using namespace efengine;
                              static_cast<int>(renderer::kMaxRaysPerProbe))) {
             s.raysPerProbe = static_cast<u32>(rayos);
         }
-        // Histeresis: cuanto del valor viejo se conserva. ESTO es el denoise
-        // temporal de DDGI, no hace falta un denoiser aparte. Mas alto = mas
-        // estable y mas lento en reaccionar.
-        ImGui::SliderFloat("Histeresis", &s.hysteresis, 0.0f, 0.995f, "%.3f");
+        // Tope de la histeresis: cada probe sube hasta aca como promedio progresivo.
+        ImGui::SliderFloat("Histeresis max", &s.hysteresis, 0.0f, 0.995f, "%.3f");
+        ImGui::SliderFloat("Umbral de cambio", &s.irradianceThreshold, 0.0f, 1.0f, "%.2f");
+        ImGui::SliderFloat("Umbral de brillo", &s.brightnessThreshold, 0.0f, 10.0f, "%.2f");
         ImGui::Checkbox("Congelar (freeze)", &s.freeze);
         ImGui::SameLine();
         if (ImGui::Button("Reset")) pass.Reset();

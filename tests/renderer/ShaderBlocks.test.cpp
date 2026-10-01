@@ -187,7 +187,7 @@ TEST_CASE("MakeDdgiBlock: updateRange lleva el rango del frame") {
     CHECK(b.updateRange.w ==  8);   // probesPerFrame: el blend lo usa como stride
 }
 
-TEST_CASE("MakeDdgiBlock: params0 empaqueta hysteresis, intensidad y los dos bias") {
+TEST_CASE("MakeDdgiBlock: params0.x queda reservado; intensidad y los dos bias") {
     DdgiSettings s;
     s.hysteresis = 0.9f;
     s.intensity  = 1.5f;
@@ -196,10 +196,20 @@ TEST_CASE("MakeDdgiBlock: params0 empaqueta hysteresis, intensidad y los dos bia
 
     const DdgiBlock b = MakeDdgiBlock(s.grid, s, UpdateRange{}, true);
 
-    CHECK(b.params0.x == doctest::Approx(0.9f));
+    CHECK(b.params0.x == doctest::Approx(0.0f));   // la histeresis vive en DdgiUpdateBlock
     CHECK(b.params0.y == doctest::Approx(1.5f));
     CHECK(b.params0.z == doctest::Approx(0.3f));
     CHECK(b.params0.w == doctest::Approx(0.05f));
+}
+
+TEST_CASE("kProbeStateBinding no choca con los SSBO de luces ni con probeData") {
+    CHECK(kProbeStateBinding == 5u);
+    CHECK(kProbeStateBinding != kProbeDataBinding);
+    CHECK(kProbeStateBinding != kClusterAabbsBinding);
+}
+
+TEST_CASE("DdgiSettings: la histeresis arranca en el tope de RTXGI") {
+    CHECK(DdgiSettings{}.hysteresis == doctest::Approx(0.97f));
 }
 
 TEST_CASE("MakeDdgiBlock: params1.x es 1 solo con enabled y atlas valido") {

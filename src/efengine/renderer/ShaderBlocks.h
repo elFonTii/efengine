@@ -31,6 +31,8 @@ namespace renderer {
 
     // Binding de SSBO (espacio aparte de los de UBO): datos por probe de DDGI.
     inline constexpr u32 kProbeDataBinding = 0u;
+    // Estado por probe de DDGI (edad, activa/inactiva). Solo los pases de actualizacion.
+    inline constexpr u32 kProbeStateBinding = 5u;
 
     // SSBO de las luces. Espacio de indices aparte de los UBO.
     inline constexpr u32 kLocalLightsBinding   = 1u;   // GpuLight[]
@@ -135,7 +137,7 @@ namespace renderer {
         glm::ivec4 gridCounts;    // .xyz = probes por eje, .w = total
         glm::ivec4 atlasLayout;   // x=cols, y=rows, z=irrTile(8), w=distTile(16)
         glm::ivec4 updateRange;   // x=firstProbe, y=count, z=reservado, w=probeBudget
-        glm::vec4  params0;       // hysteresis, intensity, normalBias, viewBias
+        glm::vec4  params0;       // reservado, intensity, normalBias, viewBias
         glm::vec4  params1;       // enabled, chebyshevSharpness, debugView, classificationEnabled
         glm::vec4  params2;       // distanceClamp, backfaceFadeStart, backfaceFadeEnd, ablation
     };

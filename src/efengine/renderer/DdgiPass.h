@@ -104,7 +104,7 @@ namespace renderer {
         private:
             DdgiPass(Renderer& renderer, VertexArray& fullscreenQuad, const Shaders& shaders,
                      Texture rays, Texture irradiance, Texture distance, StorageBuffer probeData,
-                     std::unique_ptr<VoxelizePass> voxelize);
+                     StorageBuffer probeState, std::unique_ptr<VoxelizePass> voxelize);
 
             // El trabajo real. Lo llama Execute, que publica el contexto
             // despues -- afuera, porque esto tiene retornos tempranos.
@@ -123,6 +123,9 @@ namespace renderer {
             // Cero = sin offset y activo. El contenido inicial de un buffer no esta definido.
             static void ClearProbeData(const StorageBuffer& buffer, u32 probes);
 
+            // Edad 0 y estado "sin dato": la proxima escritura de cada probe sobreescribe.
+            static void ClearProbeState(const StorageBuffer& buffer, u32 probes);
+
             Renderer&    m_renderer;
             VertexArray& m_quad;   // sin uso en el pase; ver el comentario de Create
             Shaders      m_shaders;
@@ -131,6 +134,7 @@ namespace renderer {
             Texture m_irradiance;   // atlas octaedrico RGBA16F
             Texture m_distance;     // atlas de momentos RG16F
             StorageBuffer m_probeData;   // un vec4 por probe: offset.xyz, fraccion de backfaces
+            StorageBuffer m_probeState;  // un uvec4 por probe: edad, estado
 
             // El proxy contra el que traza la captura. Lo llena m_voxelize, que
             // NO corre por frame.

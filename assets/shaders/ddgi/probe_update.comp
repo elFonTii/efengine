@@ -10,6 +10,7 @@ layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 layout(binding = 0) uniform sampler2D uRays;
 
 #define DDGI_PROBE_DATA_WRITABLE
+#define DDGI_PROBE_STATE_WRITABLE
 #include "ddgi/common.glsl"
 #include "ddgi/update.glsl"
 
@@ -142,4 +143,14 @@ void main() {
     }
 
     uDdgiProbeData[probe] = vec4(nuevo, fraccion);
+
+    // La historia deja de describir a la probe si se movio mas de un voxel o si cambio
+    // entre activa e inactiva: la edad vuelve a 0 y los blends sobreescriben.
+    uvec4 estado = uDdgiProbeState[probe];
+    uint  ahora  = (fraccion < uUpdateReloc.w) ? 1u : 2u;
+    vec3  movido = nuevo - offset;
+    bool  reset  = dot(movido, movido) > voxel * voxel
+                || (estado.y != 0u && estado.y != ahora);
+    uint  edad   = reset ? 0u : min(estado.x + 1u, 255u);
+    uDdgiProbeState[probe] = uvec4(edad, ahora, 0u, 0u);
 }

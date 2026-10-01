@@ -34,8 +34,10 @@ namespace renderer {
         u32  inactiveRecheckSweeps = 8u;                 // una inactiva se revisa cada tantos barridos
         bool freeze                = false;              // congela la actualizacion; el sampleo sigue
 
-        // Cuanto del valor viejo se conserva.
-        f32  hysteresis            = 0.7f;
+        // Tope de la histeresis (RTXGI: 0,97). Cada probe arranca en 0 despues de un reset y
+        // sube como promedio progresivo (n-1)/n hasta este valor: el tope decide cuanto
+        // ruido se filtra en regimen, no cuanto tarda en arrancar.
+        f32  hysteresis            = 0.97f;
 
         // Deteccion de cambio grande (RTXGI), en el blend de irradiancia.
         f32  irradianceThreshold   = 0.2f;   // espacio perceptual, x^(1/5)

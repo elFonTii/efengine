@@ -63,6 +63,6 @@ void main() {
     ivec2 dst       = DdgiTileOrigin(probe, bordered) + local;
     vec2  previo    = imageLoad(uDistanceAtlas, dst).rg;
     vec2  capturado = vec2(suma, suma2) / sumaPesos;
-    float h         = uDdgiParams0.x;
+    float h         = DdgiEffectiveHysteresis(uDdgiProbeState[probe].x);
     imageStore(uDistanceAtlas, dst, vec4(mix(capturado, previo, h), 0.0, 0.0));
 }

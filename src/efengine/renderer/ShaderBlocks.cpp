@@ -169,8 +169,7 @@ namespace renderer {
                                    static_cast<i32>(range.count),
                                    0,
                                    static_cast<i32>(settings.probeBudget));
-        b.params0 = glm::vec4(settings.hysteresis, settings.intensity,
-                              settings.normalBias, settings.viewBias);
+        b.params0 = glm::vec4(0.0f, settings.intensity, settings.normalBias, settings.viewBias);
         // params1.z lleva el modo de debug de vista. Va aca y no en FrameBlock
         // por lo que explica el comentario de DdgiBlock en el header: extender
         // Frame obliga a tocar siete shaders que no lo usan.

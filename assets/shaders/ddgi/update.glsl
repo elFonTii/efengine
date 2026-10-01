@@ -35,5 +35,21 @@ vec3 DdgiRayDirection(int i) {
     return normalize(mat3(uRayRotation) * DdgiSphericalFibonacci(i, DdgiRayCount()));
 }
 
+// x = edad (actualizaciones desde el ultimo reset), y = estado (0 sin dato, 1 activa,
+// 2 inactiva). Lo escribe probe_update.
+#ifdef DDGI_PROBE_STATE_WRITABLE
+layout(std430, binding = 5) buffer DdgiProbeState {
+#else
+layout(std430, binding = 5) readonly buffer DdgiProbeState {
+#endif
+    uvec4 uDdgiProbeState[];
+};
+
+// Espejo de EffectiveHysteresis (DdgiVolume.cpp).
+float DdgiEffectiveHysteresis(uint edad) {
+    if (edad < 2u) return 0.0;
+    return min(uUpdateHyst.x, float(edad - 1u) / float(edad));
+}
+
 int DdgiSlotCount()         { return uDdgiRange.y; }
 int DdgiSlotProbe(int slot) { return (uDdgiRange.x + slot) % uDdgiCounts.w; }
