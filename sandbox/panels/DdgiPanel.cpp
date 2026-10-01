@@ -8,6 +8,7 @@
 #include <efengine/renderer/DdgiPass.h>
 #include <efengine/renderer/DdgiSettings.h>
 #include <efengine/renderer/DdgiVolume.h>
+#include <efengine/renderer/DdgiConvergence.h>
 #include <efengine/renderer/DdgiGridFit.h>
 #include <efengine/renderer/AoPass.h>
 #include <efengine/renderer/IndirectPass.h>
@@ -102,6 +103,25 @@ using namespace efengine;
                                               renderer::kMaxRaysPerProbe);
         ImGui::TextDisabled("rayos por frame: %u (%u probes x %u rayos)",
                             probesDelFrame * rayosPorProbe, probesDelFrame, rayosPorProbe);
+        if (pass.hasStats()) {
+            const renderer::DdgiGpuStats& st = pass.stats();
+            const u32 grilla = std::max(st.active + st.inactive, 1u);
+            ImGui::TextDisabled("activas %u / inactivas %u (%.0f %%)", st.active, st.inactive,
+                                100.0 * static_cast<f64>(st.inactive) / static_cast<f64>(grilla));
+            ImGui::TextDisabled("barrido %u   lista %u probes   frames por barrido %.1f",
+                                st.sweep, st.listCount, pass.framesPerSweep());
+            ImGui::TextDisabled("delta media: %.2e", renderer::MeanDelta(st));
+        } else {
+            ImGui::TextDisabled("stats: esperando a la GPU");
+        }
+        if (pass.convergence().converged()) {
+            ImGui::TextColored(kColorOk, "convergencia: %.2f s desde el reset",
+                               pass.convergence().seconds());
+        } else {
+            ImGui::TextColored(kColorAviso, "convergencia: sin converger");
+        }
+        ImGui::SliderFloat("Epsilon de convergencia", &s.convergenceEpsilon, 1.0e-5f, 1.0e-2f,
+                           "%.1e", ImGuiSliderFlags_Logarithmic);
 
         // -- Voxeles -----------------------------------------------------------
         ImGui::SeparatorText("Voxeles");

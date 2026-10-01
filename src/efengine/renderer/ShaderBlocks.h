@@ -41,6 +41,23 @@ namespace renderer {
     inline constexpr usize kScheduleListOffset      = 48u;
     inline constexpr usize kScheduleBytes = kScheduleListOffset + sizeof(u32) * kMaxProbesPerFrame;
 
+    // Stats de DDGI que vuelven a la CPU con GpuReadback. Espeja DdgiStats de
+    // ddgi/update.glsl (std430). deltaSum es punto fijo: Delta * kDdgiDeltaScale.
+    inline constexpr u32 kDdgiStatsBinding = 7u;
+    inline constexpr f32 kDdgiDeltaScale   = 1.0e4f;
+
+    struct DdgiGpuStats {
+        u32 active;
+        u32 inactive;
+        u32 sweep;
+        u32 cursor;
+        u32 listCount;
+        u32 deltaSum;
+        u32 deltaCount;
+        u32 pad;
+    };
+    static_assert(sizeof(DdgiGpuStats) == 32u, "DdgiGpuStats tiene que espejar DdgiStats (std430)");
+
     // SSBO de las luces. Espacio de indices aparte de los UBO.
     inline constexpr u32 kLocalLightsBinding   = 1u;   // GpuLight[]
     inline constexpr u32 kVisibleLightsBinding = 2u;   // indices de las que tocan el frustum

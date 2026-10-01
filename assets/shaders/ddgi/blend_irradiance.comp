@@ -6,11 +6,14 @@ layout(local_size_x = 10, local_size_y = 10, local_size_z = 1) in;   // kIrradia
 layout(binding = 0) uniform sampler2D uRays;
 layout(rgba16f, binding = 0) uniform image2D uIrradianceAtlas;
 
+#define DDGI_WRITES_STATS
 #include "ddgi/common.glsl"
 #include "ddgi/update.glsl"
 
 shared vec3 sRad[kDdgiMaxRays];
 shared vec3 sDir[kDdgiMaxRays];
+shared uint sDelta;
+shared uint sTexels;
 
 void main() {
     int slot = int(gl_WorkGroupID.x);
@@ -36,6 +39,7 @@ void main() {
 
     int nRayos = DdgiRayCount();
     int nHilos = int(gl_WorkGroupSize.x * gl_WorkGroupSize.y);
+    if (gl_LocalInvocationIndex == 0u) { sDelta = 0u; sTexels = 0u; }
     for (int i = int(gl_LocalInvocationIndex); i < nRayos; i += nHilos) {
         sDir[i] = DdgiRayDirection(i);
         sRad[i] = texelFetch(uRays, ivec2(i, slot), 0).rgb;
@@ -71,4 +75,19 @@ void main() {
 
     vec3 resultado = mix(capturado, previo, h);
     imageStore(uIrradianceAtlas, dst, vec4(resultado, 1.0));
+
+    // Delta perceptual de los texels interiores (el borde es copia): mide convergencia.
+    bool borde = any(lessThan(local, ivec2(kDdgiBorder)))
+              || any(greaterThanEqual(local, ivec2(tile + kDdgiBorder)));
+    if (!borde) {
+        vec3 d = abs(pow(max(resultado, vec3(0.0)), vec3(0.2))
+                   - pow(max(previo,    vec3(0.0)), vec3(0.2)));
+        atomicAdd(sDelta, uint(min(max(d.r, max(d.g, d.b)), 1.0) * kDdgiDeltaScale + 0.5));
+        atomicAdd(sTexels, 1u);
+    }
+    barrier();
+    if (gl_LocalInvocationIndex == 0u) {
+        atomicAdd(uStatDeltaSum, sDelta);
+        atomicAdd(uStatDeltaCount, sTexels);
+    }
 }

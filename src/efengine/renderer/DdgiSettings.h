@@ -43,6 +43,11 @@ namespace renderer {
         f32  irradianceThreshold   = 0.2f;   // espacio perceptual, x^(1/5)
         f32  brightnessThreshold   = 2.0f;   // lineal
 
+        // Delta media perceptual por debajo de la cual el panel da el volumen por
+        // convergido. Medido en docs/superpowers/sims/2026-10-01-ddgi_rayos_sim.mjs: con 256
+        // rayos se cruza a las ~8 actualizaciones, con error RMS ~0,24 %.
+        f32  convergenceEpsilon    = 6.0e-4f;
+
         // -- Sampleo --
         f32 intensity          = 1.1f;
         f32 normalBias         = 0.25f;   // metros

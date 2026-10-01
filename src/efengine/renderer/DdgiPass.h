@@ -11,6 +11,8 @@
 #include <efengine/renderer/StorageBuffer.h>
 #include <efengine/renderer/VoxelGrid.h>
 #include <efengine/renderer/VoxelizePass.h>
+#include <efengine/renderer/GpuReadback.h>
+#include <efengine/renderer/DdgiConvergence.h>
 
 #include <efengine/renderer/ShaderBlocks.h>
 
@@ -77,6 +79,12 @@ namespace renderer {
 
             f32  lastMs()     const { return m_lastMs; }
 
+            // Llegan con unos frames de atraso. Hasta la primera lectura, hasStats() es false.
+            bool                   hasStats()       const { return m_hasStats; }
+            const DdgiGpuStats&    stats()          const { return m_lastStats; }
+            const DdgiConvergence& convergence()    const { return m_convergence; }
+            f32                    framesPerSweep() const { return m_framesPerSweep; }
+
             // Rehornea el grid con la escena. Lo llama la primera carga y el
             // boton del panel.
             void Voxelize(const scene::SceneGraph& scene);
@@ -115,6 +123,8 @@ namespace renderer {
             // negro y rearma el contador de barridos.
             void EnsureAtlasSize();
 
+            void PollStats();
+
             // Deja un atlas en cero. El storage inmutable arranca con contenido
             // INDEFINIDO, y un mix con hysteresis 0.97 propagaria esa basura para
             // siempre. Se hace con un FBO temporal y Clear: cero RHI nuevo.
@@ -147,6 +157,15 @@ namespace renderer {
             u64                           m_gridGeneracion = 0;   // SceneGraph::Generation() del horneado
 
             UniformBuffer m_updateUbo { sizeof(DdgiUpdateBlock) };
+
+            StorageBuffer   m_statsBuffer { sizeof(DdgiGpuStats) };
+            GpuReadback     m_readback    { sizeof(DdgiGpuStats) };
+            DdgiGpuStats    m_lastStats   {};
+            bool            m_hasStats    = false;
+            DdgiConvergence m_convergence;
+            u32             m_prevSweep      = 0u;
+            u64             m_prevSweepFrame = 0u;
+            f32             m_framesPerSweep = 0.0f;
 
             DdgiSettings m_settings;
             DdgiGrid     m_atlasGrid;      // la grilla con la que se alocaron los atlas

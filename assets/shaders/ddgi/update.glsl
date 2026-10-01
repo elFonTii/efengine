@@ -69,3 +69,18 @@ layout(std430, binding = 6) readonly buffer DdgiSchedule {
 
 int DdgiSlotCount()         { return int(uSchedCount); }
 int DdgiSlotProbe(int slot) { return int(uSchedList[slot]); }
+
+#ifdef DDGI_WRITES_STATS
+// Espeja DdgiGpuStats de ShaderBlocks.h. deltaSum es punto fijo (x kDdgiDeltaScale).
+layout(std430, binding = 7) buffer DdgiStats {
+    uint uStatActive;
+    uint uStatInactive;
+    uint uStatSweep;
+    uint uStatCursor;
+    uint uStatListCount;
+    uint uStatDeltaSum;
+    uint uStatDeltaCount;
+    uint uStatPad;
+};
+const float kDdgiDeltaScale = 1.0e4;
+#endif

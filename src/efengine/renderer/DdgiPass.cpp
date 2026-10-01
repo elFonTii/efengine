@@ -29,6 +29,11 @@ namespace renderer {
                       "sincronizar kDdgiMaxRays en assets/shaders/ddgi/update.glsl");
         static_assert(kRayGroupSize == 64u,
                       "sincronizar local_size_x de trace_voxel.comp y kDdgiRayGroup de ddgi/update.glsl");
+
+        f64 NowSeconds() {
+            return std::chrono::duration<f64>(
+                       std::chrono::steady_clock::now().time_since_epoch()).count();
+        }
     }
 
     std::unique_ptr<DdgiPass> DdgiPass::Create(Renderer& renderer, VertexArray& fullscreenQuad,
@@ -135,6 +140,7 @@ namespace renderer {
         ClearProbeData(m_probeData, ProbeCount(m_atlasGrid));
         ClearProbeState(m_probeState, ProbeCount(m_atlasGrid));
         ClearSchedule(m_schedule);
+        m_convergence.Reset(m_frame, NowSeconds());
     }
 
     void DdgiPass::EnsureAtlasSize() {
@@ -147,6 +153,7 @@ namespace renderer {
             if (seMovio) {
                 ClearProbeData(m_probeData, ProbeCount(m_atlasGrid));
                 ClearProbeState(m_probeState, ProbeCount(m_atlasGrid));
+                m_convergence.Reset(m_frame, NowSeconds());
             }
             return;
         }
@@ -170,6 +177,7 @@ namespace renderer {
         m_atlasGrid   = want;
         ClearSchedule(m_schedule);
         m_blendedOnce = false;
+        m_convergence.Reset(m_frame, NowSeconds());
 
         EF_LOG_INFO("DdgiPass: grilla a %dx%dx%d, atlas realocados",
                     want.counts.x, want.counts.y, want.counts.z);
@@ -203,6 +211,7 @@ namespace renderer {
     void DdgiPass::Update(const scene::SceneGraph& scene, const ShadowContext& shadow,
                           const IblContext& ibl, const Cubemap* env) {
         const ScopedMs medicion { &m_lastMs };
+        PollStats();
 
         const bool otraEscena = m_gridGeneracion != scene.Generation();
         if ((!m_gridValido || otraEscena) && scene.WorldBounds().Valid()) Voxelize(scene);
@@ -221,6 +230,7 @@ namespace renderer {
         m_probeData.BindTo(kProbeDataBinding);
         m_probeState.BindTo(kProbeStateBinding);
         m_schedule.BindTo(kScheduleBinding);
+        m_statsBuffer.BindTo(kDdgiStatsBinding);
 
         // atlasValid = m_blendedOnce: en el primer frame el atlas es el negro del clear y
         // el rebote tiene que valer cero.
@@ -284,10 +294,33 @@ namespace renderer {
 
             efecom::IssueMemoryBarrier(efecom::Barrier::ShaderImageAccess
                                      | efecom::Barrier::TextureFetch
-                                     | efecom::Barrier::ShaderStorage);
+                                     | efecom::Barrier::ShaderStorage
+                                     | efecom::Barrier::BufferUpdate);
         }
 
+        // m_frame ya avanzo al subir el bloque: el frame que produjo estas stats es el anterior.
+        m_readback.Push(m_statsBuffer, m_frame - 1u);
+
         m_blendedOnce = true;
+    }
+
+    void DdgiPass::PollStats() {
+        DdgiGpuStats leidas {};
+        u64 frame = 0u;
+        if (!m_readback.Poll(&leidas, frame)) return;
+
+        if (leidas.sweep != m_prevSweep) {
+            if (m_prevSweepFrame != 0u && leidas.sweep > m_prevSweep && frame > m_prevSweepFrame) {
+                m_framesPerSweep = static_cast<f32>(frame - m_prevSweepFrame)
+                                 / static_cast<f32>(leidas.sweep - m_prevSweep);
+            }
+            m_prevSweep      = leidas.sweep;
+            m_prevSweepFrame = frame;
+        }
+
+        m_lastStats = leidas;
+        m_hasStats  = true;
+        m_convergence.Observe(frame, NowSeconds(), MeanDelta(leidas), m_settings.convergenceEpsilon);
     }
 
     DdgiContext DdgiPass::Context() const {
