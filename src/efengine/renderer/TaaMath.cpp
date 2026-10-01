@@ -62,7 +62,10 @@ namespace renderer {
         if (alpha >= 1.0f) return cur;
         const f32 wCur  = alpha / (1.0f + Luma(cur));
         const f32 wHist = (1.0f - alpha) / (1.0f + Luma(hist));
-        return (cur * wCur + hist * wHist) / std::max(wCur + wHist, 1e-6f);
+        const glm::vec3 res = (cur * wCur + hist * wHist) / std::max(wCur + wHist, 1e-6f);
+        // La caja YCoCg incluye colores fuera de gamut: la historia clipeada puede
+        // traer canales negativos.
+        return glm::max(res, glm::vec3(0.0f));
     }
 
     TaaBlock MakeTaaBlock(const FrameView& view, const TaaSettings& settings, bool reset) {

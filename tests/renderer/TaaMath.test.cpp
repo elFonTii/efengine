@@ -156,3 +156,10 @@ TEST_CASE("MakeTaaBlock: 0x0 no divide por cero") {
     CHECK(b.screen.w == doctest::Approx(0.0f));
     CHECK(std::isfinite(b.invViewProjNoJitter[0][0]));
 }
+
+TEST_CASE("TaaBlend: una historia clipeada fuera de gamut no deja canales negativos") {
+    const glm::vec3 r = TaaBlend(glm::vec3(0.5f), glm::vec3(-0.25f, 0.75f, -0.25f), 0.1f);
+    CHECK(r.x >= 0.0f);
+    CHECK(r.y >= 0.0f);
+    CHECK(r.z >= 0.0f);
+}

@@ -120,5 +120,8 @@ void main() {
     vec3  res   = (cur * wCur + hist * wHist) / max(wCur + wHist, 1e-6);
 
     if (any(isnan(res)) || any(isinf(res))) res = cur;
+    // La caja YCoCg incluye colores fuera de gamut: la historia clipeada puede
+    // traer canales negativos.
+    res = max(res, vec3(0.0));
     FragColor = vec4(res, 1.0);
 }
